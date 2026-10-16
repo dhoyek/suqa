@@ -1,13 +1,15 @@
 import type { SuqaClient } from './supabase';
 import type { Tenant } from './types';
 
-/** Web: resolve tenant by hostname (suqa.tenant_domains). Falls back to a dev slug for localhost. */
+/** Web: resolve tenant by hostname (suqa.tenant_domains).
+ *  If devSlug is set (NEXT_PUBLIC_SUQA_DEV_TENANT — dev/staging sites only, never production),
+ *  any hostname not found in tenant_domains resolves to that tenant. */
 export async function resolveTenantByHost(sb: SuqaClient, hostname: string, devSlug?: string): Promise<Tenant | null> {
   const host = hostname.split(':')[0].toLowerCase();
   const { data } = await sb.from('tenant_domains').select('tenant:tenants(*)').eq('hostname', host).maybeSingle();
   const t = (data as any)?.tenant as Tenant | undefined;
   if (t) return t;
-  if (devSlug && (host === 'localhost' || host.endsWith('.local'))) return resolveTenantBySlug(sb, devSlug);
+  if (devSlug) return resolveTenantBySlug(sb, devSlug);
   return null;
 }
 

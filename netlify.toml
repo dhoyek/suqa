@@ -1,0 +1,12 @@
+# Netlify — monorepo: install at the root (npm workspaces), build/serve apps/web.
+# In the Netlify UI leave "Base directory" empty; "Package directory" = apps/web is set here.
+[build]
+  command = "npm run build -w @suqa/web"
+  publish = "apps/web/.next"
+  package = "apps/web"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

@@ -9,3 +9,5 @@ dist/
 supabase/all.sql
 supabase/.temp/
 .DS_Store
+# netlify
+.netlify/

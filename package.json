@@ -1,0 +1,13 @@
+{
+  "name": "suqa",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "web": "npm run dev -w @suqa/web",
+    "mobile": "npm run start -w @suqa/mobile",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:build": "bash supabase/build.sh",
+    "db:types": "supabase gen types typescript --schema suqa --project-id $SUQA_SUPABASE_PROJECT_ID > packages/shared/src/database.types.ts"
+  },
+  "engines": { "node": ">=20" }
+}

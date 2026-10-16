@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.expo/
+dist/
+*.log
+.env
+.env.local
+.env.*.local
+supabase/all.sql
+supabase/.temp/
+.DS_Store

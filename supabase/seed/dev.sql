@@ -16,7 +16,7 @@ create extension if not exists pgcrypto;
 
 -- ---------- helper: create or refresh an email/password auth user -------------
 create or replace function suqa._dev_user(p_id uuid, p_email text, p_name text, p_phone text, p_tenant uuid)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, extensions as $$
 begin
   insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
                           phone, phone_confirmed_at, raw_app_meta_data, raw_user_meta_data,

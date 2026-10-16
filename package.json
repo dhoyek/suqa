@@ -1,13 +1,18 @@
 {
   "name": "suqa",
   "private": true,
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/web"
+  ],
   "scripts": {
     "web": "npm run dev -w @suqa/web",
-    "mobile": "npm run start -w @suqa/mobile",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:build": "bash supabase/build.sh",
-    "db:types": "supabase gen types typescript --schema suqa --project-id $SUQA_SUPABASE_PROJECT_ID > packages/shared/src/database.types.ts"
+    "db:types": "supabase gen types typescript --schema suqa --project-id $SUQA_SUPABASE_PROJECT_ID > packages/shared/src/database.types.ts",
+    "mobile": "echo 'Phase 2: add apps/mobile back to workspaces (React version must match apps/web)'"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

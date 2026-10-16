@@ -1,8 +1,8 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SuqaClient } from './supabase';
 import type { Tenant } from './types';
 
 /** Web: resolve tenant by hostname (suqa.tenant_domains). Falls back to a dev slug for localhost. */
-export async function resolveTenantByHost(sb: SupabaseClient, hostname: string, devSlug?: string): Promise<Tenant | null> {
+export async function resolveTenantByHost(sb: SuqaClient, hostname: string, devSlug?: string): Promise<Tenant | null> {
   const host = hostname.split(':')[0].toLowerCase();
   const { data } = await sb.from('tenant_domains').select('tenant:tenants(*)').eq('hostname', host).maybeSingle();
   const t = (data as any)?.tenant as Tenant | undefined;
@@ -12,7 +12,7 @@ export async function resolveTenantByHost(sb: SupabaseClient, hostname: string, 
 }
 
 /** Mobile: tenant slug is fixed at build time. */
-export async function resolveTenantBySlug(sb: SupabaseClient, slug: string): Promise<Tenant | null> {
+export async function resolveTenantBySlug(sb: SuqaClient, slug: string): Promise<Tenant | null> {
   const { data } = await sb.from('tenants').select('*').eq('slug', slug).maybeSingle();
   return (data as Tenant | null) ?? null;
 }

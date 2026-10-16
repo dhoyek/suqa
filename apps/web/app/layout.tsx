@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import './globals.css';
 import { getTenant } from '@/lib/tenant';
 import { brandCssVars, RTL } from '@suqa/shared';
 
@@ -12,7 +13,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const locale = t.default_locale;
   return (
     <html lang={locale} dir={RTL[locale] ? 'rtl' : 'ltr'} style={brandCssVars(t) as any}>
-      <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif' }}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

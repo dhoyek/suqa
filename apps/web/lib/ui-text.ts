@@ -1,0 +1,60 @@
+import type { Locale, OrderStatus } from '@suqa/shared';
+
+// Merchant-portal UI strings. Arabic first (Lebanese shop owners), English second.
+const T = {
+  signIn: { en: 'Sign in', ar: 'تسجيل الدخول' },
+  email: { en: 'Email', ar: 'البريد الإلكتروني' },
+  password: { en: 'Password', ar: 'كلمة المرور' },
+  signOut: { en: 'Sign out', ar: 'تسجيل الخروج' },
+  invalidLogin: { en: 'Wrong email or password', ar: 'البريد أو كلمة المرور غير صحيحة' },
+  orders: { en: 'Orders', ar: 'الطلبات' },
+  products: { en: 'Products', ar: 'المنتجات' },
+  newOrders: { en: 'New', ar: 'جديد' },
+  inProgress: { en: 'In progress', ar: 'قيد التحضير' },
+  done: { en: 'Done', ar: 'منتهي' },
+  noOrders: { en: 'No orders here', ar: 'لا طلبات هنا' },
+  accept: { en: 'Accept', ar: 'قبول' },
+  reject: { en: 'Reject', ar: 'رفض' },
+  rejectReason: { en: 'Reason for the customer (optional)', ar: 'سبب الرفض للزبون (اختياري)' },
+  startPreparing: { en: 'Start preparing', ar: 'بدء التحضير' },
+  markReady: { en: 'Ready', ar: 'جاهز' },
+  outForDelivery: { en: 'Out for delivery', ar: 'في الطريق' },
+  delivered: { en: 'Delivered', ar: 'تم التسليم' },
+  cancel: { en: 'Cancel', ar: 'إلغاء' },
+  confirm: { en: 'Confirm', ar: 'تأكيد' },
+  total: { en: 'Total', ar: 'المجموع' },
+  delivery: { en: 'Delivery', ar: 'التوصيل' },
+  notes: { en: 'Notes', ar: 'ملاحظات' },
+  call: { en: 'Call', ar: 'اتصال' },
+  available: { en: 'Available', ar: 'متوفر' },
+  unavailable: { en: 'Unavailable', ar: 'غير متوفر' },
+  addProduct: { en: 'Add product', ar: 'إضافة منتج' },
+  editProduct: { en: 'Edit product', ar: 'تعديل المنتج' },
+  nameEn: { en: 'Name (English)', ar: 'الاسم (إنكليزي)' },
+  nameAr: { en: 'Name (Arabic)', ar: 'الاسم (عربي)' },
+  priceUsd: { en: 'Price (USD)', ar: 'السعر (دولار)' },
+  unit: { en: 'Unit (kg, piece, …)', ar: 'الوحدة (كيلو، حبة، …)' },
+  section: { en: 'Section (Dairy, Sweets, …)', ar: 'القسم (ألبان، حلويات، …)' },
+  save: { en: 'Save', ar: 'حفظ' },
+  remove: { en: 'Remove', ar: 'حذف' },
+  noShop: { en: 'Your account is not linked to a shop yet. Ask the association to add you.', ar: 'حسابك غير مرتبط بأي متجر بعد. اطلب من الجمعية إضافتك.' },
+  live: { en: 'Live', ar: 'مباشر' },
+  minsAgo: { en: 'min ago', ar: 'د' },
+  items: { en: 'items', ar: 'أصناف' },
+  shopOpen: { en: 'Accepting orders', ar: 'يستقبل الطلبات' },
+  shopPaused: { en: 'Paused', ar: 'متوقف مؤقتاً' },
+} as const;
+
+export type UiKey = keyof typeof T;
+export const ui = (k: UiKey, l: Locale) => (T[k] as any)[l] ?? T[k].en;
+
+export const STATUS_LABEL: Record<OrderStatus, { en: string; ar: string }> = {
+  pending: { en: 'New', ar: 'جديد' },
+  accepted: { en: 'Accepted', ar: 'مقبول' },
+  preparing: { en: 'Preparing', ar: 'قيد التحضير' },
+  ready: { en: 'Ready', ar: 'جاهز' },
+  out_for_delivery: { en: 'On the way', ar: 'في الطريق' },
+  delivered: { en: 'Delivered', ar: 'تم التسليم' },
+  rejected: { en: 'Rejected', ar: 'مرفوض' },
+  cancelled: { en: 'Cancelled', ar: 'ملغى' },
+};

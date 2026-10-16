@@ -20,4 +20,5 @@ source of truth.
 | 06_orders.sql | orders, order_items, order_events |
 | 07_functions.sql | helpers (auth/role checks), triggers, order numbering, state machine |
 | 08_rls.sql | row-level security policies |
+| 09_realtime.sql | realtime publication (orders) |
 | ../seed/batroun.sql | first tenant |

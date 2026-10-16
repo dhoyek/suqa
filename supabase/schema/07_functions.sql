@@ -88,16 +88,23 @@ returns boolean language sql immutable as $$
     ('out_for_delivery','delivered'), ('out_for_delivery','cancelled'))
 $$;
 
+-- First event on insert (AFTER, so the order row exists for the FK).
+create or replace function suqa.orders_on_insert() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into suqa.order_events(order_id, tenant_id, from_status, to_status, actor_kind, actor_id)
+  values (new.id, new.tenant_id, null, new.status, 'customer', new.customer_id);
+  return new;
+end $$;
+drop trigger if exists orders_after_insert on suqa.orders;
+create trigger orders_after_insert after insert on suqa.orders
+  for each row execute function suqa.orders_on_insert();
+
+-- Transitions on update (BEFORE, so we can validate and stamp timestamps).
 create or replace function suqa.orders_on_status_change() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_actor suqa.actor_kind;
 begin
-  if tg_op = 'INSERT' then
-    insert into suqa.order_events(order_id, tenant_id, from_status, to_status, actor_kind, actor_id)
-    values (new.id, new.tenant_id, null, new.status, 'customer', new.customer_id);
-    return new;
-  end if;
-
   if new.status = old.status then return new; end if;
 
   if not suqa.order_transition_allowed(old.status, new.status) then
@@ -107,7 +114,7 @@ begin
 
   -- who is doing this?
   v_actor := case
-    when suqa.is_platform_admin()            then 'platform'
+    when suqa.is_platform_admin()             then 'platform'
     when suqa.is_tenant_member(new.tenant_id) then 'tenant'
     when suqa.is_shop_member(new.shop_id)     then 'shop'
     when auth.uid() = new.customer_id         then 'customer'
@@ -128,7 +135,7 @@ begin
   return new;
 end $$;
 drop trigger if exists orders_status_change on suqa.orders;
-create trigger orders_status_change before insert or update of status on suqa.orders
+create trigger orders_status_change before update of status on suqa.orders
   for each row execute function suqa.orders_on_status_change();
 
 -- ---------- zone lookup ------------------------------------------------------

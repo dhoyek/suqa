@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
 import { getUser } from '@/lib/auth';
@@ -17,6 +18,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <h1 style={{ margin: '4px 0 0', fontSize: 20 }}>{ui('signIn', L)}</h1>
         </div>
         <LoginForm next={next || '/shop'} labels={{ email: ui('email', L), password: ui('password', L), signIn: ui('signIn', L), invalid: ui('invalidLogin', L) }} />
+        <Link href={`/signup?next=${encodeURIComponent(next || '/')}`} className="muted" style={{ fontSize: 14, textAlign: 'center' }}>{ui('noAccount', L)}</Link>
       </div>
     </main>
   );

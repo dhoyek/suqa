@@ -8,6 +8,9 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[functions]
+  directory = "netlify/functions"   # warm.mts (scheduled keep-warm); the Next.js handler is added by the plugin
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

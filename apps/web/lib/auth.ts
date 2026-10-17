@@ -3,10 +3,14 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from './supabase-server';
 import type { Shop } from '@suqa/shared';
 
-export const getUser = cache(async () => {
+export type SessionUser = { id: string; email: string | null };
+
+/** Signed-in user from the session cookie, verified locally (JWT claims) — no round-trip to Supabase Auth. */
+export const getUser = cache(async (): Promise<SessionUser | null> => {
   const sb = await supabaseServer();
-  const { data } = await sb.auth.getUser();
-  return data.user ?? null;
+  const { data } = await sb.auth.getClaims();
+  const c = data?.claims as { sub?: string; email?: string } | undefined;
+  return c?.sub ? { id: c.sub, email: c.email ?? null } : null;
 });
 
 /** Redirects to /login (with return path) when not signed in. */

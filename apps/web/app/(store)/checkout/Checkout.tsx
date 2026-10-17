@@ -47,9 +47,9 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
   async function saveAddress() {
     if (!draft.line1.trim()) return;
     setBusy(true); setError(null);
-    const { data: u } = await sb.auth.getUser();
+    const { data: sess } = await sb.auth.getSession();
     const { data, error } = await sb.from('addresses').insert({
-      tenant_id: tenantId, user_id: u.user!.id, label: draft.label.trim() || null, line1: draft.line1.trim(), line2: draft.line2.trim() || null,
+      tenant_id: tenantId, user_id: sess.session!.user.id, label: draft.label.trim() || null, line1: draft.line1.trim(), line2: draft.line2.trim() || null,
       notes: draft.notes.trim() || null, phone: draft.phone.trim() || null, location: pointToEwkt(draft), is_default: addresses.length === 0,
     }).select('id,label,line1,line2,notes,phone,is_default').single();
     setBusy(false);

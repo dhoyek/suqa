@@ -10,9 +10,14 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:build": "bash supabase/build.sh",
     "db:types": "supabase gen types typescript --schema suqa --project-id $SUQA_SUPABASE_PROJECT_ID > packages/shared/src/database.types.ts",
-    "mobile": "echo 'Phase 2: add apps/mobile back to workspaces (React version must match apps/web)'"
+    "mobile": "echo 'Phase 2: add apps/mobile back to workspaces (React version must match apps/web)'",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
   }
 }

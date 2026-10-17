@@ -1,5 +1,5 @@
 'use client';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -18,6 +18,7 @@ export default function ShopEditor(props: {
   const { tenantId, shop, categories, zones, labels } = props;
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [f, setF] = useState({
     name_ar: shop?.name.ar ?? '', name_en: shop?.name.en ?? '', slug: shop?.slug ?? '', category_id: shop?.category_id ?? categories[0]?.id ?? '',
     phone: shop?.phone ?? '', whatsapp: shop?.whatsapp ?? '', address_text: shop?.address_text ?? '', min_order_usd: String(shop?.min_order_usd ?? 0),
@@ -57,15 +58,15 @@ export default function ShopEditor(props: {
     if (!shop) return;
     const { data, error } = await sb.rpc('find_user_by_email', { p_tenant: tenantId, p_email: email });
     const u = Array.isArray(data) ? data[0] : data;
-    if (error || !u) { alert(labels.userNotFound); return; }
+    if (error || !u) { notify(labels.userNotFound); return; }
     const { error: e2 } = await sb.from('shop_members').upsert({ shop_id: shop.id, user_id: u.user_id, role });
-    if (e2) { alert(e2.message); return; }
+    if (e2) { notify(e2.message); return; }
     setMembers(prev => [...prev.filter(m => m.user_id !== u.user_id), { user_id: u.user_id, full_name: u.full_name, email: u.email, role }]); setEmail('');
   }
   async function removeMember(m: Member) {
     if (!shop || !(await ask(`${labels.remove} ${m.email}?`, { danger: true }))) return;
     const { error } = await sb.from('shop_members').delete().eq('shop_id', shop.id).eq('user_id', m.user_id);
-    if (error) { alert(error.message); return; }
+    if (error) { notify(error.message); return; }
     setMembers(prev => prev.filter(x => x.user_id !== m.user_id));
   }
 

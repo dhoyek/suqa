@@ -157,3 +157,13 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - Shops can still mark `delivered` themselves (pickup-at-shop / own delivery) — the courier flow is additive.
 - Theming note: brand = `tenants.branding` → CSS variables per hostname. Extend with logo/favicon/derived palette
   when needed; no per-tenant layouts.
+
+## Quality gates (2026-10-17)
+
+- `npm test` runs Vitest over the pure logic (money, i18n, geo, opening hours, phone/WhatsApp links, redirect guard,
+  error mapping). Netlify runs it before every build; GitHub Actions runs tests + build on every push/PR.
+- Database rules are tested in SQL: `supabase/test/smoke.sql` (happy path) and `supabase/test/hardening.sql`
+  (19 negative cases) — paste into the Supabase SQL editor of the dev project.
+- Public storefront reads are server-cached (`apps/web/lib/public-data.ts`): home 60 s, shop menu 15 s.
+  A merchant's availability toggle therefore reaches the public page within ~15 s.
+- No native `alert()`/`confirm()` anywhere: use `useNotify()` / `useConfirm()` from `ConfirmProvider`.

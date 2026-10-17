@@ -1,5 +1,5 @@
 'use client';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 
@@ -8,6 +8,7 @@ type Labels = Record<'members' | 'addByEmail' | 'userNotFound' | 'tenantAdmin' |
 
 export default function MembersList({ tenantId, canEdit, initial, labels }: { tenantId: string; canEdit: boolean; initial: Person[]; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [people, setPeople] = useState(initial);
   const ask = useConfirm();
   const [email, setEmail] = useState(''); const [role, setRole] = useState<'admin' | 'ops'>('ops');
@@ -18,15 +19,15 @@ export default function MembersList({ tenantId, canEdit, initial, labels }: { te
   async function add() {
     const { data } = await sb.rpc('find_user_by_email', { p_tenant: tenantId, p_email: email });
     const u = Array.isArray(data) ? data[0] : data;
-    if (!u) { alert(labels.userNotFound); return; }
+    if (!u) { notify(labels.userNotFound); return; }
     const { error } = await sb.from('tenant_members').upsert({ tenant_id: tenantId, user_id: u.user_id, role });
-    if (error) { alert(error.message); return; }
+    if (error) { notify(error.message); return; }
     setEmail(''); reload();
   }
   async function remove(p: Person) {
     if (!(await ask(`${labels.remove} ${p.email}?`, { danger: true }))) return;
     const { error } = await sb.from('tenant_members').delete().eq('tenant_id', tenantId).eq('user_id', p.user_id);
-    if (error) { alert(error.message); return; }
+    if (error) { notify(error.message); return; }
     reload();
   }
 

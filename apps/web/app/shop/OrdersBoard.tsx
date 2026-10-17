@@ -1,4 +1,5 @@
 'use client';
+import { useNotify } from '@/components/ConfirmProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
@@ -36,6 +37,7 @@ export default function OrdersBoard(props: {
   const [rejecting, setRejecting] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState('');
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
 
   async function reload() {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -61,7 +63,7 @@ export default function OrdersBoard(props: {
     setBusy(o.id);
     const { error } = await sb.from('orders').update({ status, ...extra }).eq('id', o.id);
     setBusy(null);
-    if (error) { alert(friendlyError(error, L)); return; }
+    if (error) { notify(friendlyError(error, L)); return; }
     setOrders(prev => prev.map(x => x.id === o.id ? { ...x, status, ...extra } as OrderRow : x));
   }
 

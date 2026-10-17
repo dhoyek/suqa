@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import { waLink, telLink } from '@/lib/whatsapp';
@@ -16,6 +16,7 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
   const { basket: b, locale: L, fx, displayCurrency, statusLabels, labels } = props;
   const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [parts, setParts] = useState<Part[]>(props.initial);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
 
@@ -33,7 +34,7 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
   async function cancel(p: Part) {
     if (!(await ask(`${labels.cancelOrder} — ${tr(p.shop?.name, L)}?`, { danger: true }))) return;
     const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', p.id);
-    if (error) alert(friendlyError(error, L)); else setParts(prev => prev.map(x => x.id === p.id ? { ...x, status: 'cancelled' } : x));
+    if (error) notify(friendlyError(error, L)); else setParts(prev => prev.map(x => x.id === p.id ? { ...x, status: 'cancelled' } : x));
   }
 
   // live totals: cancelled/rejected parts drop out

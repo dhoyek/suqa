@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
-import { supabaseServer } from '@/lib/supabase-server';
+import { getShopWithProducts } from '@/lib/public-data';
 import { ui } from '@/lib/ui-text';
 import { isOpenNow } from '@/lib/hours';
-import { t as tr, type Shop, type Product } from '@suqa/shared';
+import { t as tr } from '@suqa/shared';
 import ShopMenu from './ShopMenu';
 import { waLink, telLink } from '@/lib/whatsapp';
 
@@ -12,12 +12,9 @@ export const dynamic = 'force-dynamic';
 export default async function ShopPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const tenant = await getTenant();
-  const sb = await supabaseServer();
-  const { data: shop } = await sb.from('shops').select('*').eq('tenant_id', tenant.id).eq('slug', slug).eq('status', 'active').maybeSingle();
-  if (!shop) notFound();
-  const s = shop as Shop;
-  const { data: products } = await sb.from('products').select('*').eq('shop_id', s.id).eq('is_active', true)
-    .order('section', { ascending: true, nullsFirst: false }).order('sort_order');
+  const res = await getShopWithProducts(tenant.id, slug);
+  if (!res) notFound();
+  const { shop: s, products } = res;
   const L = tenant.default_locale;
   const open = isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone);
   const wa = waLink(s.whatsapp ?? s.phone, `${ui('waHello', L)} ${tr(s.name, L)} 👋`);
@@ -45,7 +42,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         )}
       </header>
       <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone }}
-        products={(products as Product[]) ?? []} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
+        products={products} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
         labels={{ add: ui('add', L), soldOut: ui('soldOut', L), replaceCart: ui('replaceCart', L), cart: ui('cart', L), checkout: ui('checkout', L), items: ui('items', L),
           askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L) }} />
     </>

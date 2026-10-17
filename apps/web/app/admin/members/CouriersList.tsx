@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import type { Locale } from '@suqa/shared';
@@ -10,6 +10,7 @@ type Labels = Record<'couriers' | 'addByEmail' | 'userNotFound' | 'remove' | 'ac
 
 export default function CouriersList({ tenantId, canEdit, initial, locale: L, labels }: { tenantId: string; canEdit: boolean; initial: Courier[]; locale: Locale; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const ask = useConfirm();
   const [list, setList] = useState(initial);
   const [email, setEmail] = useState('');
@@ -18,19 +19,19 @@ export default function CouriersList({ tenantId, canEdit, initial, locale: L, la
   async function add() {
     const { data } = await sb.rpc('find_user_by_email', { p_tenant: tenantId, p_email: email });
     const u = Array.isArray(data) ? data[0] : data;
-    if (!u) { alert(labels.userNotFound); return; }
+    if (!u) { notify(labels.userNotFound); return; }
     const { error } = await sb.from('couriers').upsert({ tenant_id: tenantId, user_id: u.user_id, is_active: true });
-    if (error) { alert(friendlyError(error, L)); return; }
+    if (error) { notify(friendlyError(error, L)); return; }
     setEmail(''); reload();
   }
   async function toggle(c: Courier) {
     const { error } = await sb.from('couriers').update({ is_active: !c.is_active }).eq('tenant_id', tenantId).eq('user_id', c.user_id);
-    if (error) alert(friendlyError(error, L)); else reload();
+    if (error) notify(friendlyError(error, L)); else reload();
   }
   async function remove(c: Courier) {
     if (!(await ask(`${labels.remove} ${c.email}?`, { danger: true }))) return;
     const { error } = await sb.from('couriers').delete().eq('tenant_id', tenantId).eq('user_id', c.user_id);
-    if (error) alert(friendlyError(error, L)); else reload();
+    if (error) notify(friendlyError(error, L)); else reload();
   }
 
   return (

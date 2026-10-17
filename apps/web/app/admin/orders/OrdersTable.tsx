@@ -1,5 +1,5 @@
 'use client';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -13,6 +13,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
   const { shops, filters, locale: L, fx, displayCurrency, timezone, statusLabels, labels } = props;
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [orders, setOrders] = useState(props.orders);
   const [open, setOpen] = useState<string | null>(null);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
@@ -20,7 +21,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
   const ask = useConfirm();
   async function setStatus(o: Row, status: OrderStatus) {
     const { error } = await sb.from('orders').update({ status }).eq('id', o.id);
-    if (error) { alert(error.message); return; }
+    if (error) { notify(error.message); return; }
     setOrders(prev => prev.map(x => x.id === o.id ? { ...x, status } : x));
   }
   const totals = orders.filter(o => o.status === 'delivered').reduce((a, o) => ({ sum: a.sum + Number(o.total_usd), comm: a.comm + Number(o.commission_usd) }), { sum: 0, comm: 0 });

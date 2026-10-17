@@ -1,5 +1,5 @@
 'use client';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -12,11 +12,12 @@ const SHOP_STATUS_LABEL: Record<string, { en: string; ar: string }> = {
 
 export default function ShopsList({ initial, locale: L, labels }: { initial: Row[]; locale: Locale; labels: Record<'approve' | 'pause' | 'resume' | 'disable' | 'minOrder', string> }) {
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [shops, setShops] = useState(initial);
   const ask = useConfirm();
   async function setStatus(s: Row, status: Shop['status']) {
     const { error } = await sb.from('shops').update({ status }).eq('id', s.id);
-    if (error) { alert(error.message); return; }
+    if (error) { notify(error.message); return; }
     setShops(prev => prev.map(x => x.id === s.id ? { ...x, status } : x));
   }
   const badge = (st: string) => ({ pending: 'pending', active: 'ready', paused: 'accepted', disabled: 'cancelled' } as any)[st];

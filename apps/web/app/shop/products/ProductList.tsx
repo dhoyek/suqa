@@ -1,5 +1,5 @@
 'use client';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
@@ -14,6 +14,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
   const { shopId, tenantId, locale: L, fx, displayCurrency, labels } = props;
   const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [products, setProducts] = useState<Product[]>(props.initial);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
     const next = !p.is_available;
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: next } : x));
     const { error } = await sb.from('products').update({ is_available: next }).eq('id', p.id);
-    if (error) { setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: !next } : x)); alert(friendlyError(error, L)); }
+    if (error) { setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: !next } : x)); notify(friendlyError(error, L)); }
   }
 
   async function save() {
@@ -42,7 +43,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
                        : sb.from('products').insert({ ...row, sort_order: products.length + 1 }).select().single();
     const { data, error } = await q;
     setBusy(false);
-    if (error) { alert(friendlyError(error, L)); return; }
+    if (error) { notify(friendlyError(error, L)); return; }
     setProducts(prev => draft.id ? prev.map(x => x.id === draft.id ? (data as Product) : x) : [...prev, data as Product]);
     setDraft(null);
   }
@@ -50,7 +51,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
   async function remove(p: Product) {
     if (!(await ask(`${labels.remove}: ${tr(p.name, L)}?`, { danger: true }))) return;
     const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id);  // soft delete
-    if (error) { alert(friendlyError(error, L)); return; }
+    if (error) { notify(friendlyError(error, L)); return; }
     setProducts(prev => prev.filter(x => x.id !== p.id));
   }
 

@@ -1,4 +1,5 @@
 'use client';
+import { useNotify } from '@/components/ConfirmProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
@@ -17,6 +18,7 @@ const mapsLink = (p: { lat: number; lng: number } | null) => p ? `https://www.go
 export default function CourierBoard(props: { tenantId: string; me: string; initial: Row[]; locale: Locale; fx: number; displayCurrency: DisplayCurrency; courierMode: boolean; statusLabels: Record<OrderStatus, string>; labels: Labels }) {
   const { tenantId, me, locale: L, fx, displayCurrency, labels, statusLabels } = props;
   const sb = useMemo(() => supabaseBrowser(), []);
+  const notify = useNotify();
   const [rows, setRows] = useState<Row[]>(props.initial);
   const [live, setLive] = useState(false);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
@@ -39,12 +41,12 @@ export default function CourierBoard(props: { tenantId: string; me: string; init
   async function pickUp(o: Row) {
     setRows(prev => prev.map(x => x.id === o.id ? { ...x, status: 'out_for_delivery', courier_id: me } : x));
     const { error } = await sb.from('orders').update({ status: 'out_for_delivery', courier_id: me }).eq('id', o.id).eq('status', 'ready').is('courier_id', null);
-    if (error) { alert(friendlyError(error, L)); refresh(); }
+    if (error) { notify(friendlyError(error, L)); refresh(); }
   }
   async function delivered(o: Row) {
     setRows(prev => prev.filter(x => x.id !== o.id));
     const { error } = await sb.from('orders').update({ status: 'delivered' }).eq('id', o.id);
-    if (error) { alert(friendlyError(error, L)); refresh(); }
+    if (error) { notify(friendlyError(error, L)); refresh(); }
   }
 
   const ready = rows.filter(r => r.status === 'ready' && !r.courier_id);

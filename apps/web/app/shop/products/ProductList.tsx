@@ -3,11 +3,12 @@ import { useConfirm } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
+import ImageUpload from '@/components/ImageUpload';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Product } from '@suqa/shared';
 
-type Labels = Record<'available' | 'unavailable' | 'addProduct' | 'editProduct' | 'nameEn' | 'nameAr' | 'priceUsd' | 'unit' | 'section' | 'save' | 'cancel' | 'remove', string>;
-type Draft = { id?: string; name_en: string; name_ar: string; price_usd: string; unit: string; section: string };
-const empty: Draft = { name_en: '', name_ar: '', price_usd: '', unit: '', section: '' };
+type Labels = Record<'available' | 'unavailable' | 'addProduct' | 'editProduct' | 'nameEn' | 'nameAr' | 'priceUsd' | 'unit' | 'section' | 'save' | 'cancel' | 'remove' | 'photo' | 'changePhoto' | 'descAr' | 'descEn', string>;
+type Draft = { id?: string; name_en: string; name_ar: string; desc_en: string; desc_ar: string; price_usd: string; unit: string; section: string; image_url: string | null };
+const empty: Draft = { name_en: '', name_ar: '', desc_en: '', desc_ar: '', price_usd: '', unit: '', section: '', image_url: null };
 
 export default function ProductList(props: { shopId: string; tenantId: string; initial: Product[]; locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels }) {
   const { shopId, tenantId, locale: L, fx, displayCurrency, labels } = props;
@@ -34,7 +35,8 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
     const row = {
       tenant_id: tenantId, shop_id: shopId,
       name: { en: draft.name_en.trim() || draft.name_ar.trim(), ar: draft.name_ar.trim() || draft.name_en.trim() },
-      price_usd: price, unit: draft.unit.trim() || null, section: draft.section.trim() || null,
+      description: { en: draft.desc_en.trim(), ar: draft.desc_ar.trim() },
+      price_usd: price, unit: draft.unit.trim() || null, section: draft.section.trim() || null, image_url: draft.image_url,
     };
     const q = draft.id ? sb.from('products').update(row).eq('id', draft.id).select().single()
                        : sb.from('products').insert({ ...row, sort_order: products.length + 1 }).select().single();
@@ -68,11 +70,12 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
             {products.filter(p => (p.section ?? '') === sec).map(p => (
               <div className={`product ${p.is_available ? '' : 'off'}`} key={p.id}>
                 <button className={`switch ${p.is_available ? 'on' : ''}`} aria-label={p.is_available ? labels.available : labels.unavailable} aria-pressed={p.is_available} onClick={() => toggle(p)} />
+                {p.image_url ? <img className="thumb" src={p.image_url} alt="" /> : <span className="thumb" aria-hidden />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="name">{tr(p.name, L)}</div>
                   <div className="muted" style={{ fontSize: 13 }}>{money(Number(p.price_usd))}{p.unit ? ` / ${p.unit}` : ''}</div>
                 </div>
-                <button className="btn ghost muted" onClick={() => setDraft({ id: p.id, name_en: p.name.en ?? '', name_ar: p.name.ar ?? '', price_usd: String(p.price_usd), unit: p.unit ?? '', section: p.section ?? '' })}>✎</button>
+                <button className="btn ghost muted" onClick={() => setDraft({ id: p.id, name_en: p.name.en ?? '', name_ar: p.name.ar ?? '', desc_en: p.description?.en ?? '', desc_ar: p.description?.ar ?? '', price_usd: String(p.price_usd), unit: p.unit ?? '', section: p.section ?? '', image_url: p.image_url ?? null })}>✎</button>
               </div>
             ))}
           </section>
@@ -83,6 +86,13 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
         <div className="sheet" onClick={() => setDraft(null)}>
           <div className="panel stack" onClick={e => e.stopPropagation()}>
             <strong>{draft.id ? labels.editProduct : labels.addProduct}</strong>
+            <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
+              <ImageUpload shopId={shopId} kind="product" shape="square" value={draft.image_url} onChange={u => setDraft(d => d ? { ...d, image_url: u } : d)} locale={L} labels={{ add: labels.photo, change: labels.changePhoto, remove: labels.remove }} />
+              <div className="stack" style={{ flex: 1 }}>
+                <div><label className="label">{labels.descAr}</label><input className="input" dir="rtl" value={draft.desc_ar} onChange={e => setDraft({ ...draft, desc_ar: e.target.value })} /></div>
+                <div><label className="label">{labels.descEn}</label><input className="input" dir="ltr" value={draft.desc_en} onChange={e => setDraft({ ...draft, desc_en: e.target.value })} /></div>
+              </div>
+            </div>
             <div><label className="label">{labels.nameAr}</label><input className="input" dir="rtl" value={draft.name_ar} onChange={e => setDraft({ ...draft, name_ar: e.target.value })} /></div>
             <div><label className="label">{labels.nameEn}</label><input className="input" dir="ltr" value={draft.name_en} onChange={e => setDraft({ ...draft, name_en: e.target.value })} /></div>
             <div className="row" style={{ alignItems: 'stretch' }}>

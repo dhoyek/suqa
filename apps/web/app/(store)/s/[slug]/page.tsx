@@ -26,7 +26,11 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
   return (
     <>
       <header style={{ marginBottom: 12 }}>
-        <h1 style={{ margin: '4px 0', fontSize: 22 }}>{tr(s.name, L)}</h1>
+        {s.cover_url && <img className="shop-cover" src={s.cover_url} alt="" />}
+        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+          {s.logo_url && <img className="shop-logo" src={s.logo_url} alt="" />}
+          <h1 style={{ margin: '4px 0', fontSize: 22 }}>{tr(s.name, L)}</h1>
+        </div>
         <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
         <div className="row" style={{ fontSize: 13, marginTop: 6 }}>
           <span className={`dot ${open ? 'on' : ''}`} /> {open ? ui('openNow', L) : ui('closedNow', L)}

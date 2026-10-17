@@ -19,7 +19,7 @@ export default async function ShopLayout({ children }: { children: ReactNode }) 
           <Link href="/shop" className="brand">{tenant.brand_name}</Link>
           <ShopNav
             shops={shops.map(s => ({ id: s.id, name: tr(s.name, L) }))}
-            labels={{ orders: ui('orders', L), products: ui('products', L), signOut: ui('signOut', L) }}
+            labels={{ orders: ui('orders', L), products: ui('products', L), myShop: ui('myShop', L), signOut: ui('signOut', L) }}
           />
         </div>
       </header>

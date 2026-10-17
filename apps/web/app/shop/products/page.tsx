@@ -21,6 +21,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     available: ui('available', L), unavailable: ui('unavailable', L), addProduct: ui('addProduct', L), editProduct: ui('editProduct', L),
     nameEn: ui('nameEn', L), nameAr: ui('nameAr', L), priceUsd: ui('priceUsd', L), unit: ui('unit', L), section: ui('section', L),
     save: ui('save', L), cancel: ui('cancel', L), remove: ui('remove', L),
+    photo: ui('photo', L), changePhoto: ui('changePhoto', L), descAr: ui('descAr', L), descEn: ui('descEn', L),
   };
 
   return (

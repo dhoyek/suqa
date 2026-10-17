@@ -37,6 +37,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
               const q = qtyOf(p.id);
               return (
                 <div className={`product ${p.is_available ? '' : 'off'}`} key={p.id}>
+                  {p.image_url && <img className="thumb lg" src={p.image_url} alt="" loading="lazy" />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="name">{tr(p.name, L)}</div>
                     {tr(p.description, L) && <div className="muted" style={{ fontSize: 13 }}>{tr(p.description, L)}</div>}

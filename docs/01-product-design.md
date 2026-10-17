@@ -131,3 +131,16 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - Web: `?next=` redirects are restricted to same-site paths; `x-suqa-host` is forwarded as a request header;
   unknown hostnames render a neutral page instead of crashing; `error.tsx`/`not-found.tsx`/`global-error.tsx`
   exist; security headers set in `netlify.toml`; dev deploys are `noindex`.
+
+## Multi-shop baskets (2026-10-17)
+
+- Tenant setting `settings.multi_shop_cart` turns on one cart across shops. The cart is grouped by shop with a
+  checkbox per shop (AliExpress-style): the customer checks out the selected shops and the rest stay in the cart.
+- One checkout → `suqa.place_basket()` → one `suqa.baskets` row + one `suqa.orders` row per shop
+  (`BAT-000123-A`, `-B`, …, `orders.basket_id/basket_seq`). Each part has its own status/state machine; a shop
+  only sees its own part. A rejected/cancelled part drops out of the basket total on the tracking page `/orders/b/<id>`.
+- Delivery of baskets: `settings.delivery_mode` = `per_shop` (each shop delivers, one fee per shop — default) or
+  `courier` (association delivers everything, one fee = `settings.courier_fee_usd`, else the highest zone fee among the parts;
+  parts carry `delivery_fee_usd = 0`, the fee lives on the basket). A courier/driver app is a later phase.
+- Single-shop checkouts keep using `suqa.place_order()` (no basket row). Both share `suqa._place_shop_order()`.
+- The "max 5 open checkouts" limit counts a basket as one.

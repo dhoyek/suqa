@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Tenant } from '@suqa/shared';
 
-type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed', string>;
+type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
+  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee', string>;
 
 export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tenant; canEdit: boolean; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -13,6 +14,8 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     brand_name: tenant.brand_name, fx: String(tenant.fx_lbp_rate), display: tenant.display_currency, commission: String(Number(tenant.commission_rate) * 100),
     support_phone: tenant.settings.support_phone ?? '', whatsapp_number: tenant.settings.whatsapp_number ?? '',
     primary: tenant.branding.colors?.primary ?? '#0E7490', accent: tenant.branding.colors?.accent ?? '#F59E0B',
+    multi_shop_cart: !!tenant.settings.multi_shop_cart, delivery_mode: tenant.settings.delivery_mode ?? 'per_shop',
+    courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '',
   });
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
@@ -20,7 +23,8 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     setBusy(true); setMsg(null);
     const { error } = await sb.from('tenants').update({
       brand_name: f.brand_name.trim(), fx_lbp_rate: Number(f.fx), display_currency: f.display, commission_rate: (Number(f.commission) || 0) / 100,
-      settings: { ...tenant.settings, support_phone: f.support_phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null },
+      settings: { ...tenant.settings, support_phone: f.support_phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
+        multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee) },
       branding: { ...tenant.branding, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
     }).eq('id', tenant.id);
     setBusy(false);
@@ -43,6 +47,17 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}><label className="label">{labels.supportPhone}</label><input className="input" dir="ltr" disabled={dis} value={f.support_phone} onChange={e => setF({ ...f, support_phone: e.target.value })} /></div>
           <div style={{ flex: 1 }}><label className="label">{labels.whatsapp}</label><input className="input" dir="ltr" disabled={dis} value={f.whatsapp_number} onChange={e => setF({ ...f, whatsapp_number: e.target.value })} /></div>
+        </div>
+        <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+          <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.multi_shop_cart} onChange={e => setF({ ...f, multi_shop_cart: e.target.checked })} /> {labels.multiShopCart}</label>
+          {f.multi_shop_cart && (
+            <div className="row" style={{ alignItems: 'stretch' }}>
+              <div style={{ flex: 1 }}><label className="label">{labels.deliveryMode}</label>
+                <select className="input" disabled={dis} value={f.delivery_mode} onChange={e => setF({ ...f, delivery_mode: e.target.value as any })}>
+                  <option value="per_shop">{labels.perShopDelivery}</option><option value="courier">{labels.courierDelivery}</option></select></div>
+              {f.delivery_mode === 'courier' && <div style={{ flex: 1 }}><label className="label">{labels.courierFee}</label><input className="input" dir="ltr" inputMode="decimal" disabled={dis} value={f.courier_fee} onChange={e => setF({ ...f, courier_fee: e.target.value })} /></div>}
+            </div>
+          )}
         </div>
         <div className="row">
           <label className="row">{labels.primaryColor} <input type="color" disabled={dis} value={f.primary} onChange={e => setF({ ...f, primary: e.target.value })} /></label>

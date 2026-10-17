@@ -6,8 +6,10 @@ create table if not exists suqa.orders (
   tenant_id         uuid not null references suqa.tenants(id) on delete restrict,
   shop_id           uuid not null references suqa.shops(id) on delete restrict,
   customer_id       uuid not null references auth.users(id) on delete restrict,
-  number            text not null,                               -- 'BAT-000123', per tenant
+  number            text not null,                               -- 'BAT-000123' (or 'BAT-000123-A' inside a basket), per tenant
   status            suqa.order_status not null default 'pending',
+  basket_id         uuid,                                        -- set when the order is one shop's part of a multi-shop basket (FK added in 12_baskets.sql)
+  basket_seq        text,                                        -- 'A', 'B', … position inside the basket
   payment_method    suqa.payment_method not null default 'cod',
   -- delivery
   zone_id           uuid references suqa.delivery_zones(id) on delete set null,

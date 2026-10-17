@@ -10,7 +10,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
   const user = await getUser();
   const L = tenant.default_locale;
   return (
-    <CartProvider tenantSlug={tenant.slug}>
+    <CartProvider tenantSlug={tenant.slug} multiShop={!!tenant.settings.multi_shop_cart}>
       <StoreHeader brand={tenant.brand_name} signedIn={!!user}
         labels={{ cart: ui('cart', L), account: ui('account', L), signIn: ui('signIn', L), myOrders: ui('myOrders', L) }} />
       <main className="container">{children}</main>

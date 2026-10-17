@@ -37,7 +37,7 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
     <div className="stack">
       {props.justPlaced && <div className="card" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>✅ {labels.orderPlaced}</div>}
       <div className="row spread">
-        <h1 style={{ margin: 0, fontSize: 20 }}>{o.number}</h1>
+        <h1 style={{ margin: 0, fontSize: 20 }}>{o.number}{(o as any).basket_id && <Link href={`/orders/b/${(o as any).basket_id}`} className="muted" style={{ fontSize: 13, fontWeight: 400, marginInlineStart: 8 }}>🧺</Link>}</h1>
         <span className={`badge ${o.status}`}>{statusLabels[o.status]}</span>
       </div>
       <section className="card">

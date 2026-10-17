@@ -117,3 +117,11 @@ button, input, select, textarea { font: inherit; }
 .divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .btn.social { background: #fff; color: #111; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* multi-shop cart */
+.cart-shop.off { opacity: .6; }
+.check { width: 20px; height: 20px; accent-color: var(--brand-primary); }
+.btn.disabled { opacity: .5; pointer-events: none; }
+.btn.wa-text { color: #128C7E; align-self: flex-start; padding: 4px 0; }
+.basket-part { border-inline-start: 3px solid var(--brand-primary); padding-inline-start: 10px; }
+.timeline.compact li { font-size: 12px; }

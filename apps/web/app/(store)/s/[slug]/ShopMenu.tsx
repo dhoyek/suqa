@@ -12,13 +12,13 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   shop: { id: string; slug: string; name: LocalizedText; min_order_usd: number; whatsapp: string | null }; products: Product[];
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels;
 }) {
-  const { cart, add, setQty, count, subtotal } = useCart();
+  const { add, setQty, qtyOf: qtyIn, selectedCount, selectedSubtotal, shopOf, setSelected } = useCart();
   const ask = useConfirm();
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(window.location.origin), []);
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
-  const qtyOf = (id: string) => cart.shop_id === shop.id ? (cart.lines.find(l => l.product_id === id)?.qty ?? 0) : 0;
+  const qtyOf = (id: string) => qtyIn(shop.id, id);
   // Prefilled WhatsApp message with the item's details and a link back to the shop page.
   const askLink = (p: Product) => waLink(shop.whatsapp, [
     `${labels.waHello} ${tr(shop.name, L)} 👋`, labels.waAskItem,
@@ -29,7 +29,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
 
   return (
     <>
-      <div className="stack" style={{ paddingBottom: count ? 90 : 0 }}>
+      <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
         {sections.map(sec => (
           <section className="card" key={sec || '_'}>
             {sec && <div className="col-title" style={{ marginTop: 0 }}>{sec}</div>}
@@ -44,11 +44,11 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
                   </div>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
+                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
                     : <div className="stepper">
-                        <button className="btn" onClick={() => setQty(p.id, q - 1)} aria-label="−">−</button>
+                        <button className="btn" onClick={() => setQty(shop.id, p.id, q - 1)} aria-label="−">−</button>
                         <span className="qty">{q}</span>
-                        <button className="btn" onClick={() => setQty(p.id, q + 1)} aria-label="+">+</button>
+                        <button className="btn" onClick={() => setQty(shop.id, p.id, q + 1)} aria-label="+">+</button>
                       </div>}
                 </div>
               );
@@ -56,10 +56,10 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
           </section>
         ))}
       </div>
-      {count > 0 && cart.shop_id === shop.id && (
+      {selectedCount > 0 && (
         <div className="cart-bar">
-          <Link href="/cart" className="btn primary wide row spread">
-            <span>{count} {labels.items}</span><span>{labels.checkout} · {money(subtotal)}</span>
+          <Link href="/cart" className="btn primary wide row spread" onClick={() => { if (shopOf(shop.id)) setSelected(shop.id, true); }}>
+            <span>{selectedCount} {labels.items}</span><span>{labels.cart} · {money(selectedSubtotal)}</span>
           </Link>
         </div>
       )}

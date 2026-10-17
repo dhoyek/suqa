@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 
@@ -8,6 +9,7 @@ type Labels = Record<'members' | 'addByEmail' | 'userNotFound' | 'tenantAdmin' |
 export default function MembersList({ tenantId, canEdit, initial, labels }: { tenantId: string; canEdit: boolean; initial: Person[]; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const [people, setPeople] = useState(initial);
+  const ask = useConfirm();
   const [email, setEmail] = useState(''); const [role, setRole] = useState<'admin' | 'ops'>('ops');
   const staff = people.filter(p => p.tenant_role);
   const shopPeople = people.filter(p => p.shop_id);
@@ -22,7 +24,7 @@ export default function MembersList({ tenantId, canEdit, initial, labels }: { te
     setEmail(''); reload();
   }
   async function remove(p: Person) {
-    if (!confirm(`${labels.remove} ${p.email}?`)) return;
+    if (!(await ask(`${labels.remove} ${p.email}?`, { danger: true }))) return;
     const { error } = await sb.from('tenant_members').delete().eq('tenant_id', tenantId).eq('user_id', p.user_id);
     if (error) { alert(error.message); return; }
     reload();

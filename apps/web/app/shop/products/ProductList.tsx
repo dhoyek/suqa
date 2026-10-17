@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
@@ -10,6 +11,7 @@ const empty: Draft = { name_en: '', name_ar: '', price_usd: '', unit: '', sectio
 
 export default function ProductList(props: { shopId: string; tenantId: string; initial: Product[]; locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels }) {
   const { shopId, tenantId, locale: L, fx, displayCurrency, labels } = props;
+  const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
   const [products, setProducts] = useState<Product[]>(props.initial);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -44,7 +46,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
   }
 
   async function remove(p: Product) {
-    if (!confirm(`${labels.remove}: ${tr(p.name, L)}?`)) return;
+    if (!(await ask(`${labels.remove}: ${tr(p.name, L)}?`, { danger: true }))) return;
     const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id);  // soft delete
     if (error) { alert(friendlyError(error, L)); return; }
     setProducts(prev => prev.filter(x => x.id !== p.id));

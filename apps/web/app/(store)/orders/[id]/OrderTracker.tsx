@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -10,6 +11,7 @@ const STEPS: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'out_
 
 export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes', string> }) {
   const { locale: L, fx, displayCurrency, statusLabels, labels } = props;
+  const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
   const [o, setO] = useState<Row>(props.initial);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
@@ -23,7 +25,7 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
   }, [o.id]);
 
   async function cancel() {
-    if (!confirm(`${labels.cancelOrder}?`)) return;
+    if (!(await ask(`${labels.cancelOrder}?`, { danger: true }))) return;
     const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', o.id);
     if (error) alert(friendlyError(error, L)); else setO(prev => ({ ...prev, status: 'cancelled' }));
   }

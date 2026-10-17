@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
@@ -21,6 +22,7 @@ const toWkt = (ring: [number, number][]) => `SRID=4326;MULTIPOLYGON(((${[...ring
 export default function ZonesEditor({ tenantId, locale: L, center, initial, labels }: { tenantId: string; locale: Locale; center: { lat: number; lng: number }; initial: Zone[]; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const [zones, setZones] = useState<Zone[]>(initial);
+  const ask = useConfirm();
   const [editing, setEditing] = useState<Zone | null>(null);
   const [draft, setDraft] = useState({ name_ar: '', name_en: '', fee: '', eta: '', active: true });
   const [drawing, setDrawing] = useState<[number, number][]>([]);
@@ -77,7 +79,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
     setZones((data as Zone[]) ?? []); setEditing(null); setDrawing([]); setMsg(labels.saved);
   }
   async function remove(z: Zone) {
-    if (!confirm(`${labels.remove} ${tr(z.name, L)}?`)) return;
+    if (!(await ask(`${labels.remove} ${tr(z.name, L)}?`, { danger: true }))) return;
     const { error } = await sb.from('delivery_zones').delete().eq('id', z.id);
     if (error) { alert(error.message); return; }
     setZones(prev => prev.filter(x => x.id !== z.id)); setEditing(null);

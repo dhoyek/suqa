@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -23,6 +24,7 @@ export default function ShopEditor(props: {
     prep_minutes: String(shop?.prep_minutes ?? 30), commission_rate: shop?.commission_rate == null ? '' : String(Number(shop.commission_rate) * 100),
   });
   const [loc, setLoc] = useState(props.location);
+  const ask = useConfirm();
   const [served, setServed] = useState<Record<string, { on: boolean; fee: string }>>(Object.fromEntries(zones.map(z => {
     const s = props.served.find(x => x.zone_id === z.id); return [z.id, { on: !!s, fee: s?.fee_usd == null ? '' : String(s.fee_usd) }];
   })));
@@ -61,7 +63,7 @@ export default function ShopEditor(props: {
     setMembers(prev => [...prev.filter(m => m.user_id !== u.user_id), { user_id: u.user_id, full_name: u.full_name, email: u.email, role }]); setEmail('');
   }
   async function removeMember(m: Member) {
-    if (!shop || !confirm(`${labels.remove} ${m.email}?`)) return;
+    if (!shop || !(await ask(`${labels.remove} ${m.email}?`, { danger: true }))) return;
     const { error } = await sb.from('shop_members').delete().eq('shop_id', shop.id).eq('user_id', m.user_id);
     if (error) { alert(error.message); return; }
     setMembers(prev => prev.filter(x => x.user_id !== m.user_id));

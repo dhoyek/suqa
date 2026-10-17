@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { getTenantOrNull, isDevDeploy } from '@/lib/tenant';
 import { brandCssVars, RTL } from '@suqa/shared';
+import { ConfirmProvider } from '@/components/ConfirmProvider';
+import { ui } from '@/lib/ui-text';
 
 export async function generateMetadata() {
   const t = await getTenantOrNull();
@@ -32,7 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const locale = t.default_locale;
   return (
     <html lang={locale} dir={RTL[locale] ? 'rtl' : 'ltr'} style={brandCssVars(t) as any}>
-      <body>{children}</body>
+      <body><ConfirmProvider labels={{ confirm: ui('confirm', locale), cancel: ui('cancel', locale) }}>{children}</ConfirmProvider></body>
     </html>
   );
 }

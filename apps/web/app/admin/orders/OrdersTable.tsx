@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -16,6 +17,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
   const [open, setOpen] = useState<string | null>(null);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
   const nav = (patch: Partial<typeof filters>) => { const f = { ...filters, ...patch }; const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as any).toString(); router.push(`/admin/orders${q ? `?${q}` : ''}`); };
+  const ask = useConfirm();
   async function setStatus(o: Row, status: OrderStatus) {
     const { error } = await sb.from('orders').update({ status }).eq('id', o.id);
     if (error) { alert(error.message); return; }
@@ -54,7 +56,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
                 {o.reject_reason && <div className="error">{o.reject_reason}</div>}
                 <div className="row">
                   {(NEXT_STATUS[o.status] ?? []).map(s => <button key={s} className="btn" onClick={() => setStatus(o, s)}>{statusLabels[s]}</button>)}
-                  {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn danger" onClick={() => confirm(`${statusLabels.cancelled}?`) && setStatus(o, 'cancelled')}>{statusLabels.cancelled}</button>}
+                  {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn danger" onClick={async () => (await ask(`${statusLabels.cancelled}?`, { danger: true })) && setStatus(o, 'cancelled')}>{statusLabels.cancelled}</button>}
                 </div>
               </div>
             )}

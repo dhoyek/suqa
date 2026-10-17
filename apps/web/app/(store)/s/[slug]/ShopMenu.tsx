@@ -1,4 +1,5 @@
 'use client';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
@@ -12,6 +13,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels;
 }) {
   const { cart, add, setQty, count, subtotal } = useCart();
+  const ask = useConfirm();
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(window.location.origin), []);
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
@@ -42,7 +44,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
                   </div>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => confirm(labels.replaceCart))}>+ {labels.add}</button>
+                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(p.id, q - 1)} aria-label="−">−</button>
                         <span className="qty">{q}</span>

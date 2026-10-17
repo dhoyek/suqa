@@ -101,6 +101,7 @@ create trigger orders_after_insert after insert on suqa.orders
   for each row execute function suqa.orders_on_insert();
 
 -- Transitions on update (BEFORE, so we can validate and stamp timestamps).
+-- NB: superseded by the version in 14_couriers.sql (adds the courier actor and picked_up_at); kept for readability.
 create or replace function suqa.orders_on_status_change() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_actor suqa.actor_kind;

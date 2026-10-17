@@ -144,3 +144,16 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
   parts carry `delivery_fee_usd = 0`, the fee lives on the basket). A courier/driver app is a later phase.
 - Single-shop checkouts keep using `suqa.place_order()` (no basket row). Both share `suqa._place_shop_order()`.
 - The "max 5 open checkouts" limit counts a basket as one.
+
+## Couriers (2026-10-17)
+
+- `settings.courier_enabled` shows the driver app at `/courier` (and the Couriers section in admin → Members).
+  Independent of `delivery_mode`: an association can run drivers for single-shop orders too.
+- A courier is a row in `suqa.couriers`, **not** a tenant member — no access to finances, shops or other orders.
+  RLS: couriers read orders in their tenant that are `ready`/`out_for_delivery` (or theirs), and may only set
+  `courier_id = me` on an unassigned `ready` order and move it `ready → out_for_delivery → delivered`.
+- `/courier`: "My deliveries" (out for delivery, by me) + "Ready for pickup"; basket parts grouped into one card
+  (pick up from N shops → one address), call/navigate links, cash to collect; realtime + 20 s polling.
+- Shops can still mark `delivered` themselves (pickup-at-shop / own delivery) — the courier flow is additive.
+- Theming note: brand = `tenants.branding` → CSS variables per hostname. Extend with logo/favicon/derived palette
+  when needed; no per-tenant layouts.

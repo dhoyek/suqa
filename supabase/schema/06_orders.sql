@@ -10,6 +10,8 @@ create table if not exists suqa.orders (
   status            suqa.order_status not null default 'pending',
   basket_id         uuid,                                        -- set when the order is one shop's part of a multi-shop basket (FK added in 12_baskets.sql)
   basket_seq        text,                                        -- 'A', 'B', … position inside the basket
+  courier_id        uuid references auth.users(id) on delete set null,   -- association courier delivering it (14_couriers.sql)
+  picked_up_at      timestamptz,
   payment_method    suqa.payment_method not null default 'cod',
   -- delivery
   zone_id           uuid references suqa.delivery_zones(id) on delete set null,

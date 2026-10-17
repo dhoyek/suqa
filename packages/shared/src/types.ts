@@ -15,7 +15,7 @@ export interface Tenant {
   timezone: string; country_code: string;
   branding: { logo_url?: string | null; colors?: { primary?: string; accent?: string }; app_icon_url?: string | null };
   settings: { support_phone?: string | null; whatsapp_number?: string | null; min_order_usd?: number;
-    multi_shop_cart?: boolean; delivery_mode?: 'per_shop' | 'courier'; courier_fee_usd?: number | null };
+    multi_shop_cart?: boolean; delivery_mode?: 'per_shop' | 'courier'; courier_fee_usd?: number | null; courier_enabled?: boolean };
 }
 
 export interface Shop {
@@ -42,7 +42,7 @@ export interface Address {
 
 export interface Order {
   id: string; tenant_id: string; shop_id: string; customer_id: string; number: string;
-  basket_id: string | null; basket_seq: string | null;
+  basket_id: string | null; basket_seq: string | null; courier_id: string | null; picked_up_at: string | null;
   status: OrderStatus; payment_method: 'cod' | 'card'; zone_id: string | null; address: Address;
   customer_name: string; customer_phone: string; customer_notes: string | null;
   subtotal_usd: number; delivery_fee_usd: number; total_usd: number; fx_lbp_rate: number;

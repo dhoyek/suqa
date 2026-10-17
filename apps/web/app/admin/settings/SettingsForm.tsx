@@ -5,7 +5,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Tenant } from '@suqa/shared';
 
 type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
-  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee', string>;
+  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled', string>;
 
 export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tenant; canEdit: boolean; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -15,7 +15,7 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     support_phone: tenant.settings.support_phone ?? '', whatsapp_number: tenant.settings.whatsapp_number ?? '',
     primary: tenant.branding.colors?.primary ?? '#0E7490', accent: tenant.branding.colors?.accent ?? '#F59E0B',
     multi_shop_cart: !!tenant.settings.multi_shop_cart, delivery_mode: tenant.settings.delivery_mode ?? 'per_shop',
-    courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '',
+    courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '', courier_enabled: !!tenant.settings.courier_enabled,
   });
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
@@ -24,7 +24,7 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     const { error } = await sb.from('tenants').update({
       brand_name: f.brand_name.trim(), fx_lbp_rate: Number(f.fx), display_currency: f.display, commission_rate: (Number(f.commission) || 0) / 100,
       settings: { ...tenant.settings, support_phone: f.support_phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
-        multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee) },
+        multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee), courier_enabled: f.courier_enabled },
       branding: { ...tenant.branding, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
     }).eq('id', tenant.id);
     setBusy(false);
@@ -50,6 +50,7 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
         </div>
         <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.multi_shop_cart} onChange={e => setF({ ...f, multi_shop_cart: e.target.checked })} /> {labels.multiShopCart}</label>
+          <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.courier_enabled} onChange={e => setF({ ...f, courier_enabled: e.target.checked })} /> 🛵 {labels.couriersEnabled}</label>
           {f.multi_shop_cart && (
             <div className="row" style={{ alignItems: 'stretch' }}>
               <div style={{ flex: 1 }}><label className="label">{labels.deliveryMode}</label>

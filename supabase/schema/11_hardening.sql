@@ -18,6 +18,7 @@ language sql immutable as $$
 $$;
 
 -- ---------- orders: snapshot stays frozen; only workflow columns move ----------
+-- NB: superseded by the version in 14_couriers.sql (adds courier rules); kept for readability.
 create or replace function suqa.orders_guard_columns() returns trigger
 language plpgsql set search_path = public as $$
 declare

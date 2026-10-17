@@ -142,3 +142,4 @@ button, input, select, textarea { font: inherit; }
 .hours-row { display: grid; grid-template-columns: 52px 1fr 1fr auto; gap: 6px; align-items: center; }
 .hours-row input[type=time] { min-height: 36px; padding: 4px 6px; }
 .card.paused { border-color: #fecaca; background: #fff7f7; }
+.courier-card { border-inline-start: 4px solid var(--brand-accent); }

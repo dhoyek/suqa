@@ -61,7 +61,7 @@ grant execute on function suqa.tenant_stats(uuid) to authenticated;
 -- Zones as GeoJSON for the admin map (PostgREST returns geography as WKB hex otherwise).
 create or replace function suqa.tenant_zones_geojson(p_tenant uuid)
 returns table (id uuid, name jsonb, fee_usd numeric, eta_minutes int, is_active boolean, sort_order int, geojson jsonb)
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select z.id, z.name, z.fee_usd, z.eta_minutes, z.is_active, z.sort_order, st_asgeojson(z.area)::jsonb
     from suqa.delivery_zones z where z.tenant_id = p_tenant and suqa.is_tenant_member(p_tenant)
    order by z.sort_order

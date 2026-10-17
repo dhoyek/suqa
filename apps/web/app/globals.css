@@ -82,7 +82,9 @@ button, input, select, textarea { font: inherit; }
 .error { color: var(--bad); font-size: 14px; }
 
 /* storefront */
-.chip { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; text-decoration: none; font-size: 14px; white-space: nowrap; }
+.chip { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; text-decoration: none; font-size: 14px; white-space: nowrap; cursor: pointer; color: inherit; font: inherit; font-size: 14px; }
+.chips { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+.chips::-webkit-scrollbar { display: none; }
 .chip.active { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .shop-card { text-decoration: none; color: inherit; display: block; }
@@ -105,3 +107,13 @@ button, input, select, textarea { font: inherit; }
 .timeline li.current .tick { border-color: var(--brand-primary); background: #fff; box-shadow: 0 0 0 3px rgba(14,116,144,.2); }
 .addr { border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
 .addr.selected { border-color: var(--brand-primary); background: #f0f9fb; }
+
+/* WhatsApp buttons */
+.btn.wa { background: #25D366; border-color: #25D366; color: #fff; }
+.btn.wa:hover { background: #1ebe5b; }
+.btn.wa-mini { padding: 6px 8px; font-size: 16px; line-height: 1; text-decoration: none; }
+.btn.wa-mini:hover { background: #e9fbef; }
+/* social sign-in */
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.btn.social { background: #fff; color: #111; display: flex; align-items: center; justify-content: center; gap: 8px; }

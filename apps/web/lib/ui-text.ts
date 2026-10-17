@@ -139,6 +139,21 @@ const T = {
   tenantAdmin: { en: 'Admin', ar: 'مدير' },
   tenantOps: { en: 'Ops', ar: 'تشغيل' },
   customer: { en: 'Customer', ar: 'زبون' },
+  noShopsInCategory: { en: 'No shops in this category yet', ar: 'لا متاجر في هذه الفئة بعد' },
+  // whatsapp / contact
+  chatWhatsapp: { en: 'WhatsApp', ar: 'واتساب' },
+  askOnWhatsapp: { en: 'Ask about this item on WhatsApp', ar: 'اسأل عن هذا الصنف عبر واتساب' },
+  sendCartWhatsapp: { en: 'Send this order by WhatsApp instead', ar: 'أرسل هذا الطلب عبر واتساب بدلاً من ذلك' },
+  waHello: { en: 'Hello', ar: 'مرحباً' },
+  waAskItem: { en: 'I would like to ask about this item:', ar: 'أودّ الاستفسار عن هذا الصنف:' },
+  waOrderIntro: { en: 'I would like to order:', ar: 'أودّ طلب ما يلي:' },
+  waFrom: { en: 'via', ar: 'عبر' },
+  // social sign-in
+  orContinueWith: { en: 'or continue with', ar: 'أو تابع باستخدام' },
+  continueGoogle: { en: 'Continue with Google', ar: 'المتابعة عبر Google' },
+  continueFacebook: { en: 'Continue with Facebook', ar: 'المتابعة عبر Facebook' },
+  continueApple: { en: 'Continue with Apple', ar: 'المتابعة عبر Apple' },
+  checkEmail: { en: 'Check your email to confirm the account, then sign in.', ar: 'تحقق من بريدك الإلكتروني لتأكيد الحساب ثم سجّل الدخول.' },
   // errors coming back from the database (stable keys raised by suqa.place_order & guards)
   err_shop_unavailable: { en: 'This shop is not taking orders right now', ar: 'هذا المتجر لا يستقبل الطلبات حالياً' },
   err_tenant_not_live: { en: 'The marketplace is not open yet', ar: 'السوق غير مفتوح بعد' },

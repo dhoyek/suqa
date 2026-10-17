@@ -3,11 +3,11 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { LocalizedText } from '@suqa/shared';
 
 export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number };
-export type Cart = { shop_id: string | null; shop_slug: string | null; shop_name: LocalizedText | null; lines: CartLine[] };
+export type Cart = { shop_id: string | null; shop_slug: string | null; shop_name: LocalizedText | null; shop_whatsapp?: string | null; lines: CartLine[] };
 
 type Ctx = {
   cart: Cart; count: number; subtotal: number;
-  add: (shop: { id: string; slug: string; name: LocalizedText }, line: Omit<CartLine, 'qty'>, replaceConfirm: () => boolean) => void;
+  add: (shop: { id: string; slug: string; name: LocalizedText; whatsapp?: string | null }, line: Omit<CartLine, 'qty'>, replaceConfirm: () => boolean) => void;
   setQty: (product_id: string, qty: number) => void;
   clear: () => void;
 };
@@ -31,11 +31,11 @@ export function CartProvider({ tenantSlug, children }: { tenantSlug: string; chi
       setCart(prev => {
         if (prev.shop_id && prev.shop_id !== shop.id && prev.lines.length) {
           if (!replaceConfirm()) return prev;
-          return { shop_id: shop.id, shop_slug: shop.slug, shop_name: shop.name, lines: [{ ...line, qty: 1 }] };
+          return { shop_id: shop.id, shop_slug: shop.slug, shop_name: shop.name, shop_whatsapp: shop.whatsapp ?? null, lines: [{ ...line, qty: 1 }] };
         }
         const existing = prev.lines.find(l => l.product_id === line.product_id);
         const lines = existing ? prev.lines.map(l => l.product_id === line.product_id ? { ...l, qty: l.qty + 1 } : l) : [...prev.lines, { ...line, qty: 1 }];
-        return { shop_id: shop.id, shop_slug: shop.slug, shop_name: shop.name, lines };
+        return { shop_id: shop.id, shop_slug: shop.slug, shop_name: shop.name, shop_whatsapp: shop.whatsapp ?? prev.shop_whatsapp ?? null, lines };
       });
     },
     setQty(product_id, qty) {

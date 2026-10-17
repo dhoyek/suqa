@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Locale } from '@suqa/shared';
 
-export default function SignupForm({ next, tenantId, locale, labels }: { next: string; tenantId: string; locale: Locale; labels: Record<'fullName' | 'phone' | 'email' | 'password' | 'createAccount' | 'failed', string> }) {
+export default function SignupForm({ next, tenantId, locale, labels }: { next: string; tenantId: string; locale: Locale; labels: Record<'fullName' | 'phone' | 'email' | 'password' | 'createAccount' | 'failed' | 'checkEmail', string> }) {
   const router = useRouter();
   const [f, setF] = useState({ full_name: '', phone: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
@@ -20,7 +20,7 @@ export default function SignupForm({ next, tenantId, locale, labels }: { next: s
     });
     setBusy(false);
     if (error) { setError(`${labels.failed}: ${error.message}`); return; }
-    if (!data.session) { setError('Check your email to confirm the account, then sign in.'); return; }
+    if (!data.session) { setError(labels.checkEmail); return; }
     // keep the phone on the profile too (auth.users.phone is only set by phone auth)
     await sb.from('profiles').update({ phone }).eq('id', data.user!.id);
     router.replace(next); router.refresh();

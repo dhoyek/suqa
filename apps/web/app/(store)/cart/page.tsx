@@ -11,5 +11,6 @@ export default async function CartPage() {
   const L = tenant.default_locale;
   return <CartView locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} signedIn={!!user}
     labels={{ cart: ui('cart', L), emptyCart: ui('emptyCart', L), browseShops: ui('browseShops', L), subtotal: ui('subtotal', L),
-      deliveryFee: ui('deliveryFee', L), checkout: ui('checkout', L), from: ui('from', L), remove: ui('remove', L) }} />;
+      deliveryFee: ui('deliveryFee', L), checkout: ui('checkout', L), from: ui('from', L), remove: ui('remove', L),
+      sendCartWhatsapp: ui('sendCartWhatsapp', L), waHello: ui('waHello', L), waOrderIntro: ui('waOrderIntro', L), total: ui('total', L), notes: ui('notes', L) }} />;
 }

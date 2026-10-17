@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type LocalizedText, type Product } from '@suqa/shared';
@@ -11,6 +12,8 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels;
 }) {
   const { cart, add, setQty, count, subtotal } = useCart();
+  const [origin, setOrigin] = useState('');
+  useEffect(() => setOrigin(window.location.origin), []);
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
   const qtyOf = (id: string) => cart.shop_id === shop.id ? (cart.lines.find(l => l.product_id === id)?.qty ?? 0) : 0;
@@ -19,7 +22,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
     `${labels.waHello} ${tr(shop.name, L)} 👋`, labels.waAskItem,
     `• ${tr(p.name, L)}${p.unit ? ` (${p.unit})` : ''} — ${money(Number(p.price_usd))}`,
     tr(p.description, L) || null,
-    typeof window !== 'undefined' ? `${labels.waFrom} ${window.location.origin}/s/${shop.slug}` : null,
+    origin ? `${labels.waFrom} ${origin}/s/${shop.slug}` : null,
   ].filter(Boolean).join('\n'));
 
   return (

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import { friendlyError } from '@/lib/ui-text';
 import { useCart } from '@/components/CartProvider';
 import MapPicker from '@/components/MapPicker';
 import { formatMoney, placeOrder, pointToEwkt, t as tr, type DisplayCurrency, type Locale } from '@suqa/shared';
@@ -44,7 +45,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
       notes: draft.notes.trim() || null, phone: draft.phone.trim() || null, location: pointToEwkt(draft), is_default: addresses.length === 0,
     }).select('id,label,line1,line2,notes,phone,is_default').single();
     setBusy(false);
-    if (error) { setError(error.message); return; }
+    if (error) { setError(friendlyError(error, L)); return; }
     const a: Addr = { ...(data as any), lat: draft.lat, lng: draft.lng };
     setAddresses(prev => [...prev, a]); setSelected(a.id); setAdding(false);
   }
@@ -56,7 +57,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
       const order = await placeOrder(sb, cart.shop_id, selected, cart.lines.map(l => ({ product_id: l.product_id, quantity: l.qty })), notes.trim() || undefined);
       clear();
       router.replace(`/orders/${order.id}?placed=1`);
-    } catch (e: any) { setError(e.message ?? String(e)); setBusy(false); }
+    } catch (e: any) { setError(friendlyError(e, L)); setBusy(false); }
   }
 
   if (!count) return <div className="card stack" style={{ textAlign: 'center' }}><p className="muted">{labels.emptyCart}</p><Link className="btn primary" href="/">{labels.browseShops}</Link></div>;

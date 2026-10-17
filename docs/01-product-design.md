@@ -114,3 +114,20 @@ customer ratings · loyalty.
 Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · instances
 `suqa-<slug>` · bundle id `com.yorgoinc.suqa.<slug>` · SQL changes = full table script re-issued
 (see `supabase/schema/README.md`).
+
+## Hardening notes (2026-10-17)
+
+- **Two layers of authorisation.** RLS decides *who* may touch a row; `BEFORE UPDATE` guard triggers
+  (`supabase/schema/11_hardening.sql`) decide *which columns* they may change. Orders are frozen snapshots
+  (only `status`, `reject_reason`, `shop_notes`, `eta_minutes` move, customers only `status`); merchants
+  cannot change their own `commission_rate`, `slug` or leave `pending`/`disabled`; association admins
+  cannot change a tenant's `slug`/`status`; the last tenant admin cannot be removed.
+- Guards apply only to end users (`anon`/`authenticated`) who are not platform admins. The SQL editor and
+  the service role bypass them. **Platform admins bypass them too** — `dev-admin@suqa.dev` is one, so use
+  a plain tenant admin when testing (see `supabase/test/hardening.sql`, which runs 19 negative tests).
+- `place_order` raises stable snake_case errors (`min_order`, `outside_delivery_area`, `product_unavailable`,
+  `too_many_open_orders` …) with the parameter in `DETAIL`; the web app translates them in
+  `lib/ui-text.ts → friendlyError()`. Limits: ≤50 lines, qty ≤999, notes ≤500/200 chars, ≤5 open orders per customer.
+- Web: `?next=` redirects are restricted to same-site paths; `x-suqa-host` is forwarded as a request header;
+  unknown hostnames render a neutral page instead of crashing; `error.tsx`/`not-found.tsx`/`global-error.tsx`
+  exist; security headers set in `netlify.toml`; dev deploys are `noindex`.

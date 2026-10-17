@@ -9,10 +9,16 @@ begin
   if not suqa.is_tenant_member(p_tenant) then
     raise exception 'not allowed' using errcode = 'insufficient_privilege';
   end if;
+  -- Only people who signed up on this tenant (or are already linked to it) can be found —
+  -- prevents using the admin as a directory of every account on the platform.
   return query
     select u.id, p.full_name, u.email::text
       from auth.users u left join suqa.profiles p on p.id = u.id
      where lower(u.email) = lower(trim(p_email))
+       and (p.home_tenant_id = p_tenant
+            or exists (select 1 from suqa.tenant_members tm where tm.user_id = u.id and tm.tenant_id = p_tenant)
+            or exists (select 1 from suqa.shop_members sm join suqa.shops s on s.id = sm.shop_id
+                        where sm.user_id = u.id and s.tenant_id = p_tenant))
      limit 1;
 end $$;
 grant execute on function suqa.find_user_by_email(uuid, text) to authenticated;

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import { friendlyError } from '@/lib/ui-text';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 
 export type OrderRow = Order & { items: OrderItem[] };
@@ -60,7 +61,7 @@ export default function OrdersBoard(props: {
     setBusy(o.id);
     const { error } = await sb.from('orders').update({ status, ...extra }).eq('id', o.id);
     setBusy(null);
-    if (error) { alert(error.message); return; }
+    if (error) { alert(friendlyError(error, L)); return; }
     setOrders(prev => prev.map(x => x.id === o.id ? { ...x, status, ...extra } as OrderRow : x));
   }
 

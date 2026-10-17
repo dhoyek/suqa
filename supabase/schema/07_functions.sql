@@ -153,6 +153,7 @@ $$;
 -- ---------- place_order (the only way a customer creates an order) -----------
 -- Prices, fees and totals are computed here from the database, never trusted from the client.
 -- p_items: [{ "product_id": "...", "quantity": 2, "notes": "..." }]
+-- Errors use stable snake_case messages (the app translates them); DETAIL carries the parameter.
 create or replace function suqa.place_order(
   p_shop uuid, p_address_id uuid, p_items jsonb, p_notes text default null)
 returns suqa.orders
@@ -160,36 +161,45 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_shop suqa.shops; v_tenant suqa.tenants; v_addr suqa.addresses; v_order suqa.orders;
   v_zone record; v_item jsonb; v_prod suqa.products; v_qty numeric; v_sub numeric := 0;
-  v_rate numeric;
+  v_rate numeric; v_open int;
+  c_max_lines constant int := 50; c_max_qty constant numeric := 999; c_max_open constant int := 5;
 begin
-  if auth.uid() is null then raise exception 'not signed in' using errcode='insufficient_privilege'; end if;
+  if auth.uid() is null then raise exception 'not_signed_in' using errcode='insufficient_privilege'; end if;
 
   select * into v_shop from suqa.shops where id = p_shop and status = 'active';
-  if not found then raise exception 'shop not available'; end if;
+  if not found then raise exception 'shop_unavailable'; end if;
   select * into v_tenant from suqa.tenants where id = v_shop.tenant_id and status = 'live';
-  if not found then raise exception 'tenant not live'; end if;
+  if not found then raise exception 'tenant_not_live'; end if;
   select * into v_addr from suqa.addresses where id = p_address_id and user_id = auth.uid() and tenant_id = v_tenant.id;
-  if not found then raise exception 'address not found'; end if;
+  if not found then raise exception 'address_not_found'; end if;
+
+  -- abuse limit: a customer may have at most N orders still open
+  select count(*) into v_open from suqa.orders
+   where customer_id = auth.uid() and tenant_id = v_tenant.id and closed_at is null;
+  if v_open >= c_max_open then raise exception 'too_many_open_orders' using detail = c_max_open::text; end if;
 
   select * into v_zone from suqa.find_zone(v_tenant.id, v_shop.id, v_addr.location);
-  if v_zone.zone_id is null then raise exception 'address outside delivery area'; end if;
+  if v_zone.zone_id is null then raise exception 'outside_delivery_area'; end if;
 
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
-    raise exception 'empty order';
+    raise exception 'empty_order';
   end if;
+  if jsonb_array_length(p_items) > c_max_lines then raise exception 'too_many_lines' using detail = c_max_lines::text; end if;
+  if length(coalesce(p_notes, '')) > 500 then raise exception 'notes_too_long' using detail = '500'; end if;
 
   -- subtotal
   for v_item in select * from jsonb_array_elements(p_items) loop
     select * into v_prod from suqa.products
      where id = (v_item->>'product_id')::uuid and shop_id = v_shop.id and is_active and is_available;
-    if not found then raise exception 'product % unavailable', v_item->>'product_id'; end if;
+    if not found then raise exception 'product_unavailable' using detail = v_item->>'product_id'; end if;
     v_qty := (v_item->>'quantity')::numeric;
-    if v_qty is null or v_qty <= 0 then raise exception 'bad quantity'; end if;
+    if v_qty is null or v_qty <= 0 or v_qty > c_max_qty then raise exception 'bad_quantity' using detail = v_item->>'product_id'; end if;
+    if length(coalesce(v_item->>'notes', '')) > 200 then raise exception 'notes_too_long' using detail = '200'; end if;
     v_sub := v_sub + round(v_prod.price_usd * v_qty, 2);
   end loop;
 
   if v_sub < v_shop.min_order_usd then
-    raise exception 'minimum order is % USD', v_shop.min_order_usd;
+    raise exception 'min_order' using detail = v_shop.min_order_usd::text;
   end if;
 
   v_rate := coalesce(v_shop.commission_rate, v_tenant.commission_rate);

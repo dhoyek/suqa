@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import { friendlyError } from '@/lib/ui-text';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Product } from '@suqa/shared';
 
 type Labels = Record<'available' | 'unavailable' | 'addProduct' | 'editProduct' | 'nameEn' | 'nameAr' | 'priceUsd' | 'unit' | 'section' | 'save' | 'cancel' | 'remove', string>;
@@ -19,7 +20,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
     const next = !p.is_available;
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: next } : x));
     const { error } = await sb.from('products').update({ is_available: next }).eq('id', p.id);
-    if (error) { setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: !next } : x)); alert(error.message); }
+    if (error) { setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_available: !next } : x)); alert(friendlyError(error, L)); }
   }
 
   async function save() {
@@ -37,7 +38,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
                        : sb.from('products').insert({ ...row, sort_order: products.length + 1 }).select().single();
     const { data, error } = await q;
     setBusy(false);
-    if (error) { alert(error.message); return; }
+    if (error) { alert(friendlyError(error, L)); return; }
     setProducts(prev => draft.id ? prev.map(x => x.id === draft.id ? (data as Product) : x) : [...prev, data as Product]);
     setDraft(null);
   }
@@ -45,7 +46,7 @@ export default function ProductList(props: { shopId: string; tenantId: string; i
   async function remove(p: Product) {
     if (!confirm(`${labels.remove}: ${tr(p.name, L)}?`)) return;
     const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id);  // soft delete
-    if (error) { alert(error.message); return; }
+    if (error) { alert(friendlyError(error, L)); return; }
     setProducts(prev => prev.filter(x => x.id !== p.id));
   }
 

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import { friendlyError } from '@/lib/ui-text';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 
 type Row = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
@@ -24,7 +25,7 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
   async function cancel() {
     if (!confirm(`${labels.cancelOrder}?`)) return;
     const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', o.id);
-    if (error) alert(error.message); else setO(prev => ({ ...prev, status: 'cancelled' }));
+    if (error) alert(friendlyError(error, L)); else setO(prev => ({ ...prev, status: 'cancelled' }));
   }
 
   const terminalBad = o.status === 'rejected' || o.status === 'cancelled';

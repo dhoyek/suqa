@@ -55,7 +55,7 @@ const T = {
   minOrder: { en: 'Minimum order', ar: 'الحد الأدنى للطلب' },
   replaceCart: { en: 'Your cart has items from another shop. Replace them?', ar: 'سلتك تحتوي أصنافاً من متجر آخر. استبدالها؟' },
   openNow: { en: 'Open now', ar: 'مفتوح الآن' },
-  closedNow: { en: 'Closed now — you can still order for later', ar: 'مغلق الآن — يمكنك الطلب للاحقاً' },
+  closedNow: { en: 'Closed now — you can still order for later', ar: 'مغلق الآن — يمكنك الطلب لوقتٍ لاحق' },
   soldOut: { en: 'Unavailable', ar: 'غير متوفر' },
   deliveryAddress: { en: 'Delivery address', ar: 'عنوان التوصيل' },
   newAddress: { en: 'New address', ar: 'عنوان جديد' },
@@ -139,10 +139,44 @@ const T = {
   tenantAdmin: { en: 'Admin', ar: 'مدير' },
   tenantOps: { en: 'Ops', ar: 'تشغيل' },
   customer: { en: 'Customer', ar: 'زبون' },
+  // errors coming back from the database (stable keys raised by suqa.place_order & guards)
+  err_shop_unavailable: { en: 'This shop is not taking orders right now', ar: 'هذا المتجر لا يستقبل الطلبات حالياً' },
+  err_tenant_not_live: { en: 'The marketplace is not open yet', ar: 'السوق غير مفتوح بعد' },
+  err_address_not_found: { en: 'Please choose a delivery address', ar: 'يرجى اختيار عنوان التوصيل' },
+  err_too_many_open_orders: { en: 'You already have several orders in progress — wait until one is delivered', ar: 'لديك عدة طلبات قيد التنفيذ — انتظر تسليم أحدها أولاً' },
+  err_outside_delivery_area: { en: 'This address is outside the delivery area of this shop', ar: 'هذا العنوان خارج منطقة توصيل هذا المتجر' },
+  err_empty_order: { en: 'Your cart is empty', ar: 'سلتك فارغة' },
+  err_too_many_lines: { en: 'Too many different items in one order', ar: 'عدد الأصناف في الطلب كبير جداً' },
+  err_notes_too_long: { en: 'Notes are too long', ar: 'الملاحظات طويلة جداً' },
+  err_product_unavailable: { en: 'An item in your cart is no longer available — please remove it', ar: 'أحد الأصناف في سلتك لم يعد متوفراً — يرجى حذفه' },
+  err_bad_quantity: { en: 'Please check the quantities', ar: 'يرجى التحقق من الكميات' },
+  err_min_order: { en: 'The order is below the shop minimum', ar: 'الطلب أقل من الحد الأدنى للمتجر' },
+  err_order_locked: { en: 'This order can no longer be changed', ar: 'لم يعد بالإمكان تعديل هذا الطلب' },
+  err_transition: { en: 'This order has already moved on — refresh to see its current status', ar: 'تغيّرت حالة هذا الطلب — حدّث الصفحة لرؤية حالته الحالية' },
+  err_customers_cancel_pending: { en: 'You can only cancel while the shop has not accepted yet', ar: 'يمكنك الإلغاء فقط قبل أن يقبل المتجر الطلب' },
+  err_last_admin: { en: 'Cannot remove the last admin', ar: 'لا يمكن إزالة آخر مدير' },
+  err_network: { en: 'No connection — check your internet and try again', ar: 'لا يوجد اتصال — تحقق من الإنترنت وحاول مجدداً' },
+  err_generic: { en: 'Something went wrong, please try again', ar: 'حدث خطأ ما، حاول مجدداً' },
 } as const;
 
 export type UiKey = keyof typeof T;
 export const ui = (k: UiKey, l: Locale) => (T[k] as any)[l] ?? T[k].en;
+
+/** Translate a Supabase/Postgres error into a human sentence. Stable keys come from place_order & the column guards. */
+export function friendlyError(e: unknown, l: Locale): string {
+  const err = e as { message?: string; details?: string; code?: string } | null;
+  const msg = (err?.message ?? '').trim();
+  if (!msg || /fetch|network|Failed to fetch/i.test(msg)) return ui('err_network', l);
+  const key = `err_${msg}` as UiKey;
+  if (key in T) {
+    const base = ui(key, l);
+    return msg === 'min_order' && err?.details ? `${base} (${err.details} USD)` : base;
+  }
+  if (/transition .* not allowed/.test(msg)) return ui('err_transition', l);
+  if (/customers can only cancel/.test(msg)) return ui('err_customers_cancel_pending', l);
+  if (/shop_locked|shop_status_locked|tenant_locked|profile_locked|not allowed|permission denied|row-level security/i.test(msg)) return ui('notAllowed', l);
+  return ui('err_generic', l);
+}
 
 export const STATUS_LABEL: Record<OrderStatus, { en: string; ar: string }> = {
   pending: { en: 'New', ar: 'جديد' },

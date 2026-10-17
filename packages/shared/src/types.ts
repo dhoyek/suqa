@@ -23,7 +23,7 @@ export interface Shop {
   phone: string | null; whatsapp: string | null; address_text: string | null;
   logo_url: string | null; cover_url: string | null;
   opening_hours: Record<string, [string, string][]>; is_open_override: boolean | null;
-  min_order_usd: number; prep_minutes: number; category_id: string | null; sort_order: number;
+  min_order_usd: number; prep_minutes: number; commission_rate: number | null; category_id: string | null; sort_order: number;
 }
 
 export interface Product {

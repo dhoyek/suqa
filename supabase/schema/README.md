@@ -21,4 +21,5 @@ source of truth.
 | 07_functions.sql | helpers (auth/role checks), triggers, order numbering, state machine |
 | 08_rls.sql | row-level security policies |
 | 09_realtime.sql | realtime publication (orders) |
+| 10_admin.sql | admin RPCs (find user by email, people, stats) |
 | ../seed/batroun.sql | first tenant |

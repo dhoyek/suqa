@@ -39,6 +39,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <h1 style={{ margin: 0, fontSize: 20 }}>{tr(shop.name, L)}</h1>
       </div>
       <OrdersBoard
+        key={shop.id}
         shopId={shop.id}
         initial={(data as OrderRow[]) ?? []}
         locale={L}

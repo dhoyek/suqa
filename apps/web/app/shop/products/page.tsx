@@ -29,7 +29,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       <div className="row spread" style={{ marginBottom: 10 }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>{tr(shop.name, L)} — {ui('products', L)}</h1>
       </div>
-      <ProductList shopId={shop.id} tenantId={tenant.id} initial={(data as Product[]) ?? []} locale={L}
+      <ProductList key={shop.id} shopId={shop.id} tenantId={tenant.id} initial={(data as Product[]) ?? []} locale={L}
         fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} labels={labels} />
     </>
   );

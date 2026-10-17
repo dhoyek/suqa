@@ -15,5 +15,5 @@ export default async function ShopSettingsPage({ searchParams }: { searchParams:
   const keys = ['myShop', 'shopDetails', 'nameAr', 'nameEn', 'descAr', 'descEn', 'logo', 'cover', 'photo', 'changePhoto', 'remove', 'contact', 'publicPhone', 'whatsapp', 'addressText',
     'openingHours', 'closedDay', 'addRange', 'pauseOrders', 'pauseHint', 'followHours', 'forceOpen', 'forceClosed', 'minOrderUsd', 'prepMinutes', 'save', 'saved'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
-  return <MyShopForm shop={shop} locale={L} canEdit={shop.role === 'owner'} labels={labels} />;
+  return <MyShopForm key={shop.id} shop={shop} locale={L} canEdit={shop.role === 'owner'} labels={labels} />;
 }

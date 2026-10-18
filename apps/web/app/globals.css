@@ -148,3 +148,9 @@ button, input, select, textarea { font: inherit; }
 .toast.error { background: #991b1b; }
 .toast.ok { background: #065f46; }
 @keyframes toast-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* legal pages */
+.legal { max-width: 760px; }
+.legal-text { line-height: 1.6; font-size: 15px; }
+.legal-text h3 { margin: 10px 0 0; font-size: 16px; }
+.legal-text ul, .legal-text ol { margin: 0; padding-inline-start: 20px; }
+.legal-text li { margin: 4px 0; }

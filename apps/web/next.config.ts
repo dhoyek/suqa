@@ -15,5 +15,13 @@ const config: NextConfig = {
   images: { remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }] },
   poweredByHeader: false,
   async headers() { return [{ source: '/(.*)', headers: SECURITY_HEADERS }]; },
+  // Friendly aliases for the legal pages (Meta's URL validator is picky about paths)
+  async redirects() {
+    return [
+      { source: '/data-deletion', destination: '/legal/delete-data', permanent: true },
+      { source: '/privacy', destination: '/legal/privacy', permanent: true },
+      { source: '/terms', destination: '/legal/terms', permanent: true },
+    ];
+  },
 };
 export default config;

@@ -1,14 +1,15 @@
 import { getTenantOrNull } from '@/lib/tenant';
 import Legal from '../Legal';
+import { legalInfo } from '../legal-info';
 
 export const dynamic = 'force-dynamic';
 const UPDATED = '2026-10-18';
-const CONTACT = 'privacy@yorgoinc.com';
 
 // Meta "User data deletion" URL: explains how a person removes their account and data.
 export default async function DeleteData() {
   const t = await getTenantOrNull();
   const brand = t?.brand_name ?? 'Suqa';
+  const { OPERATOR, CONTACT } = legalInfo(t);
   const wa = t?.settings.whatsapp_number ?? null;
   return (
     <Legal brand={brand} titleAr="حذف الحساب والبيانات" titleEn="Delete your account & data" updated={UPDATED}>

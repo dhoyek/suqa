@@ -5,7 +5,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Tenant } from '@suqa/shared';
 
 type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
-  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled', string>;
+  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection', string>;
 
 export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tenant; canEdit: boolean; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -16,6 +16,7 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     primary: tenant.branding.colors?.primary ?? '#0E7490', accent: tenant.branding.colors?.accent ?? '#F59E0B',
     multi_shop_cart: !!tenant.settings.multi_shop_cart, delivery_mode: tenant.settings.delivery_mode ?? 'per_shop',
     courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '', courier_enabled: !!tenant.settings.courier_enabled,
+    legal_operator: tenant.settings.legal_operator ?? '', legal_email: tenant.settings.legal_email ?? '',
   });
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
@@ -24,7 +25,8 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     const { error } = await sb.from('tenants').update({
       brand_name: f.brand_name.trim(), fx_lbp_rate: Number(f.fx), display_currency: f.display, commission_rate: (Number(f.commission) || 0) / 100,
       settings: { ...tenant.settings, support_phone: f.support_phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
-        multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee), courier_enabled: f.courier_enabled },
+        multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee), courier_enabled: f.courier_enabled,
+        legal_operator: f.legal_operator.trim() || null, legal_email: f.legal_email.trim() || null },
       branding: { ...tenant.branding, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
     }).eq('id', tenant.id);
     setBusy(false);
@@ -59,6 +61,13 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
               {f.delivery_mode === 'courier' && <div style={{ flex: 1 }}><label className="label">{labels.courierFee}</label><input className="input" dir="ltr" inputMode="decimal" disabled={dis} value={f.courier_fee} onChange={e => setF({ ...f, courier_fee: e.target.value })} /></div>}
             </div>
           )}
+        </div>
+        <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+          <strong style={{ fontSize: 14 }}>{labels.legalSection}</strong>
+          <div className="row" style={{ alignItems: 'stretch' }}>
+            <div style={{ flex: 1 }}><label className="label">{labels.legalOperator}</label><input className="input" disabled={dis} value={f.legal_operator} onChange={e => setF({ ...f, legal_operator: e.target.value })} placeholder="Purple Digits (Lebanon)" /></div>
+            <div style={{ flex: 1 }}><label className="label">{labels.legalEmail}</label><input className="input" dir="ltr" type="email" disabled={dis} value={f.legal_email} onChange={e => setF({ ...f, legal_email: e.target.value })} placeholder="privacy@yorgoinc.com" /></div>
+          </div>
         </div>
         <div className="row">
           <label className="row">{labels.primaryColor} <input type="color" disabled={dis} value={f.primary} onChange={e => setF({ ...f, primary: e.target.value })} /></label>

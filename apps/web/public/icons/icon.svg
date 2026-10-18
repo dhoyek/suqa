@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E7490"/><stop offset="1" stop-color="#155E75"/>
+    </linearGradient>
+    <linearGradient id="weave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDE68A"/><stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded square background -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <!-- subtle arc highlight -->
+  <circle cx="300" cy="200" r="520" fill="#ffffff" opacity="0.06"/>
+  <!-- basket handle -->
+  <path d="M332 470 A180 180 0 0 1 692 470" fill="none" stroke="#ffffff" stroke-width="54" stroke-linecap="round"/>
+  <!-- basket body: trapezoid with rounded bottom -->
+  <path d="M226 470 H798 L748 772 Q740 812 700 812 H324 Q284 812 276 772 Z" fill="url(#weave)"/>
+  <!-- rim -->
+  <rect x="196" y="440" width="632" height="72" rx="36" fill="#ffffff"/>
+  <!-- weave lines -->
+  <g stroke="#B45309" stroke-width="18" stroke-linecap="round" opacity="0.55">
+    <path d="M300 560 H724"/><path d="M314 650 H710"/><path d="M328 740 H696"/>
+    <path d="M360 512 L380 812"/><path d="M460 512 L470 812"/><path d="M564 512 L554 812"/><path d="M664 512 L644 812"/>
+  </g>
+  <!-- produce peeking out: three dots (tomato, lemon, leaf) -->
+  <circle cx="420" cy="440" r="58" fill="#EF4444"/>
+  <circle cx="530" cy="422" r="62" fill="#FACC15"/>
+  <path d="M600 450 C 600 380, 680 350, 720 372 C 700 430, 650 470, 600 450 Z" fill="#22C55E"/>
+</svg>

@@ -15,7 +15,8 @@ export interface Tenant {
   timezone: string; country_code: string;
   branding: { logo_url?: string | null; colors?: { primary?: string; accent?: string }; app_icon_url?: string | null };
   settings: { support_phone?: string | null; whatsapp_number?: string | null; min_order_usd?: number;
-    multi_shop_cart?: boolean; delivery_mode?: 'per_shop' | 'courier'; courier_fee_usd?: number | null; courier_enabled?: boolean };
+    multi_shop_cart?: boolean; delivery_mode?: 'per_shop' | 'courier'; courier_fee_usd?: number | null; courier_enabled?: boolean;
+    legal_operator?: string | null; legal_email?: string | null };
 }
 
 export interface Shop {

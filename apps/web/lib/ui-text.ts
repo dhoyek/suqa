@@ -157,6 +157,9 @@ const T = {
   couriers: { en: 'Couriers', ar: 'الموصّلون' },
   courier: { en: 'Courier', ar: 'موصّل' },
   activeDeliveries: { en: 'active', ar: 'قيد التوصيل' },
+  legalSection: { en: 'Legal pages (privacy, terms, data deletion)', ar: 'الصفحات القانونية (الخصوصية، الشروط، حذف البيانات)' },
+  legalOperator: { en: 'Operating entity shown on legal pages (empty = platform)', ar: 'الجهة المشغّلة في الصفحات القانونية (فارغ = المنصة)' },
+  legalEmail: { en: 'Privacy / data-deletion contact email (empty = platform)', ar: 'بريد التواصل للخصوصية وحذف البيانات (فارغ = المنصة)' },
   // images & merchant settings
   photo: { en: 'Photo', ar: 'صورة' },
   changePhoto: { en: 'Change', ar: 'تغيير' },

@@ -12,6 +12,7 @@ export async function generateMetadata() {
     description: t?.name ?? 'Local shops, delivered.',
     manifest: t ? '/manifest.webmanifest' : undefined,
     robots: isDevDeploy() ? { index: false, follow: false } : undefined,
+    icons: { icon: t?.branding.app_icon_url ?? '/icons/icon-192.png', apple: t?.branding.app_icon_url ?? '/icons/icon-180.png', shortcut: '/favicon.ico' },
   };
 }
 

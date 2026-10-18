@@ -1,14 +1,14 @@
 import { getTenantOrNull } from '@/lib/tenant';
 import Legal from '../Legal';
+import { legalInfo } from '../legal-info';
 
 export const dynamic = 'force-dynamic';
 const UPDATED = '2026-10-18';
-const OPERATOR = 'Purple Digits (Lebanon)';
-const CONTACT = 'privacy@yorgoinc.com';
 
 export default async function Privacy() {
   const t = await getTenantOrNull();
   const brand = t?.brand_name ?? 'Suqa';
+  const { OPERATOR, CONTACT } = legalInfo(t);
   const support = t?.settings.support_phone ?? null;
   return (
     <Legal brand={brand} titleAr="سياسة الخصوصية" titleEn="Privacy Policy" updated={UPDATED}>

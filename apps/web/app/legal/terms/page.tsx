@@ -1,13 +1,14 @@
 import { getTenantOrNull } from '@/lib/tenant';
 import Legal from '../Legal';
+import { legalInfo } from '../legal-info';
 
 export const dynamic = 'force-dynamic';
 const UPDATED = '2026-10-18';
-const OPERATOR = 'Purple Digits (Lebanon)';
 
 export default async function Terms() {
   const t = await getTenantOrNull();
   const brand = t?.brand_name ?? 'Suqa';
+  const { OPERATOR, CONTACT } = legalInfo(t);
   return (
     <Legal brand={brand} titleAr="شروط الاستخدام" titleEn="Terms of Service" updated={UPDATED}>
       <section dir="rtl" lang="ar" className="card stack legal-text">

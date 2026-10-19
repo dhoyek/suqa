@@ -167,3 +167,12 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - Public storefront reads are server-cached (`apps/web/lib/public-data.ts`): home 60 s, shop menu 15 s.
   A merchant's availability toggle therefore reaches the public page within ~15 s.
 - No native `alert()`/`confirm()` anywhere: use `useNotify()` / `useConfirm()` from `ConfirmProvider`.
+
+## WhatsApp Cloud API (2026-10-19)
+- Meta app **Suqa** (App ID 4004002429909677); test number for now, production number + payment later.
+- Server helper `apps/web/lib/server/whatsapp.ts` (`waSendText`, `waSendTemplate`, `waVerifySignature`). Secrets in Netlify env only:
+  `WHATSAPP_TOKEN` (system-user permanent token), `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `SUPABASE_SMS_HOOK_SECRET`.
+- Webhook: `GET/POST /api/wa/webhook` — verify handshake + `X-Hub-Signature-256` check; subscribed to `messages` (statuses + replies). Phase 1 logs only.
+- OTP login: Supabase Auth **Send SMS hook** → `POST /api/auth/sms-hook` (Standard Webhooks signature) → WhatsApp text with the code. Login page shows a WhatsApp tab when `NEXT_PUBLIC_WHATSAPP_LOGIN=1`.
+- Admin → Settings has a "Send test" box (admins only) to verify the configuration.
+- Production note: business-initiated messages (OTP to a new number, order alerts after 24h) need approved templates — authentication template for OTP, utility templates for order events. Plain text is fine for test recipients and inside a 24h customer window.

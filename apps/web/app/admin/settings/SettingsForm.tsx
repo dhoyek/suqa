@@ -3,11 +3,12 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Tenant } from '@suqa/shared';
+import { sendTestWhatsApp } from './actions';
 
 type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
-  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection', string>;
+  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection' | 'waTestSection' | 'waTestPhone' | 'waTestSend' | 'waTestSent', string>;
 
-export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tenant; canEdit: boolean; labels: Labels }) {
+export default function SettingsForm({ tenant, canEdit, labels, waConfigured }: { tenant: Tenant; canEdit: boolean; labels: Labels; waConfigured: boolean }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   const [f, setF] = useState({
@@ -19,6 +20,12 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
     legal_operator: tenant.settings.legal_operator ?? '', legal_email: tenant.settings.legal_email ?? '',
   });
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [testPhone, setTestPhone] = useState(tenant.settings.whatsapp_number ?? ''); const [testMsg, setTestMsg] = useState<string | null>(null); const [testBusy, setTestBusy] = useState(false);
+  async function sendTest() {
+    setTestBusy(true); setTestMsg(null);
+    const r = await sendTestWhatsApp(testPhone);
+    setTestBusy(false); setTestMsg(r.ok ? labels.waTestSent : r.error);
+  }
 
   async function save() {
     setBusy(true); setMsg(null);
@@ -69,6 +76,16 @@ export default function SettingsForm({ tenant, canEdit, labels }: { tenant: Tena
             <div style={{ flex: 1 }}><label className="label">{labels.legalEmail}</label><input className="input" dir="ltr" type="email" disabled={dis} value={f.legal_email} onChange={e => setF({ ...f, legal_email: e.target.value })} placeholder="privacy@yorgoinc.com" /></div>
           </div>
         </div>
+        {canEdit && (
+          <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <strong style={{ fontSize: 14 }}>{labels.waTestSection} {waConfigured ? '🟢' : '⚪'}</strong>
+            <div className="row" style={{ alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}><label className="label">{labels.waTestPhone}</label><input className="input" dir="ltr" inputMode="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="+961 70 000 000" /></div>
+              <button className="btn" disabled={testBusy || !waConfigured} onClick={sendTest}>{labels.waTestSend}</button>
+            </div>
+            {testMsg && <div className={testMsg === labels.waTestSent ? 'muted' : 'error'} dir="ltr">{testMsg}</div>}
+          </div>
+        )}
         <div className="row">
           <label className="row">{labels.primaryColor} <input type="color" disabled={dis} value={f.primary} onChange={e => setF({ ...f, primary: e.target.value })} /></label>
           <label className="row">{labels.accentColor} <input type="color" disabled={dis} value={f.accent} onChange={e => setF({ ...f, accent: e.target.value })} /></label>

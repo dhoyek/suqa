@@ -177,3 +177,8 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - Admin → Settings has a "Send test" box (admins only) to verify the configuration.
 - Production note: business-initiated messages (OTP to a new number, order alerts after 24h) need approved templates — authentication template for OTP, utility templates for order events. Plain text is fine for test recipients and inside a 24h customer window.
 - Order notifications (2026-10-21): `supabase/schema/15_notifications.sql` — trigger `orders_notify` posts a self-contained payload via pg_net to `POST /api/wa/events` (header `x-suqa-secret` = Netlify `SUQA_EVENTS_SECRET`; URL + secret stored in `suqa.integration_config`, postgres-only). Endpoint sends: new order → shop WhatsApp; status → customer (accepted/preparing/ready/out_for_delivery/delivered/rejected); ready → active couriers when `courier_enabled` and `delivery_mode = courier`. Copy in `lib/server/wa-messages.ts` (= future template texts).
+
+## Quick checkout (2026-10-21) — "order like you do on WhatsApp"
+- Phone is a checkout field (prefilled from profile / default address; saved back to the profile on order). `place_order`/`place_basket` take `p_phone` (16_quick_checkout.sql, `_checkout_phone`).
+- Address text is optional; the pin is required (fee/zone need it). Addresses are editable/deletable inline on the checkout screen.
+- Merchant order card: 📍 address with map link + 💬 WhatsApp link to the customer. Phase B (next): free-text order line priced by the shop, "repeat last order", wa.me links in alerts. Phase C: shop replies from WhatsApp logged on the order (needs production number).

@@ -37,7 +37,7 @@ export interface Product {
 export interface Category { id: string; tenant_id: string; slug: string; name: LocalizedText; icon: string | null; sort_order: number; parent_id: string | null }
 
 export interface Address {
-  id: string; tenant_id: string; user_id: string; label: string | null; line1: string; line2: string | null;
+  id: string; tenant_id: string; user_id: string; label: string | null; line1: string | null; line2: string | null;
   notes: string | null; phone: string | null; is_default: boolean;
 }
 

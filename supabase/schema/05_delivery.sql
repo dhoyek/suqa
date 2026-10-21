@@ -29,7 +29,7 @@ create table if not exists suqa.addresses (
   tenant_id   uuid not null references suqa.tenants(id) on delete cascade,
   user_id     uuid not null references auth.users(id) on delete cascade,
   label       text,                                              -- 'Home', 'Office'
-  line1       text not null,                                     -- building / street as the user types it
+  line1       text,                                              -- building / street as the user types it (optional since 16_quick_checkout)
   line2       text,
   notes       text,                                              -- "ring twice", landmark
   location    geography(point, 4326) not null,

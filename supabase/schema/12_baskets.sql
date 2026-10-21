@@ -115,7 +115,8 @@ language sql stable security definer set search_path = public as $$
    where customer_id = p_customer and tenant_id = p_tenant and closed_at is null
 $$;
 
--- ---------- place_order: single shop (unchanged signature) -------------------------
+-- ---------- place_order: single shop -------------------------
+-- NB: superseded by 16_quick_checkout.sql (adds p_phone); kept for readability.
 create or replace function suqa.place_order(p_shop uuid, p_address_id uuid, p_items jsonb, p_notes text default null)
 returns suqa.orders
 language plpgsql security definer set search_path = public as $$
@@ -136,6 +137,7 @@ end $$;
 grant execute on function suqa.place_order(uuid, uuid, jsonb, text) to authenticated;
 
 -- ---------- place_basket: several shops in one checkout ---------------------------
+-- NB: superseded by 16_quick_checkout.sql (adds p_phone); kept for readability.
 -- p_shops: [{ "shop_id": "...", "items": [{ "product_id": "...", "quantity": 2 }], "notes": "..." }, ...]
 -- Returns the basket row; the parts are in suqa.orders where basket_id = basket.id.
 create or replace function suqa.place_basket(p_address_id uuid, p_shops jsonb, p_notes text default null)

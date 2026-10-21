@@ -3,7 +3,8 @@ import { useNotify } from '@/components/ConfirmProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
-import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
+import { formatMoney, pointFromEwkb, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
+import { waLink } from '@/lib/whatsapp';
 
 export type OrderRow = Order & { items: OrderItem[] };
 type Labels = Record<'newOrders' | 'inProgress' | 'done' | 'noOrders' | 'accept' | 'reject' | 'rejectReason' | 'startPreparing' | 'markReady'
@@ -104,12 +105,16 @@ export default function OrdersBoard(props: {
         </ul>
         <div className="row spread"><span className="muted">{labels.delivery}: {money(Number(o.delivery_fee_usd))}</span><strong>{labels.total}: {money(Number(o.total_usd))}</strong></div>
         <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
-          {o.address?.line1}{o.address?.line2 ? `, ${o.address.line2}` : ''}{o.address?.notes ? ` — ${o.address.notes}` : ''}
+          📍 {[o.address?.line1, o.address?.line2].filter(Boolean).join(', ') || (o.address?.label ?? '')}{o.address?.notes ? ` — ${o.address.notes}` : ''}
+          {(() => { const p = pointFromEwkb((o.address as any)?.location); return p ? <> · <a href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`} target="_blank" rel="noopener noreferrer">🗺️</a></> : null; })()}
         </div>
         {o.customer_notes && <div style={{ fontSize: 13, marginTop: 4 }}><span className="muted">{labels.notes}:</span> {o.customer_notes}</div>}
         {o.reject_reason && <div className="error" style={{ marginTop: 4 }}>{o.reject_reason}</div>}
         <div className="row spread" style={{ marginTop: 10 }}>
-          <a className="btn" href={`tel:${o.customer_phone}`}>{labels.call}</a>
+          <span className="row" style={{ gap: 4 }}>
+            <a className="btn" href={`tel:${o.customer_phone}`}>{labels.call}</a>
+            {waLink(o.customer_phone) && <a className="btn" href={waLink(o.customer_phone)!} target="_blank" rel="noopener noreferrer">💬</a>}
+          </span>
           <Actions o={o} />
         </div>
       </article>

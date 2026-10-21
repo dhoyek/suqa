@@ -20,7 +20,7 @@ export default async function CheckoutPage() {
   const addrs = ((addresses as any[]) ?? []).map(a => { const p = pointFromEwkb(a.location) ?? center; const { location, ...rest } = a; return { ...rest, lat: p.lat, lng: p.lng }; });
   const keys = ['checkout', 'deliveryAddress', 'newAddress', 'addressLabel', 'addressLine1', 'addressLine2', 'addressNotes', 'phone', 'pinLocation', 'useMyLocation',
     'outsideZone', 'orderNotes', 'payCash', 'placeOrder', 'subtotal', 'deliveryFee', 'total', 'minOrder', 'save', 'cancel', 'emptyCart', 'browseShops', 'eta',
-    'oneFeeCourier', 'feePerShop', 'deliveredTogether'] as const;
+    'oneFeeCourier', 'feePerShop', 'deliveredTogether', 'contactPhone', 'phoneRequired', 'editAddress', 'deleteAddress', 'pinHint', 'confirm'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
 
   return <Checkout tenantId={tenant.id} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}

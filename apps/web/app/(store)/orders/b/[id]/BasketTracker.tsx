@@ -1,4 +1,5 @@
 'use client';
+import StatusTimeline from '@/components/StatusTimeline';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useConfirm, useNotify } from '@/components/ConfirmProvider';
@@ -10,7 +11,6 @@ import { formatMoney, t as tr, type Basket, type DisplayCurrency, type Locale, t
 type Part = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
 type Labels = Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes' | 'subtotal' | 'basket' | 'basketOf'
   | 'deliveredTogether' | 'deliveredSeparately' | 'chatWhatsapp', string>;
-const STEPS: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
 export default function BasketTracker(props: { basket: Basket; initial: Part[]; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Labels }) {
   const { basket: b, locale: L, fx, displayCurrency, statusLabels, labels } = props;
@@ -53,7 +53,6 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
 
       {parts.map(p => {
         const bad = p.status === 'rejected' || p.status === 'cancelled';
-        const idx = STEPS.indexOf(p.status);
         const wa = waLink(p.shop?.whatsapp ?? p.shop?.phone, `${p.number}`); const tel = telLink(p.shop?.phone ?? p.shop?.whatsapp);
         return (
           <section className="card stack basket-part" key={p.id}>
@@ -61,7 +60,7 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
               <strong>{tr(p.shop?.name, L)} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>{p.number}</span></strong>
               <span className={`badge ${p.status}`}>{statusLabels[p.status]}</span>
             </div>
-            {!bad && <ul className="timeline compact">{STEPS.map((s, i) => <li key={s} className={i < idx ? 'done' : i === idx ? 'current' : ''}><span className="tick" />{statusLabels[s]}</li>)}</ul>}
+            {!bad && <StatusTimeline status={p.status} labels={statusLabels} compact />}
             {bad && p.reject_reason && <div className="error">{p.reject_reason}</div>}
             {p.items?.map(i => <div className="row spread" key={i.id} style={{ fontSize: 14 }}><span><span className="qty">{Number(i.quantity)}×</span> {tr(i.name, L)}</span><span>{money(i.line_total_usd)}</span></div>)}
             <div className="row spread muted" style={{ fontSize: 13 }}>

@@ -154,3 +154,19 @@ button, input, select, textarea { font: inherit; }
 .legal-text h3 { margin: 10px 0 0; font-size: 16px; }
 .legal-text ul, .legal-text ol { margin: 0; padding-inline-start: 20px; }
 .legal-text li { margin: 4px 0; }
+/* horizontal order-status stepper */
+.stepper { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 6px 0 2px; }
+.stepper-track { position: absolute; top: 22px; inset-inline: calc(100% / 12); height: 4px; background: var(--line); border-radius: 2px; }
+.stepper-fill { height: 100%; background: var(--ok); border-radius: 2px; transition: width .6s ease; }
+[dir="rtl"] .stepper-fill { margin-inline-start: auto; }
+.step { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); font-size: 11px; line-height: 1.2; position: relative; }
+.step .node { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 2px solid var(--line); font-size: 15px; z-index: 1; transition: all .3s; }
+.step.done .node { background: var(--ok); border-color: var(--ok); color: #fff; font-size: 14px; font-weight: 700; }
+.step.done { color: var(--text); }
+.step.current { color: var(--brand-primary); font-weight: 700; }
+.step.current .node { border-color: var(--brand-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-primary) 20%, transparent); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-primary) 20%, transparent); } 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand-primary) 8%, transparent); } }
+.stepper.compact .node { width: 24px; height: 24px; font-size: 12px; }
+.stepper.compact .step { font-size: 10px; }
+.stepper.compact .stepper-track { top: 17px; height: 3px; }
+@media (max-width: 380px) { .step .lbl { font-size: 10px; } }

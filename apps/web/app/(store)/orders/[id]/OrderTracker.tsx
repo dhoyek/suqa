@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
+import StatusTimeline from '@/components/StatusTimeline';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 
 type Row = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
-const STEPS: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
 export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes', string> }) {
   const { locale: L, fx, displayCurrency, statusLabels, labels } = props;
@@ -32,7 +32,6 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
   }
 
   const terminalBad = o.status === 'rejected' || o.status === 'cancelled';
-  const idx = STEPS.indexOf(o.status);
 
   return (
     <div className="stack">
@@ -43,11 +42,7 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
       </div>
       <section className="card">
         <div className="row spread"><strong>{tr(o.shop?.name, L)}</strong>{o.shop?.phone && <a className="btn" href={`tel:${o.shop.phone}`}>{labels.call}</a>}</div>
-        {!terminalBad && (
-          <ul className="timeline" style={{ marginTop: 10 }}>
-            {STEPS.map((s, i) => <li key={s} className={i < idx ? 'done' : i === idx ? 'current' : ''}><span className="tick" />{statusLabels[s]}</li>)}
-          </ul>
-        )}
+        {!terminalBad && <div style={{ marginTop: 12 }}><StatusTimeline status={o.status} labels={statusLabels} /></div>}
         {terminalBad && o.reject_reason && <div className="error" style={{ marginTop: 8 }}>{o.reject_reason}</div>}
         {!terminalBad && o.status !== 'delivered' && o.eta_minutes != null && <div className="muted" style={{ fontSize: 13 }}>{labels.eta}: ~{o.eta_minutes} min</div>}
       </section>

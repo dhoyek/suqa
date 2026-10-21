@@ -11,18 +11,19 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
 export const waConfigured = () => !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
 
 /** Plain text message (allowed inside a 24h customer window, and always to test recipients). */
-export async function waSendText(to: string, body: string) {
-  return waPost({ messaging_product: 'whatsapp', to, type: 'text', text: { body, preview_url: false } });
+export async function waSendText(to: string, body: string, from?: string | null) {
+  return waPost({ messaging_product: 'whatsapp', to, type: 'text', text: { body, preview_url: false } }, from);
 }
 
 /** Approved template message (business-initiated). components follow Meta's template payload format. */
-export async function waSendTemplate(to: string, name: string, lang: string, components?: unknown[]) {
-  return waPost({ messaging_product: 'whatsapp', to, type: 'template', template: { name, language: { code: lang }, components } });
+export async function waSendTemplate(to: string, name: string, lang: string, components?: unknown[], from?: string | null) {
+  return waPost({ messaging_product: 'whatsapp', to, type: 'template', template: { name, language: { code: lang }, components } }, from);
 }
 
-async function waPost(payload: Record<string, unknown>) {
+/** `from` = Meta phone number id to send from (a shop's or tenant's own number); defaults to the platform number. */
+async function waPost(payload: Record<string, unknown>, from?: string | null) {
   if (!waConfigured()) throw new Error('whatsapp_not_configured');
-  const res = await fetch(`${GRAPH}/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+  const res = await fetch(`${GRAPH}/${from || process.env.WHATSAPP_PHONE_ID}/messages`, {
     method: 'POST', headers: { authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify(payload),
   });
   const json = await res.json().catch(() => ({}));

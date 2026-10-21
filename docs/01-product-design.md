@@ -182,3 +182,10 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - Phone is a checkout field (prefilled from profile / default address; saved back to the profile on order). `place_order`/`place_basket` take `p_phone` (16_quick_checkout.sql, `_checkout_phone`).
 - Address text is optional; the pin is required (fee/zone need it). Addresses are editable/deletable inline on the checkout screen.
 - Merchant order card: 📍 address with map link + 💬 WhatsApp link to the customer. Phase B (next): free-text order line priced by the shop, "repeat last order", wa.me links in alerts. Phase C: shop replies from WhatsApp logged on the order (needs production number).
+
+## WhatsApp conversations — Phase C (2026-10-21)
+- `17_wa_conversations.sql`: `wa_numbers` (platform-owned Cloud API numbers, bound to a shop = dedicated SIM, or shared per tenant), `wa_messages` (every outbound/inbound message with wamid, order, party, status), `wa_sender_for_order()`, `wa_match_order(phone, context_wamid, phone_number_id)`.
+- Outbound: events route logs each send; sender = shop number → tenant number → platform default (`WHATSAPP_PHONE_ID`).
+- Inbound (`/api/wa/webhook`): statuses update `wa_messages.status`; a text that quotes one of our messages, or comes from a phone with an open order (customer phone or shop WhatsApp), is logged as an `order_events` note (actor customer/shop) and forwarded to the other party from the same number. Unmatched messages are logged only. Needs `SUPABASE_SERVICE_ROLE_KEY` in Netlify.
+- UI: `OrderThread` (chat bubbles) under the status stepper on the customer order page and on each merchant order card.
+- Constraint to remember: a number on the Cloud API cannot be used in the WhatsApp app any more — shops keep their own number and talk to the platform number; only shops with a dedicated SIM get a `wa_numbers` row.

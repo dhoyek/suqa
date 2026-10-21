@@ -5,10 +5,11 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import { formatMoney, pointFromEwkb, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 import { waLink } from '@/lib/whatsapp';
+import OrderThread from '@/components/OrderThread';
 
 export type OrderRow = Order & { items: OrderItem[] };
 type Labels = Record<'newOrders' | 'inProgress' | 'done' | 'noOrders' | 'accept' | 'reject' | 'rejectReason' | 'startPreparing' | 'markReady'
-  | 'outForDelivery' | 'delivered' | 'cancel' | 'confirm' | 'total' | 'delivery' | 'notes' | 'call' | 'live' | 'minsAgo', string>;
+  | 'outForDelivery' | 'delivered' | 'cancel' | 'confirm' | 'total' | 'delivery' | 'notes' | 'call' | 'live' | 'minsAgo' | 'threadTitle' | 'threadCustomer' | 'threadShop', string>;
 
 const OPEN: OrderStatus[] = ['accepted', 'preparing', 'ready', 'out_for_delivery'];
 
@@ -110,6 +111,7 @@ export default function OrdersBoard(props: {
         </div>
         {o.customer_notes && <div style={{ fontSize: 13, marginTop: 4 }}><span className="muted">{labels.notes}:</span> {o.customer_notes}</div>}
         {o.reject_reason && <div className="error" style={{ marginTop: 4 }}>{o.reject_reason}</div>}
+        <OrderThread orderId={o.id} you="shop" labels={{ title: labels.threadTitle, customer: labels.threadCustomer, shop: labels.threadShop }} />
         <div className="row spread" style={{ marginTop: 10 }}>
           <span className="row" style={{ gap: 4 }}>
             <a className="btn" href={`tel:${o.customer_phone}`}>{labels.call}</a>

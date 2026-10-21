@@ -216,6 +216,9 @@ const T = {
   waAskItem: { en: 'I would like to ask about this item:', ar: 'أودّ الاستفسار عن هذا الصنف:' },
   waOrderIntro: { en: 'I would like to order:', ar: 'أودّ طلب ما يلي:' },
   waFrom: { en: 'via', ar: 'عبر' },
+  threadTitle: { en: 'Messages about this order', ar: 'رسائل حول هذا الطلب' },
+  threadCustomer: { en: 'Customer', ar: 'العميل' },
+  threadShop: { en: 'Shop', ar: 'المتجر' },
   // whatsapp login / test
   waTestSection: { en: 'WhatsApp notifications (Cloud API)', ar: 'إشعارات واتساب (Cloud API)' },
   waTestPhone: { en: 'Send a test message to', ar: 'أرسل رسالة اختبار إلى' },

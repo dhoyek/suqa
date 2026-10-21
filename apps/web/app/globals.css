@@ -170,3 +170,8 @@ button, input, select, textarea { font: inherit; }
 .stepper.compact .step { font-size: 10px; }
 .stepper.compact .stepper-track { top: 17px; height: 3px; }
 @media (max-width: 380px) { .step .lbl { font-size: 10px; } }
+/* WhatsApp-style order thread */
+.thread { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.bubble { max-width: 85%; padding: 6px 10px; border-radius: 12px; background: #f1f3f5; font-size: 14px; white-space: pre-wrap; align-self: flex-start; border-start-start-radius: 4px; }
+.bubble.mine { background: #dcf8c6; align-self: flex-end; border-start-start-radius: 12px; border-start-end-radius: 4px; }
+.bubble .who { font-size: 11px; color: var(--muted); margin-bottom: 2px; }

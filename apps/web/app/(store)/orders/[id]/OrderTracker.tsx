@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import StatusTimeline from '@/components/StatusTimeline';
+import OrderThread from '@/components/OrderThread';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 
 type Row = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
 
-export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes', string> }) {
+export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes' | 'threadTitle' | 'threadCustomer' | 'threadShop', string> }) {
   const { locale: L, fx, displayCurrency, statusLabels, labels } = props;
   const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -45,6 +46,7 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
         {!terminalBad && <div style={{ marginTop: 12 }}><StatusTimeline status={o.status} labels={statusLabels} /></div>}
         {terminalBad && o.reject_reason && <div className="error" style={{ marginTop: 8 }}>{o.reject_reason}</div>}
         {!terminalBad && o.status !== 'delivered' && o.eta_minutes != null && <div className="muted" style={{ fontSize: 13 }}>{labels.eta}: ~{o.eta_minutes} min</div>}
+        <OrderThread orderId={o.id} you="customer" labels={{ title: labels.threadTitle, customer: labels.threadCustomer, shop: labels.threadShop }} />
       </section>
       <section className="card stack">
         {o.items?.map(i => <div className="row spread" key={i.id} style={{ fontSize: 14 }}><span><span className="qty">{Number(i.quantity)}×</span> {tr(i.name, L)}</span><span>{money(i.line_total_usd)}</span></div>)}

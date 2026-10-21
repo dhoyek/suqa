@@ -19,5 +19,5 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const statusLabels = Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]));
   return <OrderTracker initial={data as any} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} justPlaced={placed === '1'}
     statusLabels={statusLabels as any}
-    labels={{ orderPlaced: ui('orderPlaced', L), cancelOrder: ui('cancelOrder', L), total: ui('total', L), deliveryFee: ui('deliveryFee', L), call: ui('call', L), eta: ui('eta', L), myOrders: ui('myOrders', L), notes: ui('notes', L) }} />;
+    labels={{ orderPlaced: ui('orderPlaced', L), cancelOrder: ui('cancelOrder', L), total: ui('total', L), deliveryFee: ui('deliveryFee', L), call: ui('call', L), eta: ui('eta', L), myOrders: ui('myOrders', L), notes: ui('notes', L), threadTitle: ui('threadTitle', L), threadCustomer: ui('threadCustomer', L), threadShop: ui('threadShop', L) }} />;
 }

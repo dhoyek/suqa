@@ -29,7 +29,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     accept: ui('accept', L), reject: ui('reject', L), rejectReason: ui('rejectReason', L),
     startPreparing: ui('startPreparing', L), markReady: ui('markReady', L), outForDelivery: ui('outForDelivery', L),
     delivered: ui('delivered', L), cancel: ui('cancel', L), confirm: ui('confirm', L), total: ui('total', L),
-    delivery: ui('delivery', L), notes: ui('notes', L), call: ui('call', L), live: ui('live', L), minsAgo: ui('minsAgo', L),
+    delivery: ui('delivery', L), notes: ui('notes', L), call: ui('call', L), live: ui('live', L), minsAgo: ui('minsAgo', L), threadTitle: ui('threadTitle', L), threadCustomer: ui('threadCustomer', L), threadShop: ui('threadShop', L),
   };
   const statusLabels = Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]));
 

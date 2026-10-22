@@ -6,7 +6,7 @@ import type { Tenant } from '@suqa/shared';
 import { sendTestWhatsApp } from './actions';
 
 type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
-  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection' | 'waTestSection' | 'waTestPhone' | 'waTestSend' | 'waTestSent', string>;
+  | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection' | 'waTestSection' | 'waTestPhone' | 'waTestSend' | 'waTestSent' | 'maxOpenOrders', string>;
 
 export default function SettingsForm({ tenant, canEdit, labels, waConfigured }: { tenant: Tenant; canEdit: boolean; labels: Labels; waConfigured: boolean }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -18,6 +18,7 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured }: 
     multi_shop_cart: !!tenant.settings.multi_shop_cart, delivery_mode: tenant.settings.delivery_mode ?? 'per_shop',
     courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '', courier_enabled: !!tenant.settings.courier_enabled,
     legal_operator: tenant.settings.legal_operator ?? '', legal_email: tenant.settings.legal_email ?? '',
+    max_open_orders: tenant.settings.max_open_orders != null ? String(tenant.settings.max_open_orders) : '5',
   });
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const [testPhone, setTestPhone] = useState(tenant.settings.whatsapp_number ?? ''); const [testMsg, setTestMsg] = useState<string | null>(null); const [testBusy, setTestBusy] = useState(false);
@@ -33,7 +34,8 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured }: 
       brand_name: f.brand_name.trim(), fx_lbp_rate: Number(f.fx), display_currency: f.display, commission_rate: (Number(f.commission) || 0) / 100,
       settings: { ...tenant.settings, support_phone: f.support_phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
         multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee), courier_enabled: f.courier_enabled,
-        legal_operator: f.legal_operator.trim() || null, legal_email: f.legal_email.trim() || null },
+        legal_operator: f.legal_operator.trim() || null, legal_email: f.legal_email.trim() || null,
+        max_open_orders: f.max_open_orders.trim() === '' ? null : Math.max(0, Math.floor(Number(f.max_open_orders) || 0)) },
       branding: { ...tenant.branding, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
     }).eq('id', tenant.id);
     setBusy(false);
@@ -59,6 +61,7 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured }: 
         </div>
         <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.multi_shop_cart} onChange={e => setF({ ...f, multi_shop_cart: e.target.checked })} /> {labels.multiShopCart}</label>
+          <div><label className="label">{labels.maxOpenOrders}</label><input className="input" dir="ltr" inputMode="numeric" disabled={dis} value={f.max_open_orders} onChange={e => setF({ ...f, max_open_orders: e.target.value })} style={{ maxWidth: 120 }} /></div>
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.courier_enabled} onChange={e => setF({ ...f, courier_enabled: e.target.checked })} /> 🛵 {labels.couriersEnabled}</label>
           {f.multi_shop_cart && (
             <div className="row" style={{ alignItems: 'stretch' }}>

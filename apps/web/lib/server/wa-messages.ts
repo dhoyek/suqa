@@ -70,3 +70,29 @@ export function courierReady(e: OrderEvent, origin: string): string {
     ? `📦 طلب جاهز للتوصيل ${o.number} من ${e.shop ? t(e.shop.name, L) : ''} → ${a.area ?? a.city ?? ''}\nاستلمه من: ${origin}/courier`
     : `📦 Order ${o.number} ready for pickup at ${e.shop ? t(e.shop.name, L) : ''} → ${a.area ?? a.city ?? ''}\nTake it: ${origin}/courier`;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Template variants — Meta utility templates (see docs/whatsapp-templates.md). Used when WHATSAPP_TEMPLATES=1.
+// Parameters: no newlines, no runs of 4+ spaces, ≤ 1024 chars (Meta rejects otherwise).
+export type Tpl = { name: string; lang: string; params: string[] };
+const P = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 1000) || '-';
+const itemsOneLine = (e: OrderEvent, L: Locale) => e.items.map(i => `${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}`).join('، ');
+
+export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
+  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name} ${o.customer_phone}`), P(addr(o.address) || '📍'), P(`${origin}/shop`)] };
+}
+export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
+  const text = customerStatus(e, origin); if (!text) return null;
+  const o = e.order; const L = e.tenant?.default_locale ?? 'ar';
+  const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
+  return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(text.split('\n')[0]), P(link)] };
+}
+export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;
+  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(e.shop ? t(e.shop.name, L) : ''), P(a.area ?? a.city ?? addr(o.address)), P(`${origin}/courier`)] };
+}
+export function orderMessageTpl(orderNumber: string, from: string, text: string): Tpl {
+  return { name: 'order_message', lang: 'ar', params: [P(orderNumber), P(from), P(text)] };
+}
+export const tplComponents = (tpl: Tpl) => [{ type: 'body', parameters: tpl.params.map(text => ({ type: 'text', text })) }];

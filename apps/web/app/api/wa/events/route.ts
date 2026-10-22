@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
-import { waConfigured, waSendText } from '@/lib/server/whatsapp';
+import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, type OrderEvent } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, tplComponents, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -24,20 +24,22 @@ export async function POST(req: Request) {
   const origin = `https://${req.headers.get('x-forwarded-host') ?? u.host}`;
   const sends: Promise<unknown>[] = [];
   const from = e.phone_number_id ?? null;
-  const to = (raw: string | null | undefined, text: string | null, party: Party) => {
+  const useTpl = process.env.WHATSAPP_TEMPLATES === '1';   // approved Meta templates: deliver outside the 24 h window
+  const to = (raw: string | null | undefined, text: string | null, party: Party, tpl?: Tpl | null) => {
     const n = normalizePhone(raw); if (!n || !text) return;
-    sends.push(waSendText(n, text, from)
+    const send = useTpl && tpl ? waSendTemplate(n, tpl.name, tpl.lang, tplComponents(tpl), from) : waSendText(n, text, from);
+    sends.push(send
       .then(r => logWaMessage({ wamid: r.messages?.[0]?.id ?? `local-${Date.now()}-${n}`, order_id: e.order.id, tenant_id: e.order.tenant_id ?? e.tenant?.id, direction: 'out', party, phone: n, phone_number_id: from ?? process.env.WHATSAPP_PHONE_ID, body: text, status: 'sent' }))
       .catch(err => console.error('[wa events] send failed', n.slice(-4), (err as Error).message)));
   };
 
   if (e.event === 'order.created') {
-    to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop');
+    to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop', shopNewOrderTpl(e, origin));
   } else if (e.event === 'order.status') {
-    to(e.order.customer_phone, customerStatus(e, origin), 'customer');
+    to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
     if (e.order.status === 'ready' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {
-      const msg = courierReady(e, origin);
-      for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier');
+      const msg = courierReady(e, origin); const tpl = courierReadyTpl(e, origin);
+      for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier', tpl);
     }
   }
   await Promise.all(sends);

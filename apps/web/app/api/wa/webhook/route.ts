@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { waVerifySignature, waSendText } from '@/lib/server/whatsapp';
+import { waVerifySignature, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
+import { orderMessageTpl, tplComponents } from '@/lib/server/wa-messages';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 import { normalizePhone } from '@/lib/whatsapp';
@@ -71,7 +72,10 @@ async function handleInbound(m: Msg, phoneNumberId?: string) {
   const label = hit.party === 'shop' ? `💬 ${shopName} — ${o.number}` : `💬 ${o.customer_name || 'العميل'} — ${o.number}`;
   const n = normalizePhone(dest); if (!n) return;
   try {
-    const r = await waSendText(n, `${label}:\n${text}`, phoneNumberId);
+    const who = hit.party === 'shop' ? shopName : (o.customer_name || 'العميل');
+    const r = process.env.WHATSAPP_TEMPLATES === '1'
+      ? await (() => { const tpl = orderMessageTpl(o.number, who, text); return waSendTemplate(n, tpl.name, tpl.lang, tplComponents(tpl), phoneNumberId); })()
+      : await waSendText(n, `${label}:\n${text}`, phoneNumberId);
     await logWaMessage({ wamid: r.messages?.[0]?.id ?? `fwd-${m.id}`, order_id: o.id, tenant_id: o.tenant_id, direction: 'out', party: hit.party === 'shop' ? 'customer' : 'shop', phone: n, phone_number_id: phoneNumberId, body: `${label}:\n${text}`, status: 'sent' });
   } catch (e) { console.error('[wa forward]', (e as Error).message); }
 }

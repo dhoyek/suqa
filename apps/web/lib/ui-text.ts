@@ -219,6 +219,7 @@ const T = {
   threadTitle: { en: 'Messages about this order', ar: 'رسائل حول هذا الطلب' },
   threadCustomer: { en: 'Customer', ar: 'العميل' },
   threadShop: { en: 'Shop', ar: 'المتجر' },
+  maxOpenOrders: { en: 'Max unfinished orders per customer (0 = unlimited)', ar: 'الحد الأقصى للطلبات غير المنجزة لكل عميل (0 = بلا حد)' },
   // whatsapp login / test
   waTestSection: { en: 'WhatsApp notifications (Cloud API)', ar: 'إشعارات واتساب (Cloud API)' },
   waTestPhone: { en: 'Send a test message to', ar: 'أرسل رسالة اختبار إلى' },

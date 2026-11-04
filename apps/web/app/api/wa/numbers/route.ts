@@ -24,6 +24,14 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const waba = u.searchParams.get('waba') || process.env.WHATSAPP_WABA_ID;
   const phone = u.searchParams.get('phone');
+  const business = u.searchParams.get('business');
+  if (business) {   // list the WhatsApp accounts a business portfolio owns / is client of
+    const [owned, client] = await Promise.all([
+      graph(`${business}/owned_whatsapp_business_accounts?fields=id,name,currency,timezone_id`),
+      graph(`${business}/client_whatsapp_business_accounts?fields=id,name`),
+    ]);
+    return NextResponse.json({ owned: owned.json, client: client.json });
+  }
   if (phone) {   // probe one number directly (works even if it lives in another WABA, as long as the token can see it)
     const r = await graph(`${phone}?fields=id,display_phone_number,verified_name,name_status,code_verification_status,status,quality_rating,messaging_limit_tier,platform_type`);
     return NextResponse.json(r.json, { status: r.ok ? 200 : 400 });

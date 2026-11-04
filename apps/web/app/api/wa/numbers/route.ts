@@ -21,7 +21,13 @@ async function graph(path: string, init?: RequestInit) {
 
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const waba = process.env.WHATSAPP_WABA_ID;
+  const u = new URL(req.url);
+  const waba = u.searchParams.get('waba') || process.env.WHATSAPP_WABA_ID;
+  const phone = u.searchParams.get('phone');
+  if (phone) {   // probe one number directly (works even if it lives in another WABA, as long as the token can see it)
+    const r = await graph(`${phone}?fields=id,display_phone_number,verified_name,name_status,code_verification_status,status,quality_rating,messaging_limit_tier,platform_type`);
+    return NextResponse.json(r.json, { status: r.ok ? 200 : 400 });
+  }
   const [numbers, subs] = await Promise.all([
     graph(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,status,quality_rating,messaging_limit_tier,platform_type,throughput`),
     graph(`${waba}/subscribed_apps`),
@@ -31,14 +37,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const b = await req.json().catch(() => ({})) as { action?: string; phone_number_id?: string; pin?: string };
+  const b = await req.json().catch(() => ({})) as { action?: string; phone_number_id?: string; pin?: string; waba?: string };
   if (b.action === 'register') {
     if (!b.phone_number_id || !/^\d{6}$/.test(b.pin ?? '')) return NextResponse.json({ error: 'phone_number_id and 6-digit pin required' }, { status: 400 });
     const r = await graph(`${b.phone_number_id}/register`, { method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', pin: b.pin }) });
     return NextResponse.json(r.json, { status: r.ok ? 200 : 400 });
   }
   if (b.action === 'subscribe') {
-    const r = await graph(`${process.env.WHATSAPP_WABA_ID}/subscribed_apps`, { method: 'POST' });
+    const r = await graph(`${b.waba || process.env.WHATSAPP_WABA_ID}/subscribed_apps`, { method: 'POST' });
     return NextResponse.json(r.json, { status: r.ok ? 200 : 400 });
   }
   return NextResponse.json({ error: 'unknown action' }, { status: 400 });

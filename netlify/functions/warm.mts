@@ -1,8 +1,9 @@
 // Keeps the Next.js server function warm so the first visitor after a quiet spell doesn't pay a cold start.
-// Runs every minute (Netlify scheduled function). Cheap: a few tiny requests (~130k/month, well inside the free tier).
+// Every 10 minutes, one request (~4.3k invocations/month). It used to run every minute on 3 pages (~170k/month),
+// which burned through the Netlify credit allowance — keep it lean.
 export default async () => {
   const base = process.env.URL;
   if (!base) return;
-  await Promise.allSettled(['/', '/cart', '/s/abou-elie'].map(p => fetch(`${base}${p}`, { headers: { 'x-warm': '1' } })));
+  await fetch(`${base}/`, { headers: { 'x-warm': '1' } }).catch(() => {});
 };
-export const config = { schedule: '* * * * *' };
+export const config = { schedule: '*/10 * * * *' };

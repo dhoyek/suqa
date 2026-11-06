@@ -169,7 +169,7 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - No native `alert()`/`confirm()` anywhere: use `useNotify()` / `useConfirm()` from `ConfirmProvider`.
 
 ## WhatsApp Cloud API (2026-10-19)
-- Meta app **Suqa** (App ID 4004002429909677); test number for now, production number + payment later.
+- Meta app **Suqa** (App ID 4004002429909677). Production sender since 2026-11-06: +961 79 469 091, phone number id 1547396231770883, WABA "Yorgo" 1635084338341071 (portfolio 150512816251593). Old test WABA 1428980581951265 kept for reference.
 - Server helper `apps/web/lib/server/whatsapp.ts` (`waSendText`, `waSendTemplate`, `waVerifySignature`). Secrets in Netlify env only:
   `WHATSAPP_TOKEN` (system-user permanent token), `WHATSAPP_PHONE_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `SUPABASE_SMS_HOOK_SECRET`.
 - Webhook: `GET/POST /api/wa/webhook` — verify handshake + `X-Hub-Signature-256` check; subscribed to `messages` (statuses + replies). Phase 1 logs only.

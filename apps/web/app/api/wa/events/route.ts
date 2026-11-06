@@ -27,7 +27,14 @@ export async function POST(req: Request) {
   const useTpl = process.env.WHATSAPP_TEMPLATES === '1';   // approved Meta templates: deliver outside the 24 h window
   const to = (raw: string | null | undefined, text: string | null, party: Party, tpl?: Tpl | null) => {
     const n = normalizePhone(raw); if (!n || !text) return;
-    const send = useTpl && tpl ? waSendTemplate(n, tpl.name, tpl.lang, tplComponents(tpl), from) : waSendText(n, text, from);
+    // Template first; if Meta refuses it (e.g. not approved yet on a new account), fall back to plain text,
+    // which still delivers inside the customer's 24 h window.
+    const send = useTpl && tpl
+      ? waSendTemplate(n, tpl.name, tpl.lang, tplComponents(tpl), from).catch(err => {
+          console.warn('[wa events] template failed, sending text', tpl.name, (err as Error).message.slice(0, 160));
+          return waSendText(n, text, from);
+        })
+      : waSendText(n, text, from);
     sends.push(send
       .then(r => logWaMessage({ wamid: r.messages?.[0]?.id ?? `local-${Date.now()}-${n}`, order_id: e.order.id, tenant_id: e.order.tenant_id ?? e.tenant?.id, direction: 'out', party, phone: n, phone_number_id: from ?? process.env.WHATSAPP_PHONE_ID, body: text, status: 'sent' }))
       .catch(err => console.error('[wa events] send failed', n.slice(-4), (err as Error).message)));

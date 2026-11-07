@@ -34,12 +34,12 @@ export default function Shell(props: {
           {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}><span className="ico">{ICON[v]}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
-          <span className={`pill ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>
-            {status?.syncing ? pt('syncing', locale) : online ? pt('online', locale) : pt('offline', locale)}
+          <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>
+            <span className={`dot ${online ? 'on' : ''}`} />{online ? pt('online', locale) : pt('offline', locale)}
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
           {!!status?.rejected && <span className="pill bad">{status.rejected} {pt('rejected', locale)}</span>}
-          <button className="btn icon" title={pt('syncNow', locale)} onClick={() => boot.engine.poke()}>🔄</button>
+          <button className={`btn icon sync ${status?.syncing ? 'spin' : ''}`} title={status?.syncing ? pt('syncing', locale) : pt('syncNow', locale)} onClick={() => boot.engine.poke()} aria-busy={!!status?.syncing}>🔄</button>
           <span className="muted" style={{ fontSize: 13 }}>{staff.display_name || staff.full_name || ''}</span>
           <button className="btn icon" title={pt('lock', locale)} onClick={onLock}>🔒</button>
         </div>

@@ -177,3 +177,12 @@
 @media (max-width: 640px) { .item-form { grid-template-columns: 1fr; } }
 .map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 10px; }
 .map-grid .label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+
+/* status pill keeps its text; syncing is shown by the sync icon turning, not by changing words */
+.pos .pill.status { min-width: 92px; justify-content: center; transition: background-color .3s, color .3s; }
+.pos .pill.status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d97706; }
+.pos .pill.status .dot.on { background: var(--ok); }
+.pos .btn.icon.sync { transition: transform .2s; }
+.pos .btn.icon.sync.spin { animation: pos-spin 1s linear infinite; }
+@keyframes pos-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pos .btn.icon.sync.spin { animation: none; opacity: .6; } }

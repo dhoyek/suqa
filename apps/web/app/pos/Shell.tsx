@@ -26,6 +26,9 @@ export default function Shell(props: {
   const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
   const online = status?.online ?? true;
+  const [manual, setManual] = useState(false);                      // user pressed sync → show the icon turning briefly
+  const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
+  const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
   return (
     <div className="pos" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
@@ -39,7 +42,7 @@ export default function Shell(props: {
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
           {!!status?.rejected && <span className="pill bad">{status.rejected} {pt('rejected', locale)}</span>}
-          <button className={`btn icon sync ${status?.syncing ? 'spin' : ''}`} title={status?.syncing ? pt('syncing', locale) : pt('syncNow', locale)} onClick={() => boot.engine.poke()} aria-busy={!!status?.syncing}>🔄</button>
+          <button className={`btn icon sync ${spinning ? 'spin' : ''}`} title={pt('syncNow', locale)} onClick={syncNow}>🔄</button>
           <span className="muted" style={{ fontSize: 13 }}>{staff.display_name || staff.full_name || ''}</span>
           <button className="btn icon" title={pt('lock', locale)} onClick={onLock}>🔒</button>
         </div>

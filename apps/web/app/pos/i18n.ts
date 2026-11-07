@@ -156,6 +156,14 @@ const T = {
   // M6: reports, staff, audit
   tender: { ar: 'طريقة الدفع', en: 'Tender' }, section: { ar: 'القسم', en: 'Section' }, currency: { ar: 'العملة', en: 'Currency' }, openedAt: { ar: 'فُتحت', en: 'Opened' },
   add: { ar: 'إضافة', en: 'Add' }, you: { ar: 'أنت', en: 'you' },
+  // M7: debt book
+  debtsNav: { ar: 'الدين', en: 'Debts' }, debtBook: { ar: 'دفتر الدين', en: 'Debt book' }, byDate: { ar: 'حسب التاريخ', en: 'By date' }, byPerson: { ar: 'حسب الشخص', en: 'By person' },
+  openOnly: { ar: 'المفتوح فقط', en: 'Open only' }, person: { ar: 'الشخص', en: 'Person' }, allPeople: { ar: 'الجميع', en: 'Everyone' }, original: { ar: 'الأصل', en: 'Original' }, paidSoFar: { ar: 'المسدّد', en: 'Paid' },
+  outstanding: { ar: 'المتبقي', en: 'Outstanding' }, totalOutstanding: { ar: 'إجمالي الدين', en: 'Total owed' }, collect: { ar: 'تحصيل', en: 'Collect' }, collectFrom: { ar: 'تحصيل من', en: 'Collect from' },
+  amountPaid: { ar: 'المبلغ المدفوع', en: 'Amount paid' }, allocation: { ar: 'التوزيع (الأقدم أولاً)', en: 'Allocation (oldest first)' }, fullyPaid: { ar: 'سُدّد بالكامل', en: 'Paid in full' },
+  remainsOpen: { ar: 'يبقى', en: 'remains' }, overpaid: { ar: 'زيادة عن الدين — تُعاد للزبون', en: 'More than owed — return to the customer' }, printStatement: { ar: 'طباعة كشف', en: 'Print statement' },
+  statement: { ar: 'كشف حساب', en: 'Statement' }, collected: { ar: 'تم التحصيل', en: 'Collected' }, debtCollected: { ar: 'تحصيل دين', en: 'Debt collected' }, noDebts: { ar: 'لا ديون', en: 'No debts' },
+  printReceipt: { ar: 'طباعة إيصال', en: 'Print receipt' }, settlementsHistory: { ar: 'التحصيلات', en: 'Collections' }, searchPerson: { ar: 'اسم أو رقم…', en: 'Name or number…' },
   codSettle: { ar: 'تسوية الدفع عند التوصيل', en: 'Cash-on-delivery settlement' }, driverName: { ar: 'السائق', en: 'Driver' }, driverFee: { ar: 'أجرة السائق', en: 'Driver fee' }, netToStore: { ar: 'صافي للمحل', en: 'Net to store' },
   driverFeeHint: { ar: 'تُسجَّل أجرة السائق كمصروف من الصندوق في الوردية الحالية', en: 'The driver fee is recorded as cash out of the drawer on the open shift' }, courierFees: { ar: 'أجور السائقين', en: 'Driver fees' }, deliveryFees: { ar: 'رسوم التوصيل', en: 'Delivery fees' },
   period: { ar: 'الفترة', en: 'Period' }, pToday: { ar: 'اليوم', en: 'Today' }, pYesterday: { ar: 'أمس', en: 'Yesterday' }, pWeek: { ar: 'هذا الأسبوع', en: 'This week' },

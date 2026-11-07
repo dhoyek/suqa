@@ -10,3 +10,4 @@ export * from './shift';
 export * from './catalog-edit';
 export * from './orders';
 export * from './reports';
+export * from './debts';

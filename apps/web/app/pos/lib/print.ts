@@ -1,5 +1,5 @@
 'use client';
-import { fmtLbp, fmtUsd, num, text, usdToLbp, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, num, text, usdToLbp, type DebtLine, type DebtSettlement, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 
 /**
@@ -84,4 +84,30 @@ export function testPrintHtml(shop: Shop, L: L, st: PrintSettings): string {
   return `<div class="vch"><div class="club">${esc(text(shop.name, L))}</div><div class="ev">${esc(pt('testPrint', L))} · ${st.paper}mm</div><hr>
     <table><tr><td class="q">2×</td><td>لبنة بلدية<div class="u"><i>$3.50</i></div></td><td class="a"><i>$7.00</i></td></tr><tr><td class="q">1×</td><td>Arabic bread<div class="u"><i>$1.00</i></div></td><td class="a"><i>$1.00</i></td></tr></table><hr>
     <div class="tot"><i>$8.00</i><span class="sep">·</span><i>716,000 ل.ل.</i></div><hr><div class="ft">0123456789 abc ABC</div>${cutBlock(st)}</div>`;
+}
+
+/** Debt statement for one person (or a filtered list): lines with date, number, original, paid, outstanding; total owed. */
+export function debtStatementHtml(lines: DebtLine[], shop: Shop, L: L, st: PrintSettings, opts: { person?: { name: string; phone: string }; rate?: number; lbpStep?: number } = {}): string {
+  const total = lines.reduce((s, l) => s + l.outstanding_cents, 0);
+  const rows = lines.map(l => `<div class="kv"><span>${esc(fmtDT(l.at, L).split(',')[0])} · ${esc(l.number)}${opts.person ? '' : ' · ' + esc(l.name)}</span>${ltr(l.closed ? '✓' : fmtUsd(l.outstanding_cents))}</div>${l.paid_cents && !l.closed ? `<div class="ft">&nbsp;&nbsp;${esc(pt('original', L))} ${ltr(fmtUsd(l.original_cents))} · ${esc(pt('paidSoFar', L))} ${ltr(fmtUsd(l.paid_cents))}</div>` : ''}`).join('');
+  return `<div class="vch">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="kiosk">${esc(pt('statement', L))}</div>
+    ${opts.person ? `<div class="no">${esc(opts.person.name)}</div><div class="ev">${ltr(esc(opts.person.phone))}</div>` : ''}
+    <div class="ev">${esc(fmtDT(new Date().toISOString(), L))}</div><hr>
+    ${rows}<hr>
+    <div class="kv tot"><span>${esc(pt('totalOutstanding', L))}</span>${ltr(fmtUsd(total))}</div>
+    ${opts.rate && st.showLbp ? `<div class="kv"><span></span>${ltr(fmtLbp(Math.round(usdToLbp(total, opts.rate) / (opts.lbpStep ?? 5000)) * (opts.lbpStep ?? 5000), L))}</div>` : ''}
+    ${shop.receipt_footer ? `<hr><div class="ft">${esc(shop.receipt_footer)}</div>` : ''}${cutBlock(st)}</div>`;
+}
+
+/** Receipt for a debt collection: amount, allocation, remaining balance. */
+export function debtReceiptHtml(s: DebtSettlement, allocs: Array<{ number: string; amount_cents: number; closed: boolean }>, remaining_cents: number, shop: Shop, L: L, st: PrintSettings): string {
+  return `<div class="vch">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="kiosk">${esc(pt('debtCollected', L))}</div>
+    <div class="no">${esc(s.name ?? '')}</div><div class="ev">${ltr(esc(s.phone))} · ${esc(fmtDT(s.at, L))}</div><hr>
+    <div class="kv tot"><span>${esc(pt(s.tender, L))}</span>${ltr(s.currency === 'lbp' ? fmtLbp(num(s.amount), L) : fmtUsd(num(s.amount)))}</div>
+    ${s.currency === 'lbp' ? `<div class="kv"><span></span>${ltr('= ' + fmtUsd(s.amount_cents))}</div>` : ''}<hr>
+    ${allocs.map(a => `<div class="kv"><span>${esc(a.number)}${a.closed ? ' ✓' : ''}</span>${ltr(fmtUsd(a.amount_cents))}</div>`).join('')}<hr>
+    <div class="kv tot"><span>${esc(pt('outstanding', L))}</span>${ltr(fmtUsd(remaining_cents))}</div>
+    ${shop.receipt_footer ? `<hr><div class="ft">${esc(shop.receipt_footer)}</div>` : ''}${cutBlock(st)}</div>`;
 }

@@ -27,4 +27,5 @@ source of truth.
 | 23_pos_m4.sql | POS M4: `pos_import_products` (dry-run/commit), `pos_bulk_price`, `pos_bulk_visibility`, online stock guard |
 | 24_pos_m5.sql | POS M5: order inbox ops `order.edit` / `order.pay` / `return.commit` (`_pos_order_edit`, `_pos_order_pay`, `_pos_return`), `order_event_payload` with channel + `order.edited` event, WA/phone reject/cancel reverses sale stock |
 | 25_pos_m6.sql | POS M6: `staff_invites` + `pos_staff_invite` / `pos_staff_set` / `pos_staff_list` (add staff by WhatsApp number, claimed on first sign-in), `pos_my_shops` (admins open any POS-enabled shop), `pos_report` (period report), `pos_export` (per-shop export), COD settlement (`orders.courier_fee_cents`, `courier_name`) |
+| 26_pos_m7.sql | POS M7 debt book: `debt_settlements` + `debt_allocations`, `order_debt_cents`, `open_debts`, op `debt.settle` (dispatcher re-created), snapshot keeps every order that carried a debt, report `unpaid` = open debts + `debt_collected_cents` |
 | ../seed/batroun.sql | first tenant |

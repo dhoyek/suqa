@@ -12,11 +12,12 @@ import ReportsView from './views/ReportsView';
 import ItemsView from './views/ItemsView';
 import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
+import DebtsView from './views/DebtsView';
 
-export type View = 'sell' | 'orders' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
-const VIEWS: View[] = ['sell', 'orders', 'items', 'stock', 'shift', 'reports', 'settings'];
-const ICON: Record<View, string> = { sell: '🧾', orders: '📥', items: '🏷️', stock: '📦', shift: '💵', reports: '📊', settings: '⚙️' };
-const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', items: 'items', stock: 'stock', shift: 'shift', reports: 'reports', settings: 'settings' };
+export type View = 'sell' | 'orders' | 'debts' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
+const VIEWS: View[] = ['sell', 'orders', 'debts', 'items', 'stock', 'shift', 'reports', 'settings'];
+const ICON: Record<View, string> = { sell: '🧾', orders: '📥', debts: '📒', items: '🏷️', stock: '📦', shift: '💵', reports: '📊', settings: '⚙️' };
+const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', debts: 'debtsNav', items: 'items', stock: 'stock', shift: 'shift', reports: 'reports', settings: 'settings' };
 
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
@@ -55,6 +56,7 @@ export default function Shell(props: {
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} />}
         {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setNewOrderReq(n => n + 1); setView('sell'); }} />}
+        {view === 'debts' && <DebtsView {...props} />}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} />}
         {view === 'shift' && <ShiftView {...props} />}

@@ -52,11 +52,13 @@ export interface Payment { id: string; order_id: string; tender: Tender; amount:
 export interface StockMove { id: string; shop_id: string; product_id: string; qty: number | string; kind: StockKind; ref_order_id?: string | null; ref_id?: string | null; unit_cost_cents?: number | null; note?: string | null; device_id?: string | null; user_id?: string | null; at: string }
 export interface Shift { id: string; shop_id: string; device_id: string; opened_by?: string | null; opened_at: string; float_usd_cents: number; float_lbp: number; closed_by?: string | null; closed_at?: string | null; counted_usd_cents?: number | null; counted_lbp?: number | null; expected_usd_cents?: number | null; expected_lbp?: number | null; diff_usd_cents?: number | null; diff_lbp?: number | null; note?: string | null }
 export interface CashMove { id: string; shift_id: string; kind: 'in' | 'out'; amount: number; currency: Currency; reason?: string | null; user_id?: string | null; at: string }
+export interface DebtSettlement { id: string; shop_id: string; phone: string; name?: string | null; tender: Exclude<Tender, 'unpaid'>; currency: Currency; amount: number; amount_cents: number; rate: number; note?: string | null; user_id?: string | null; device_id?: string | null; shift_id?: string | null; at: string }
+export interface DebtAllocation { id: string; settlement_id: string; shop_id: string; order_id: string; amount_cents: number }
 export interface Conflict { id: string; tbl: string; row_id: string; field: string; old_value: unknown; new_value: unknown; by_device?: string | null; at: string; seen: boolean }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7
@@ -76,6 +78,7 @@ export interface Snapshot {
   cursor: number; server_now: string; role: Role; device: Pick<Device, 'id' | 'prefix' | 'name'>; shop: Shop;
   categories: Category[]; products: Product[]; product_barcodes: Barcode[]; quick_buttons: QuickButton[]; exchange_rates: Rate[];
   shop_members: Staff[]; devices: Device[]; orders: Order[]; order_items: OrderLine[]; payments: Payment[]; shifts: Shift[]; cash_moves: CashMove[]; stock_moves: StockMove[];
+  debt_settlements?: DebtSettlement[]; debt_allocations?: DebtAllocation[];
 }
 
 export class SyncError extends Error {

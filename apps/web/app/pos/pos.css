@@ -1,0 +1,50 @@
+/* POS: large targets, full-height layout, works on a 1024px counter PC, an Android phone and an iPad. */
+.pos { display: flex; flex-direction: column; height: 100dvh; background: #f3f4f6; }
+.pos-center, .pos-lock { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 16px; background: #f3f4f6; }
+.pos .brand, .pos-center .brand, .pos-lock .brand { font-weight: 800; font-size: 18px; color: var(--brand-primary); }
+.pos .bad, .pos-center .bad, .pos-lock .bad { color: var(--bad); }
+.pos .pill, .pos-lock .pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #e5e7eb; font-size: 13px; white-space: nowrap; }
+.pos .pill.ok, .pos-lock .pill.ok { background: #dcfce7; color: var(--ok); }
+.pos .pill.warn, .pos-lock .pill.warn { background: #fef3c7; color: #92400e; }
+.pos .pill.bad { background: #fee2e2; color: var(--bad); }
+.btn.big, .input.big { min-height: 56px; font-size: 18px; }
+.btn.big { width: 100%; }
+
+/* top bar */
+.pos-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.pos-nav { display: flex; gap: 4px; overflow-x: auto; }
+.pos-nav button { border: 0; background: transparent; border-radius: 10px; padding: 8px 12px; min-height: 48px; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; }
+.pos-nav button .ico { font-size: 20px; line-height: 1; }
+.pos-nav button.active { background: #eef6f8; color: var(--brand-primary); }
+.pos-status { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+.pos-update { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px; background: #fef3c7; color: #92400e; font-weight: 600; }
+.pos-main { flex: 1; min-height: 0; overflow: auto; }
+
+/* sell layout: items left/right by direction, cart on the other side */
+.pos-sell { display: grid; grid-template-columns: 1fr 360px; gap: 0; height: 100%; }
+.pos-pane { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.pos-pane.cart { background: #fff; border-inline-start: 1px solid var(--line); }
+.grid-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.item-tile { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 10px; min-height: 84px; text-align: start; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font-family: inherit; }
+.item-tile:active { background: #eef6f8; }
+.item-name { font-weight: 700; font-size: 15px; line-height: 1.25; }
+.item-price { font-size: 13px; color: var(--brand-primary); font-weight: 600; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+@media (max-width: 760px) { .pos-sell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .pos-pane.cart { border-inline-start: 0; border-top: 1px solid var(--line); max-height: 45dvh; } }
+
+/* lock screen */
+.pos-lock-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; width: 100%; max-width: 440px; }
+.staff-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.tile { border: 2px solid var(--line); background: #fff; border-radius: 12px; padding: 10px; min-height: 64px; cursor: pointer; text-align: center; font-family: inherit; }
+.tile.active { border-color: var(--brand-primary); background: #eef6f8; }
+.tile-name { font-weight: 700; font-size: 16px; }
+.pin-dots { display: flex; justify-content: center; gap: 14px; margin: 8px 0; }
+.pin-dots .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--brand-primary); background: transparent; }
+.pin-dots .dot.on { background: var(--brand-primary); }
+.pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pinpad button { min-height: 60px; font-size: 24px; font-weight: 600; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; font-family: inherit; }
+.pinpad button:active { background: #eef6f8; }
+.pinpad button:disabled { opacity: .4; }
+
+.pos .table { width: 100%; border-collapse: collapse; }
+.pos .table td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }

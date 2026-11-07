@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-export default function ShopNav({ shops, labels }: { shops: { id: string; name: string }[]; labels: { orders: string; products: string; myShop: string; signOut: string } }) {
+export default function ShopNav({ shops, labels }: { shops: { id: string; name: string }[]; labels: { orders: string; products: string; myShop: string; signOut: string; pos?: string } }) {
   const path = usePathname();
   const params = useSearchParams();
   const router = useRouter();
@@ -21,6 +21,7 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
         <Link href={`/shop${q}`} className={`tab ${path === '/shop' ? 'active' : ''}`}>{labels.orders}</Link>
         <Link href={`/shop/products${q}`} className={`tab ${path.startsWith('/shop/products') ? 'active' : ''}`}>{labels.products}</Link>
         <Link href={`/shop/settings${q}`} className={`tab ${path.startsWith('/shop/settings') ? 'active' : ''}`}>{labels.myShop}</Link>
+        {labels.pos && <a href="/pos" className="tab">🧾 {labels.pos}</a>}
         <form action="/auth/signout" method="post"><button className="btn ghost muted" type="submit">{labels.signOut}</button></form>
       </nav>
     </>

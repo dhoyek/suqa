@@ -1,7 +1,7 @@
 # Netlify — monorepo: install at the root (npm workspaces), build/serve apps/web.
 # In the Netlify UI leave "Base directory" empty; "Package directory" = apps/web is set here.
 [build]
-  command = "npm test && npm run build -w @suqa/web"   # unit tests gate every deploy
+  command = "npm test && NEXT_PUBLIC_APP_VERSION=${COMMIT_REF:0:7} npm run build -w @suqa/web"   # unit tests gate every deploy; the POS shows the commit as its version
   publish = "apps/web/.next"
   package = "apps/web"
 

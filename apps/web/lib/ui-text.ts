@@ -8,6 +8,7 @@ const T = {
   signOut: { en: 'Sign out', ar: 'تسجيل الخروج' },
   invalidLogin: { en: 'Wrong email or password', ar: 'البريد أو كلمة المرور غير صحيحة' },
   orders: { en: 'Orders', ar: 'الطلبات' },
+  pos: { en: 'POS', ar: 'نقطة البيع' },
   products: { en: 'Products', ar: 'المنتجات' },
   newOrders: { en: 'New', ar: 'جديد' },
   inProgress: { en: 'In progress', ar: 'قيد التحضير' },

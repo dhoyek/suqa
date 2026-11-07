@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next';
+import withSerwistInit from '@serwist/next';
+
+// Service worker for the POS only (registered from /pos with scope '/pos'); the storefront stays plain.
+const withSerwist = withSerwistInit({ swSrc: 'app/pos/sw.ts', swDest: 'public/pos-sw.js', disable: process.env.NODE_ENV === 'development', register: false, cacheOnNavigation: false });
 
 // Security headers live here (not only netlify.toml) because Netlify's [[headers]] only apply to
 // static assets — server-rendered pages come from the Next.js function and need these from Next itself.
@@ -6,12 +10,12 @@ const SECURITY_HEADERS = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'geolocation=(self), camera=(), microphone=(), payment=()' },
+  { key: 'Permissions-Policy', value: 'geolocation=(self), camera=(self), microphone=(), payment=()' },
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
 ];
 
 const config: NextConfig = {
-  transpilePackages: ['@suqa/shared'],
+  transpilePackages: ['@suqa/shared', '@suqa/pos-core'],
   images: { remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }] },
   poweredByHeader: false,
   async headers() { return [{ source: '/(.*)', headers: SECURITY_HEADERS }]; },
@@ -24,4 +28,4 @@ const config: NextConfig = {
     ];
   },
 };
-export default config;
+export default withSerwist(config);

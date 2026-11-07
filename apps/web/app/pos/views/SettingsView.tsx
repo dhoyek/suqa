@@ -8,7 +8,9 @@ import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type PrintSettings } from '../lib/print';
 
-export default function SettingsView({ boot, sb, locale, status, staff, tick }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number }) {
+export default function SettingsView({ boot, sb, locale, status, staff, tick, setLocale }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number; setLocale: (l: L) => void }) {
+  const [big, setBig] = useState(() => { try { return localStorage.getItem('suqa-pos-big') === '1'; } catch { return false; } });
+  const toggleBig = (v: boolean) => { setBig(v); try { localStorage.setItem('suqa-pos-big', v ? '1' : '0'); } catch {} document.documentElement.classList.toggle('pos-big', v); };
   const [devices, setDevices] = useState<Device[]>([]);
   const [members, setMembers] = useState<Staff[]>([]);
   const [persist, setPersist] = useState<boolean | null>(null);
@@ -76,6 +78,14 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick }: 
         <div className="row" style={{ marginTop: 10, gap: 10, alignItems: 'center' }}>
           <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
         </div>
+      </section>
+      <section className="card">
+        <h3 style={{ marginTop: 0 }}>🌐 {pt('language', locale)}</h3>
+        <div className="row" style={{ gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="seg"><button className={locale === 'ar' ? 'active' : ''} onClick={() => setLocale('ar')}>العربية</button><button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')}>English</button></div>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={big} onChange={e => toggleBig(e.target.checked)} /> {pt('bigButtons', locale)}</label>
+        </div>
+        <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('perDevice', locale)}</p>
       </section>
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🖨 {pt('printer', locale)}</h3>

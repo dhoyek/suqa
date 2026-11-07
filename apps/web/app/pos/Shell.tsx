@@ -22,11 +22,12 @@ const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'o
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
   boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; index: CatalogIndex; tick: number;
-  updateReady: boolean; onUpdate: () => void; busyRef: MutableRefObject<boolean>; onLock: () => void; reindex: () => void;
+  updateReady: boolean; onUpdate: () => void; busyRef: MutableRefObject<boolean>; onLock: () => void; reindex: () => void; setLocale: (l: L) => void;
 }) {
   const { boot, locale, status, staff, updateReady, onUpdate, onLock } = props;
   const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
+  useEffect(() => { document.documentElement.lang = locale; document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr'; }, [locale]);
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => { boot.db.orders.where('status').equals('pending').count().then(setPendingCount); }, [boot, props.tick]);
   const online = status?.online ?? true;

@@ -164,6 +164,7 @@ const T = {
   remainsOpen: { ar: 'يبقى', en: 'remains' }, overpaid: { ar: 'زيادة عن الدين — تُعاد للزبون', en: 'More than owed — return to the customer' }, printStatement: { ar: 'طباعة كشف', en: 'Print statement' },
   statement: { ar: 'كشف حساب', en: 'Statement' }, collected: { ar: 'تم التحصيل', en: 'Collected' }, debtCollected: { ar: 'تحصيل دين', en: 'Debt collected' }, noDebts: { ar: 'لا ديون', en: 'No debts' },
   printReceipt: { ar: 'طباعة إيصال', en: 'Print receipt' }, settlementsHistory: { ar: 'التحصيلات', en: 'Collections' }, searchPerson: { ar: 'اسم أو رقم…', en: 'Name or number…' },
+  language: { ar: 'اللغة', en: 'Language' }, bigButtons: { ar: 'أزرار أكبر (لوحي / شاشة لمس)', en: 'Larger buttons (tablet / touch)' }, perDevice: { ar: 'إعداد خاص بهذا الجهاز', en: 'Per-device setting' },
   codSettle: { ar: 'تسوية الدفع عند التوصيل', en: 'Cash-on-delivery settlement' }, driverName: { ar: 'السائق', en: 'Driver' }, driverFee: { ar: 'أجرة السائق', en: 'Driver fee' }, netToStore: { ar: 'صافي للمحل', en: 'Net to store' },
   driverFeeHint: { ar: 'تُسجَّل أجرة السائق كمصروف من الصندوق في الوردية الحالية', en: 'The driver fee is recorded as cash out of the drawer on the open shift' }, courierFees: { ar: 'أجور السائقين', en: 'Driver fees' }, deliveryFees: { ar: 'رسوم التوصيل', en: 'Delivery fees' },
   period: { ar: 'الفترة', en: 'Period' }, pToday: { ar: 'اليوم', en: 'Today' }, pYesterday: { ar: 'أمس', en: 'Yesterday' }, pWeek: { ar: 'هذا الأسبوع', en: 'This week' },

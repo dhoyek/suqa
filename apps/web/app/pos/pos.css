@@ -219,3 +219,31 @@
 @media (max-width: 1000px) { .orders-cols { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) { .orders-cols { grid-template-columns: 1fr; } }
 .cod-driver { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: #fffbeb; }
+
+/* ---------- touch / tablet pass (M6) ---------- */
+/* Pointer devices without hover (iPad, touch POS screens) get comfortable targets everywhere */
+@media (hover: none) and (pointer: coarse) {
+  .pos .btn, .pos .seg button, .pos .chip, .pos .input, .pos select.input { min-height: 44px; }
+  .pos .btn.icon { min-width: 44px; }
+  .pos-nav button { min-height: 52px; min-width: 72px; }
+  .qty-btns button { min-width: 44px; min-height: 44px; font-size: 20px; }
+  .numpad button { min-height: 58px; }
+  .table td, .table th { padding: 10px 8px; }
+  .item-tile { min-height: 96px; }
+}
+/* Explicit "larger buttons" setting (Settings → language) */
+html.pos-big .pos { font-size: 17px; }
+html.pos-big .pos .btn, html.pos-big .pos .seg button, html.pos-big .pos .chip, html.pos-big .pos .input, html.pos-big .pos select.input { min-height: 52px; font-size: 17px; }
+html.pos-big .pos .btn.icon { min-width: 52px; }
+html.pos-big .pos-nav button { min-height: 60px; min-width: 84px; font-size: 15px; }
+html.pos-big .numpad button { min-height: 66px; font-size: 26px; }
+html.pos-big .qty-btns button { min-width: 52px; min-height: 52px; font-size: 22px; }
+html.pos-big .item-tile { min-height: 104px; font-size: 16px; }
+html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
+/* iPad landscape: give the cart a little more room; portrait stacks like phones */
+@media (min-width: 761px) and (max-width: 1100px) { .pos-sell { grid-template-columns: 1fr 400px; } }
+/* iOS: avoid zoom-on-focus and rubber-band scrolling inside the app shell */
+@supports (-webkit-touch-callout: none) { .pos .input, .pos select.input, .pos textarea { font-size: max(16px, 1em); } .pos-main { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; } }
+/* Logical properties keep both directions right; explicit RTL tweaks */
+[dir="rtl"] .pos .num, [dir="rtl"] .pos .kpi strong, [dir="rtl"] .pos .kpi small { direction: ltr; unicode-bidi: isolate; }
+[dir="rtl"] .pos input[type="date"] { direction: ltr; text-align: end; }

@@ -12,7 +12,12 @@ type Phase =
   | { k: 'loading' } | { k: 'needSignIn' } | { k: 'chooseShop'; shops: Membership[] } | { k: 'askName'; resolve: (n: string) => void }
   | { k: 'downloading' } | { k: 'error'; msg: string; retry: () => void } | { k: 'locked' } | { k: 'open' } | { k: 'revoked' };
 
-export default function PosApp({ locale, brand }: { locale: L; brand: string }) {
+export const LS_LOCALE = 'suqa-pos-locale';
+export default function PosApp({ locale: tenantLocale, brand }: { locale: L; brand: string }) {
+  // per-device language (Settings → اللغة); falls back to the tenant default
+  const [locale, setLocaleState] = useState<L>(tenantLocale);
+  useEffect(() => { try { const v = localStorage.getItem(LS_LOCALE); if (v === 'ar' || v === 'en') setLocaleState(v); if (localStorage.getItem('suqa-pos-big') === '1') document.documentElement.classList.add('pos-big'); } catch {} }, []);
+  const setLocale = useCallback((l: L) => { setLocaleState(l); try { localStorage.setItem(LS_LOCALE, l); } catch {} }, []);
   const sb = useMemo(() => supabaseBrowser(), []);
   const [phase, setPhase] = useState<Phase>({ k: 'loading' });
   const [boot, setBoot] = useState<Booted | null>(null);
@@ -103,7 +108,7 @@ export default function PosApp({ locale, brand }: { locale: L; brand: string }) 
   if (!boot) return null;
   if (phase.k === 'locked') return <LockScreen boot={boot} sb={sb} locale={locale} status={status} onUnlock={s => { setStaff(s); setPhase({ k: 'open' }); }} />;
   return (
-    <Shell boot={boot} sb={sb} locale={locale} status={status} staff={staff!} index={index.current} tick={tick} updateReady={updateReady} onUpdate={applyUpdate}
+    <Shell boot={boot} sb={sb} locale={locale} setLocale={setLocale} status={status} staff={staff!} index={index.current} tick={tick} updateReady={updateReady} onUpdate={applyUpdate}
       busyRef={busyRef} onLock={() => { setStaff(null); setPhase({ k: 'locked' }); }} reindex={() => setTick(t => t + 1)} />
   );
 }

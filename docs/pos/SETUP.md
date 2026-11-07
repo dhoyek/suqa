@@ -36,3 +36,28 @@ The POS prints through the system printer — no drivers inside the app.
 
 ## 6. Owner: devices & staff
 الإعدادات → الأجهزة shows every device (last sync, pending). **Revoke** stops a lost device: it wipes its local data the next time it connects (unsynced sales are saved to a file on that device first).
+
+**Staff** (الإعدادات → الموظفون): add a person by their WhatsApp number, display name and role (owner / cashier / stock). If the number already has a Suqa account they are in immediately; otherwise an invite waits and is claimed on their first sign-in — the 💬 button opens WhatsApp with a ready invite message. Roles can be changed any time, a person can be deactivated (they can no longer unlock the POS), and a forgotten PIN can be reset (they set a new one on next unlock). The last owner cannot be removed.
+
+Roles: **owner** everything · **cashier** sell, orders, debts, shifts; price changes, stock moves and returns need an owner PIN · **stock** items and stock only.
+
+Platform admins and tenant members can open the POS of any POS-enabled shop (shop picker on start).
+
+## 7. Orders (WhatsApp / phone / online)
+الطلبات shows four columns: new → in progress → on the way → done. Online orders arrive with a sound; WhatsApp/phone orders are typed in from البيع (👤 → channel, pickup/delivery, address, delivery fee → "حفظ في الطلبات") or from the ＋ button in الطلبات.
+* Accept (ETA for online), reject/cancel with a reason (customer is notified when "notify" is on), edit quantities / remove / substitute lines.
+* **Pickup handover** opens the pay dialog. **Delivery handover** opens the cash-on-delivery settlement: what the customer paid (split tender or unpaid), driver name and **driver fee** — the fee is taken out of the drawer as a cash move on the open shift, so expected cash stays right.
+* Delivered orders can be returned (full/partial, back to stock or damaged, refund $ or ل.ل.; owner PIN for cashiers) and reprinted.
+
+## 8. Debt book (الدين)
+Any sale or order paid with the **غير مدفوع** tender (name + phone) becomes a debt line. الدين lists them by person (total per person) or by date, filtered by period and by one or several people; **طباعة كشف** prints a statement on the receipt printer (one person or the filtered list).
+**تحصيل**: choose the person, type the amount (cash $, cash ل.ل., card). It is allocated oldest-first: fully covered orders are marked paid, the last one keeps the remainder. The preview shows the allocation before confirming; a receipt can be printed. Cash collected goes into the open shift's drawer ("تحصيل دين · name" on the Z report). Original sales are never edited; the collection is a separate record, so reports show "debt collected" per period.
+
+## 9. Reports & export (owner)
+التقارير: today (always, offline too) and period reports — presets or custom range — with net sales, returns, margin, driver/delivery fees, by day / channel / tender / item / section, slow movers, stock value at cost and retail, open debts, shifts (expected vs counted). **Excel** exports one sheet per table; **CSV** exports the open tab; "تصدير كل بيانات المحل" downloads the whole shop (items, orders, payments, stock moves, shifts, returns, staff, devices, audit log). Offline, the period report falls back to this device's data and says so.
+
+## 10. Language, iPad & touch
+الإعدادات → اللغة switches this device between Arabic (RTL) and English; "أزرار أكبر" enlarges every button, input and numpad for tablets / touch screens. Both are per device. On iPad add the POS to the home screen (Share → Add to Home Screen) so it opens full-screen and keeps its data; in Safari settings do not clear website data for the POS site.
+
+## 11. Audit & conflicts (owner)
+الإعدادات shows the **audit log** (who did what, when — sales, status changes, edits, returns, stock moves, staff and device changes) and **sync conflicts**: when two devices changed the same field while offline, the newer value wins and the older one is listed here for review.

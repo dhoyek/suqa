@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   let wamid: string | null = null; let error: string | null = null;
   try {
     if (process.env.WHATSAPP_TEMPLATES === '1') {
-      try { wamid = (await waSendTemplate(to, 'receipt', 'ar', [{ type: 'body', parameters: [shopName, number, items, total, pays, url].map(t => ({ type: 'text', text: String(t).slice(0, 1000) })) }], from)).messages?.[0]?.id ?? null; }
+      try { wamid = (await waSendTemplate(to, 'receipt_v2', 'ar', [{ type: 'body', parameters: [shopName, number, items, total, pays].map(t => ({ type: 'text', text: String(t).slice(0, 1000) })) }, { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: o.id }] }], from)).messages?.[0]?.id ?? null; }
       catch { wamid = (await waSendText(to, text, from)).messages?.[0]?.id ?? null; }     // template not approved yet / 24 h window open → text
     } else wamid = (await waSendText(to, text, from)).messages?.[0]?.id ?? null;
   } catch (e) { error = (e as Error).message; }

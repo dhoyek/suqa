@@ -2,7 +2,7 @@ import 'server-only';
 
 // Meta utility templates used for order notifications (mirrors docs/whatsapp-templates.md).
 // Submitted with POST /api/wa/templates (secret-protected); Meta reviews them, usually within minutes.
-export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[] };
+export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[]; button?: { text: string; url: string; example: string } };
 
 export const TEMPLATES: TemplateDef[] = [
   // Sign-in code. Meta fixes the wording of authentication templates; we only choose the options
@@ -24,10 +24,11 @@ export const TEMPLATES: TemplateDef[] = [
     samples: ['BAT-000021', 'سمانة أبو إيلي', 'البترون', 'https://suqa-dev.netlify.app/courier'],
   },
   {
-    // POS receipt (M2). Link opens the public receipt page /r/<order id>.
-    name: 'receipt', language: 'ar', category: 'UTILITY',
-    text: '🧾 إيصال من {{1}} — رقم {{2}}\n{{3}}\nالإجمالي: {{4}}\nالدفع: {{5}}\nالإيصال الكامل: {{6}}\nشكراً لزيارتكم.',
-    samples: ['سمانة أبو إيلي', 'BAT-000021', '3× لبنة بلدية، 1× خبز عربي', '$10.50 · 939,750 ل.ل.', 'نقدي $10 + 100,000 ل.ل.', 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001'],
+    // POS receipt (M2). v1 ('receipt') was rejected INVALID_FORMAT with the link as a body variable; v2 puts it in a URL button.
+    name: 'receipt_v2', language: 'ar', category: 'UTILITY',
+    text: 'إيصال من {{1}} — رقم {{2}}\nالأصناف: {{3}}\nالإجمالي: {{4}}\nالدفع: {{5}}\nشكراً لزيارتكم.',
+    samples: ['سمانة أبو إيلي', 'BAT-000021', '3× لبنة بلدية، 1× خبز عربي', '$10.50 · 939,750 ل.ل.', 'نقدي $10 + 100,000 ل.ل.'],
+    button: { text: 'عرض الإيصال', url: 'https://suqa-dev.netlify.app/r/{{1}}', example: 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001' },
   },
   {
     name: 'order_message', language: 'ar', category: 'UTILITY',
@@ -43,5 +44,7 @@ export function templateComponents(d: TemplateDef) {
     { type: 'FOOTER', code_expiration_minutes: 5 },
     { type: 'BUTTONS', buttons: [{ type: 'OTP', otp_type: 'COPY_CODE' }] },
   ];
-  return [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }];
+  const comps: unknown[] = [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }];
+  if (d.button) comps.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: d.button.text, url: d.button.url, example: [d.button.example] }] });
+  return comps;
 }

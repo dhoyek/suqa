@@ -24,4 +24,5 @@ source of truth.
 | 10_admin.sql | admin RPCs (find user by email, people, stats) |
 | 21_pos.sql | POS: devices, change feed (sync_log), idempotent ops (pos_push/pos_pull/pos_snapshot), stock ledger, payments, shifts, returns, PIN, RLS |
 | 22_pos_m2.sql | POS M2: `sale.cancel` audit op (dispatcher re-created) |
+| 23_pos_m4.sql | POS M4: `pos_import_products` (dry-run/commit), `pos_bulk_price`, `pos_bulk_visibility`, online stock guard |
 | ../seed/batroun.sql | first tenant |

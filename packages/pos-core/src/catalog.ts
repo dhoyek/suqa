@@ -28,15 +28,22 @@ export class CatalogIndex {
   private rows: IndexRow[] = [];
   private dirty = true;
 
-  load(products: Product[], barcodes: Barcode[], categories: Category[], quickButtons: QuickButton[]): void {
+  load(products: Product[], barcodes: Barcode[], _categories: Category[], quickButtons: QuickButton[]): void {
     this.byId.clear(); this.byBarcode.clear(); this.barcodesOf.clear(); this.categories.clear();
     for (const p of products) if (p.is_active) this.byId.set(p.id, p);
     for (const b of barcodes) this.addBarcode(b);
-    for (const c of categories) this.categories.set(c.id, c);
+    this.rebuildSections();
     this.quickButtons = [...quickButtons].sort((a, b) => a.sort_order - b.sort_order);
     this.dirty = true;
   }
-  upsertProduct(p: Product): void { if (p.is_active) this.byId.set(p.id, p); else this.byId.delete(p.id); this.dirty = true; }
+  upsertProduct(p: Product): void { if (p.is_active) this.byId.set(p.id, p); else this.byId.delete(p.id); this.dirty = true; this.rebuildSections(); }
+  /** Products group by their free-text `section` (the storefront's menu groups); the POS shows them as category chips. */
+  private rebuildSections(): void {
+    this.categories.clear();
+    const order = new Map<string, number>();
+    for (const p of this.byId.values()) { const sct = (p.section ?? '').trim(); if (!sct) continue; if (!order.has(sct)) order.set(sct, p.sort_order ?? order.size); }
+    let i = 0; for (const [sct] of [...order.entries()].sort((a, b) => a[1] - b[1])) this.categories.set(sct, { id: sct, tenant_id: '', name: { ar: sct, en: sct }, sort_order: i++ });
+  }
   removeProduct(id: string): void { this.byId.delete(id); for (const bc of this.barcodesOf.get(id) ?? []) this.byBarcode.delete(bc); this.barcodesOf.delete(id); this.dirty = true; }
   addBarcode(b: Barcode): void {
     const bc = normBarcode(b.barcode); this.byBarcode.set(bc, b.product_id);
@@ -72,7 +79,7 @@ export class CatalogIndex {
     const out: Product[] = [];
     for (const r of this.rows) {
       const p = this.byId.get(r.id)!;
-      if (categoryId && p.category_id !== categoryId) continue;
+      if (categoryId && (p.section ?? '') !== categoryId) continue;
       if (words.length && !words.every(w => r.norm.includes(w))) continue;
       out.push(p);
       if (out.length >= limit) break;
@@ -82,7 +89,7 @@ export class CatalogIndex {
 
   byCategory(categoryId: string | null, limit = 200): Product[] {
     const out: Product[] = [];
-    for (const p of this.byId.values()) { if ((categoryId ?? null) === (p.category_id ?? null)) { out.push(p); if (out.length >= limit) break; } }
+    for (const p of this.byId.values()) { if (categoryId === null || (p.section ?? '') === categoryId) { out.push(p); if (out.length >= limit) break; } }
     return out.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }
   get size(): number { return this.byId.size; }

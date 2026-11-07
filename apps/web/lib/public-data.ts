@@ -21,6 +21,12 @@ export const getShopWithProducts = unstable_cache(async (tenantId: string, slug:
   const { data } = await sb.from('shops').select('*, products(*)').eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active')
     .eq('products.is_active', true).order('section', { referencedTable: 'products', ascending: true, nullsFirst: false }).order('sort_order', { referencedTable: 'products' }).maybeSingle();
   if (!data) return null;
-  const { products, ...shop } = data as Shop & { products: Product[] };
-  return { shop: shop as Shop, products: products ?? [] };
+  const { products, ...shop } = data as Shop & { products: (Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string })[]; hide_online_when_zero?: boolean };
+  // POS stock (21_pos): tracked items show live availability (on hand − reserved); the shop may hide items at zero.
+  const list = (products ?? []).filter(p => p.visible_online !== false).map(p => {
+    if (!p.track_stock) return { ...p, available: null as number | null };
+    const available = Math.max(0, Number(p.on_hand ?? 0) - Number(p.reserved ?? 0));
+    return { ...p, available, is_available: p.is_available && available > 0 };
+  }).filter(p => !(shop.hide_online_when_zero && p.available === 0));
+  return { shop: shop as Shop, products: list };
 }, ['shop-page'], { revalidate: 15, tags: ['shop'] });

@@ -18,7 +18,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
 }) {
   const owner = boot.role === 'owner';
   const [ar, setAr] = useState(product?.name?.ar ?? ''); const [en, setEn] = useState(product?.name?.en ?? '');
-  const [cat, setCat] = useState<string>(product?.category_id ?? '');
+  const [cat, setCat] = useState<string>(product?.section ?? '');
   const [cur, setCur] = useState<'usd' | 'lbp'>(product?.price_currency ?? 'usd');
   const [price, setPrice] = useState(product ? (product.price_currency === 'lbp' ? String(product.price_lbp) : String(Number(product.price_usd))) : '');
   const [cost, setCost] = useState(product?.cost_cents != null ? (product.cost_cents / 100).toString() : '');
@@ -44,7 +44,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   const build = () => {
     const priceNum = Number(price) || 0;
     const fields: Partial<Product> = {
-      name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, category_id: cat || null, price_currency: cur,
+      name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
       price_usd: cur === 'usd' ? priceNum : Number(product?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(product?.price_lbp ?? 0),
       sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0,
       visible_online: vis, is_available: avail, is_active: active,
@@ -71,7 +71,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
         <div className="item-form">
           <label className="label">{pt('nameAr', locale)}<input className="input" value={ar} onChange={e => setAr(e.target.value)} autoFocus /></label>
           <label className="label">{pt('nameEn', locale)}<input className="input" dir="ltr" value={en} onChange={e => setEn(e.target.value)} /></label>
-          <label className="label">{pt('category', locale)}<select className="input" value={cat} onChange={e => setCat(e.target.value)}><option value="">{pt('noCategory', locale)}</option>{cats.map(c => <option key={c.id} value={c.id}>{text(c.name, locale)}</option>)}</select></label>
+          <label className="label">{pt('category', locale)}<input className="input" list="pos-sections" value={cat} onChange={e => setCat(e.target.value)} placeholder={pt('noCategory', locale)} /><datalist id="pos-sections">{cats.map(c => <option key={c.id} value={c.id} />)}</datalist></label>
           <label className="label">{pt('price', locale)}
             <div className="row" style={{ gap: 8 }}>
               <div className="seg"><button type="button" className={cur === 'usd' ? 'active' : ''} onClick={() => setCur('usd')}>$</button><button type="button" className={cur === 'lbp' ? 'active' : ''} onClick={() => setCur('lbp')}>ل.ل.</button></div>

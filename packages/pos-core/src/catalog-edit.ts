@@ -6,7 +6,7 @@ import type { Product } from './types';
 // Catalog edits from the POS: optimistic local write + a 'product.patch' op (field patch, server-wins LWW with conflict log).
 // Allowed fields mirror suqa._pos_product_patch's allow-list.
 export const PATCHABLE = ['name', 'description', 'price_usd', 'price_currency', 'price_lbp', 'cost_cents', 'sku', 'unit', 'unit_kind', 'decimal_qty', 'vat', 'track_stock', 'min_stock',
-  'visible_online', 'is_available', 'is_active', 'category_id', 'section', 'sort_order', 'image_url'] as const;
+  'visible_online', 'is_available', 'is_active', 'section', 'sort_order', 'image_url'] as const;
 export type Patchable = (typeof PATCHABLE)[number];
 
 export interface ProductEdit { fields: Partial<Pick<Product, Patchable>>; barcodes_add?: string[]; barcodes_remove?: string[]; approved_by?: string | null }
@@ -37,7 +37,7 @@ export async function createProduct(db: PosDb, fields: Partial<Pick<Product, Pat
     price_usd: fields.price_usd ?? 0, price_currency: fields.price_currency ?? 'usd', price_lbp: fields.price_lbp ?? 0, cost_cents: fields.cost_cents ?? null,
     sku: fields.sku ?? null, unit: fields.unit ?? null, unit_kind: fields.unit_kind ?? 'piece', decimal_qty: !!fields.decimal_qty, vat: !!fields.vat,
     track_stock: !!fields.track_stock, min_stock: fields.min_stock ?? 0, visible_online: fields.visible_online ?? true, is_available: fields.is_available ?? true, is_active: fields.is_active ?? true,
-    on_hand: 0, reserved: 0, needs_review: false, category_id: fields.category_id ?? null, section: fields.section ?? null, image_url: fields.image_url ?? null, sort_order: fields.sort_order ?? 0,
+    on_hand: 0, reserved: 0, needs_review: false, category_id: null, section: fields.section ?? null, image_url: fields.image_url ?? null, sort_order: fields.sort_order ?? 0,
     updated_at: new Date().toISOString(),
   };
   const bcs = barcodes.map(normBarcode).filter(Boolean);

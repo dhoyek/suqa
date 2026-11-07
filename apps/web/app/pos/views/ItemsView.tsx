@@ -6,6 +6,8 @@ import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import ItemEditor from '../components/ItemEditor';
 import Modal from '../components/Modal';
+import ImportDialog from '../components/ImportDialog';
+import BulkDialog from '../components/BulkDialog';
 
 /** Catalog: list + editor, quick buttons (owner, online), conflict review (owner). Bulk tools + import live in a separate dialog (M4-c). */
 export default function ItemsView({ boot, sb, locale, index, tick, staff, reindex }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
@@ -14,7 +16,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
   const [members, setMembers] = useState<Staff[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [archived, setArchived] = useState<Product[]>([]);
-  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false); const [importOpen, setImportOpen] = useState(false); const [bulkOpen, setBulkOpen] = useState(false);
   const canEdit = boot.role === 'owner' || boot.role === 'stock' || staff.role === 'owner';
   useEffect(() => { boot.db.staff.toArray().then(setMembers); boot.db.conflicts.where('seen').equals(0 as never).toArray().catch(() => []).then(c => setConflicts(c.filter(x => !x.seen))); boot.db.products.filter(p => !p.is_active).toArray().then(setArchived); }, [boot, tick]);
   const list = useMemo(() => (showArchived ? archived.filter(p => !q || text(p.name, locale).includes(q)) : q.trim() ? index.search(q, 200, cat) : index.byCategory(cat, 500)), [q, cat, index, tick, showArchived, archived, locale]);
@@ -26,6 +28,8 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         <input className="input" style={{ flex: 1, minWidth: 220 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} />
         {canEdit && <button className="btn primary" onClick={() => setEdit({ p: null })}>＋ {pt('newItem', locale)}</button>}
         {boot.role === 'owner' && <button className="btn" onClick={() => setQuickOpen(true)}>⚡ {pt('quickButtons', locale)}</button>}
+        {boot.role === 'owner' && <button className="btn" onClick={() => setBulkOpen(true)}>％ {locale === 'ar' ? 'تعديل جماعي' : 'Bulk'}</button>}
+        {boot.role === 'owner' && <button className="btn" onClick={() => setImportOpen(true)}>📥 {locale === 'ar' ? 'استيراد' : 'Import'}</button>}
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> {pt('archived', locale)} ({archived.length})</label>
       </div>
       {!canEdit && <p className="muted" style={{ margin: 0 }}>{pt('readOnly', locale)}</p>}
@@ -52,6 +56,8 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         {!list.length && <tr><td className="muted">{pt('noResults', locale)}</td></tr>}
       </tbody></table>
       {edit && <ItemEditor boot={boot} locale={locale} index={index} product={edit.p} staff={members} me={staff} onDone={() => { setEdit(null); reindex(); }} onClose={() => setEdit(null)} />}
+      {importOpen && <ImportDialog boot={boot} locale={locale} onDone={reindex} onClose={() => setImportOpen(false)} />}
+      {bulkOpen && <BulkDialog boot={boot} sb={sb} locale={locale} index={index} onDone={reindex} onClose={() => setBulkOpen(false)} />}
       {quickOpen && <QuickButtonsEditor boot={boot} sb={sb} locale={locale} index={index} onClose={() => { setQuickOpen(false); boot.engine.poke(); }} />}
     </div>
   );

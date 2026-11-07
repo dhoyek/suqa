@@ -11,3 +11,6 @@ supabase/.temp/
 .DS_Store
 # netlify
 .netlify/
+
+# pilot shop POS exports used to build import adapters — never committed
+samples/

@@ -239,6 +239,7 @@ const T = {
   searchItems: { en: 'Search items…', ar: 'ابحث عن صنف…' },
   noMatches: { en: 'Nothing matches', ar: 'لا نتائج' },
   err_pickup_unavailable: { en: 'This shop does not offer pickup', ar: 'هذا المتجر لا يوفّر الاستلام' },
+  err_out_of_stock: { en: 'Not enough stock for', ar: 'الكمية غير متوفرة حالياً لـ' },
   err_address_required: { en: 'Please choose a delivery address', ar: 'الرجاء اختيار عنوان التوصيل' },
   // whatsapp login / test
   waTestSection: { en: 'WhatsApp notifications (Cloud API)', ar: 'إشعارات واتساب (Cloud API)' },
@@ -291,7 +292,9 @@ export function friendlyError(e: unknown, l: Locale): string {
   const key = `err_${msg}` as UiKey;
   if (key in T) {
     const base = ui(key, l);
-    return msg === 'min_order' && err?.details ? `${base} (${err.details} USD)` : base;
+    if (msg === 'min_order' && err?.details) return `${base} (${err.details} USD)`;
+    if (msg === 'out_of_stock' && err?.details) return `${base} ${err.details}`;
+    return base;
   }
   if (/transition .* not allowed/.test(msg)) return ui('err_transition', l);
   if (/customers can only cancel/.test(msg)) return ui('err_customers_cancel_pending', l);

@@ -330,7 +330,10 @@ language plpgsql security definer set search_path = public as $$
 declare v_q numeric := case when tg_op = 'DELETE' then -old.qty else new.qty end;
         v_row suqa.stock_moves := case when tg_op = 'DELETE' then old else new end;
 begin
-  if tg_op = 'UPDATE' then raise exception 'stock_moves are append-only' using errcode = 'check_violation'; end if;
+  if tg_op = 'UPDATE' then   -- append-only; only detaching a deleted order's reference is allowed (27_pos_order_delete)
+    if new.ref_order_id is null and old.ref_order_id is not null and (to_jsonb(new) - 'ref_order_id' - 'updated_at') = (to_jsonb(old) - 'ref_order_id' - 'updated_at') then return new; end if;
+    raise exception 'stock_moves are append-only' using errcode = 'check_violation';
+  end if;
   if v_row.kind in ('reserve','release') then
     update suqa.products set reserved = greatest(reserved + v_q, 0) where id = v_row.product_id;
   else

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { NEXT, cashMove, currentShift, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -8,9 +8,14 @@ import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import Modal, { NumPad } from '../components/Modal';
 import PayDialog from '../components/PayDialog';
 import ReturnDialog from '../components/ReturnDialog';
+import OwnerPin from '../components/OwnerPin';
+import { useConfirm } from '@/components/ConfirmProvider';
 
-type Col = 'new' | 'active' | 'onway' | 'done';
-const COL_OF: Record<OrderStatus, Col> = { pending: 'new', accepted: 'active', preparing: 'active', ready: 'active', out_for_delivery: 'onway', delivered: 'done', rejected: 'done', cancelled: 'done' };
+type Col = 'new' | 'active' | 'onway' | 'done' | 'cancelled';
+const COLS: Col[] = ['new', 'active', 'onway', 'done', 'cancelled'];
+const COL_OF: Record<OrderStatus, Col> = { pending: 'new', accepted: 'active', preparing: 'active', ready: 'active', out_for_delivery: 'onway', delivered: 'done', rejected: 'cancelled', cancelled: 'cancelled' };
+const LS_COLS = 'suqa-pos-order-cols';
+const loadCols = (): Set<Col> => { try { const v = JSON.parse(localStorage.getItem(LS_COLS) ?? 'null'); if (Array.isArray(v) && v.length) return new Set(v as Col[]); } catch {} return new Set<Col>(['new', 'active', 'onway', 'done']); };
 
 /**
  * The shop's single order inbox: online, WhatsApp and phone orders side by side (walk-in sales live in Reports).
@@ -36,7 +41,18 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
   };
   useEffect(() => { void reload(); }, [boot, tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cols = useMemo(() => { const c: Record<Col, Order[]> = { new: [], active: [], onway: [], done: [] }; for (const o of orders) c[COL_OF[o.status]].push(o); return c; }, [orders]);
+  const cols = useMemo(() => { const c: Record<Col, Order[]> = { new: [], active: [], onway: [], done: [], cancelled: [] }; for (const o of orders) c[COL_OF[o.status]].push(o); return c; }, [orders]);
+  const [show, setShow] = useState<Set<Col>>(loadCols);
+  const toggleCol = (c: Col) => setShow(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); if (!n.size) n.add(c); try { localStorage.setItem(LS_COLS, JSON.stringify([...n])); } catch {} return n; });
+  const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
+  useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
+  const confirm = useConfirm();
+  const colLabel = (c: Col) => pt(c === 'new' ? 'colNew' : c === 'active' ? 'colActive' : c === 'onway' ? 'colOnWay' : c === 'done' ? 'colDone' : 'colCancelled', locale);
+  const removeOrder = async (o: Order, approvedBy: string | null) => { await deleteOrder(boot.db, o, approvedBy); boot.engine.poke(); setSel(null); await reload(); };
+  const askDelete = async (o: Order) => {
+    if (!(await confirm(pt('deleteOrderConfirm', locale), { danger: true }))) return;
+    if (staff.role === 'owner') await removeOrder(o, staff.user_id); else setGate(o);
+  };
   const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
   const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
 
@@ -56,10 +72,14 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
         <strong>{pt('ordersNav', locale)}</strong>
         <button className="btn primary" onClick={onNewOrder}>＋ {pt('newOrder', locale)}</button>
       </div>
-      <div className="orders-cols">
-        {(['new', 'active', 'onway', 'done'] as Col[]).map(c => (
+      <div className="row" style={{ gap: 6, padding: '8px 12px 0', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="muted" style={{ fontSize: 13 }}>{pt('showColumns', locale)}:</span>
+        {COLS.map(c => <button key={c} className={`chip ${show.has(c) ? 'active' : ''}`} onClick={() => toggleCol(c)}>{colLabel(c)} <span className="muted">{cols[c].length}</span></button>)}
+      </div>
+      <div className="orders-cols" style={{ gridTemplateColumns: `repeat(${Math.min(4, show.size)}, 1fr)` }}>
+        {COLS.filter(c => show.has(c)).map(c => (
           <section key={c} className={`orders-col ${c}`}>
-            <h4>{pt(c === 'new' ? 'colNew' : c === 'active' ? 'colActive' : c === 'onway' ? 'colOnWay' : 'colDone', locale)} <span className="muted">{cols[c].length}</span></h4>
+            <h4>{colLabel(c)} <span className="muted">{cols[c].length}</span></h4>
             {!cols[c].length && <p className="muted" style={{ fontSize: 13 }}>{pt('noOrders', locale)}</p>}
             {cols[c].map(o => {
               const ls = (lines[o.id] ?? []).filter(l => !l.voided); const open = sel === o.id; const pickup = o.fulfillment === 'pickup';
@@ -84,6 +104,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
                       </button>)}
                       {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
                       {o.status === 'delivered' && <button className="btn" onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
+                      {(o.status === 'cancelled' || o.status === 'rejected') && <button className="btn danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
                       <button className="btn icon" title={pt('print', locale)} onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨</button>
                       <label className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={o.notify_customer !== false} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
                     </div>
@@ -95,6 +116,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
         ))}
       </div>
 
+      {gate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('deleteOrder', locale)} onDone={id => { const o = gate; setGate(null); if (id) void removeOrder(o, id); }} />}
       {dialog?.k === 'eta' && <EtaDialog locale={locale} onDone={async eta => { await setOrderStatus(boot.db, dialog.o, 'accepted', { eta_minutes: eta }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}

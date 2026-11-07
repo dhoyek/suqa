@@ -6,7 +6,7 @@ import { num, type Currency, type Order, type OrderLine, type OrderStatus, type 
 // Order inbox actions (PLAN §M5). Each one writes the local mirror first (so the board updates instantly, offline too) and queues an op.
 
 export const NEXT: Record<OrderStatus, OrderStatus[]> = {
-  pending: ['accepted', 'rejected'], accepted: ['preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'], preparing: ['ready', 'out_for_delivery', 'delivered', 'cancelled'],
+  pending: ['accepted', 'rejected', 'cancelled'], accepted: ['preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'], preparing: ['ready', 'out_for_delivery', 'delivered', 'cancelled'],
   ready: ['out_for_delivery', 'delivered', 'cancelled'], out_for_delivery: ['delivered', 'cancelled'], delivered: [], rejected: [], cancelled: [],
 };
 
@@ -88,4 +88,13 @@ export async function commitReturn(db: PosDb, order: Order, lines: ReturnLineInp
     await enqueue(db, 'return.commit', { id, order_id: order.id, lines: lines.map(l => ({ id: newId(), ...l })), refund_usd_cents: input.refund_usd_cents, refund_lbp: input.refund_lbp, refund_tender: input.refund_currency === 'lbp' ? 'cash_lbp' : 'cash_usd', reason: input.reason, approved_by: input.approved_by, shift_id: input.shift_id ?? null });
   });
   return id;
+}
+
+/** Owner (or cashier with owner PIN): remove a cancelled / rejected order from the records. Items and payments go with it locally and on the server. */
+export async function deleteOrder(db: PosDb, order: Order, approved_by: string | null): Promise<void> {
+  if (order.status !== 'cancelled' && order.status !== 'rejected') throw new Error('cancel_first');
+  await db.transaction('rw', [db.orders, db.orderLines, db.payments, db.outbox], async () => {
+    await db.orderLines.where('order_id').equals(order.id).delete(); await db.payments.where('order_id').equals(order.id).delete(); await db.orders.delete(order.id);
+    await enqueue(db, 'order.delete', { id: order.id, approved_by });
+  });
 }

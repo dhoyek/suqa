@@ -104,11 +104,11 @@ export class SyncEngine {
           else await table.delete(r.row.id as string);
           continue;
         }
-        if (r.tbl === 'orders') {
-          const before = await this.db.orders.get(r.row.id as string);
-          if (!before && r.origin_device !== this.deviceId) newOrders.push(r.row.id as string);
-        }
-        await table.put(r.row);
+        const key = r.tbl === 'product_barcodes' ? [r.row.product_id as string, r.row.barcode as string] : r.tbl === 'shop_members' ? (r.row.user_id as string) : (r.row.id as string);
+        const existing = (await table.get(key as never)) as Record<string, unknown> | undefined;
+        if (r.tbl === 'orders' && !existing && r.origin_device !== this.deviceId) newOrders.push(r.row.id as string);
+        // merge over the local copy: feed rows are full server rows, but the snapshot adds joined fields (e.g. staff full_name) we keep
+        await table.put(existing ? { ...existing, ...r.row } : r.row);
       }
       await setMeta(this.db, META.cursor, cursor);
     });

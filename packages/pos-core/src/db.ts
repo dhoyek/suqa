@@ -8,6 +8,7 @@ import type { Barcode, CashMove, Category, Conflict, CustomerSeen, Device, Order
 // every store/index change; never edit an existing version block.
 
 export interface Meta { key: string; value: unknown }
+export interface DraftRow { id: string; parked: number; updated_at: string; label?: string; draft: unknown }
 
 export class PosDb extends Dexie {
   meta!: Table<Meta, string>;
@@ -27,6 +28,7 @@ export class PosDb extends Dexie {
   customers!: Table<CustomerSeen, string>;
   outbox!: Table<OutboxOp, number>;
   conflicts!: Table<Conflict, string>;
+  drafts!: Table<DraftRow, string>;
 
   constructor(name: string) {
     super(name);
@@ -53,6 +55,10 @@ export class PosDb extends Dexie {
     this.version(2).stores({
       products: 'id, category_id, updated_at, sku',
     });
+    // v3: parked / in-progress sales live in IndexedDB too (crash recovery, park/resume). Outbox untouched.
+    this.version(3).stores({
+      drafts: 'id, parked, updated_at',
+    });
   }
 }
 
@@ -68,5 +74,5 @@ export async function setMeta(db: PosDb, key: string, value: unknown): Promise<v
 
 export const META = {
   deviceId: 'device_id', devicePrefix: 'device_prefix', deviceName: 'device_name', cursor: 'cursor', localSeq: 'local_seq',
-  shop: 'shop', role: 'role', lastOnlineAt: 'last_online_at', lastSyncAt: 'last_sync_at', userId: 'user_id', revoked: 'revoked',
+  shop: 'shop', role: 'role', currentDraft: 'current_draft', lastOnlineAt: 'last_online_at', lastSyncAt: 'last_sync_at', userId: 'user_id', revoked: 'revoked',
 } as const;

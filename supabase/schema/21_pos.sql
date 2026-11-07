@@ -805,6 +805,12 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+create or replace function suqa._pos_sale_cancel(d suqa.devices, p jsonb, p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  return jsonb_build_object('ok', true, 'reason', p->>'reason');   -- audited by pos_push; nothing sold
+end $$;
+
 -- ---------- push ------------------------------------------------------------------------------------------------------------
 create or replace function suqa.pos_push(p_device uuid, p_ops jsonb, p_pending int default 0)
 returns jsonb
@@ -839,6 +845,7 @@ begin
 
       v_res := case v_kind
         when 'sale.commit'   then suqa._pos_sale_commit(v_dev, v_op->'payload', coalesce(nullif(v_op->'payload'->>'staff_user_id','')::uuid, v_user))
+        when 'sale.cancel'   then suqa._pos_sale_cancel(v_dev, v_op->'payload', v_user)
         when 'order.status'  then suqa._pos_order_status(v_dev, v_op->'payload', v_user)
         when 'stock.move'    then suqa._pos_stock_move(v_dev, v_op->'payload', v_user)
         when 'product.patch' then suqa._pos_product_patch(v_dev, v_op->'payload', v_user)

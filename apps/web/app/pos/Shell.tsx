@@ -5,7 +5,7 @@ import type { CatalogIndex, Staff, SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
-import CatalogPreview from './views/CatalogPreview';
+import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 
 export type View = 'sell' | 'orders' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
@@ -42,7 +42,7 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <CatalogPreview {...props} />}
+        {view === 'sell' && <Sell {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
         {view !== 'sell' && view !== 'settings' && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
       </main>

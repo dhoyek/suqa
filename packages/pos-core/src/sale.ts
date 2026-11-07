@@ -8,12 +8,12 @@ export const newId = (): string => uuidv7();
 export interface DraftLine {
   id: string; product_id: string | null; name: Localized; unit?: string | null; quantity: number;
   price_currency: Currency; unit_price_cents: number; unit_price_lbp: number; discount_cents: number; cost_cents?: number | null;
-  track_stock: boolean; notes?: string | null; voided?: boolean;
+  track_stock: boolean; notes?: string | null; voided?: boolean; decimal_qty?: boolean; approved_by?: string | null; void_reason?: string | null;
 }
 export interface Draft {
   id: string; channel: Channel; lines: DraftLine[]; discount_cents: number; discount_reason?: string | null;
   customer_name?: string; customer_phone?: string; notes?: string | null; fulfillment?: 'delivery' | 'pickup'; address?: Record<string, unknown>;
-  started_at: string;
+  approved_by?: string | null; started_at: string;
 }
 
 export const newDraft = (channel: Channel = 'walkin'): Draft => ({ id: newId(), channel, lines: [], discount_cents: 0, started_at: new Date().toISOString() });
@@ -23,7 +23,7 @@ export function lineFromProduct(p: Product, quantity = 1): DraftLine {
     id: newId(), product_id: p.id, name: p.name, unit: p.unit, quantity,
     price_currency: p.price_currency ?? 'usd',
     unit_price_cents: Math.round(num(p.price_usd) * 100), unit_price_lbp: num(p.price_lbp),
-    discount_cents: 0, cost_cents: p.cost_cents ?? null, track_stock: !!p.track_stock,
+    discount_cents: 0, cost_cents: p.cost_cents ?? null, track_stock: !!p.track_stock, decimal_qty: !!p.decimal_qty,
   };
 }
 
@@ -79,7 +79,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
     const lines: OrderLine[] = draft.lines.map(l => ({
       id: l.id, order_id: draft.id, product_id: l.product_id, name: l.name, unit: l.unit ?? null, quantity: l.quantity,
       price_currency: l.price_currency, unit_price_cents: l.unit_price_cents, unit_price_lbp: l.unit_price_lbp, discount_cents: l.discount_cents,
-      line_total_cents: l.voided ? 0 : lineCents(l, rate), cost_cents: l.cost_cents ?? null, notes: l.notes ?? null, voided: !!l.voided, void_reason: null,
+      line_total_cents: l.voided ? 0 : lineCents(l, rate), cost_cents: l.cost_cents ?? null, notes: l.notes ?? null, voided: !!l.voided, void_reason: l.void_reason ?? null,
     }));
     const moves: StockMove[] = [];
     for (const l of live) {
@@ -102,9 +102,10 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
         customer_name: order.customer_name, customer_phone: order.customer_phone, notes: order.customer_notes, address: order.address, fulfillment: order.fulfillment,
         notify_customer: order.notify_customer, rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: order.discount_reason,
         total_cents: t.total_cents, total_lbp: t.total_lbp, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
-        placed_at: now,
+        placed_at: now, approved_by: draft.approved_by ?? null,
+        voided: draft.lines.filter(l => l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, qty: l.quantity, reason: l.void_reason ?? null })),
         lines: lines.filter(l => !l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, unit: l.unit, qty: l.quantity, price_currency: l.price_currency,
-          unit_price_cents: l.unit_price_cents, unit_price_lbp: l.unit_price_lbp, discount_cents: l.discount_cents, line_total_cents: l.line_total_cents, cost_cents: l.cost_cents, notes: l.notes })),
+          unit_price_cents: l.unit_price_cents, unit_price_lbp: l.unit_price_lbp, discount_cents: l.discount_cents, line_total_cents: l.line_total_cents, cost_cents: l.cost_cents, notes: l.notes, approved_by: draft.lines.find(d => d.id === l.id)?.approved_by ?? null })),
         payments: pays.map(p => ({ id: p.id, tender: p.tender, amount: p.amount, currency: p.currency, reference: p.reference ?? null, unpaid_name: p.unpaid_name ?? null, unpaid_phone: p.unpaid_phone ?? null, note: p.note ?? null, at: p.at })),
         stock_moves: moves.map(m => ({ id: m.id, product_id: m.product_id, qty: m.qty, kind: m.kind, at: m.at })),
       },
@@ -123,4 +124,30 @@ export async function enqueue(db: PosDb, kind: import('./types').OpKind, payload
   const op_id = newId();
   await db.outbox.add({ op_id, kind, payload, schema_version: CURRENT_SCHEMA_VERSION, created_at: new Date().toISOString(), state: 'pending', tries: 0, next_try_at: 0 });
   return op_id;
+}
+
+// ---- drafts (park / resume / crash recovery) ----
+export async function saveDraft(db: PosDb, draft: Draft, parked = false, label?: string): Promise<void> {
+  await db.drafts.put({ id: draft.id, parked: parked ? 1 : 0, updated_at: new Date().toISOString(), label, draft });
+  if (!parked) await db.meta.put({ key: META.currentDraft, value: draft.id });
+}
+export async function loadCurrentDraft(db: PosDb): Promise<Draft | null> {
+  const id = (await db.meta.get(META.currentDraft))?.value as string | undefined;
+  if (!id) return null;
+  const row = await db.drafts.get(id);
+  return row && !row.parked ? (row.draft as Draft) : null;
+}
+export async function listParked(db: PosDb): Promise<Array<{ id: string; label?: string; updated_at: string; draft: Draft }>> {
+  const rows = await db.drafts.where('parked').equals(1).reverse().sortBy('updated_at');
+  return rows.map(r => ({ id: r.id, label: r.label, updated_at: r.updated_at, draft: r.draft as Draft }));
+}
+export async function dropDraft(db: PosDb, id: string): Promise<void> {
+  await db.drafts.delete(id);
+  const cur = (await db.meta.get(META.currentDraft))?.value;
+  if (cur === id) await db.meta.delete(META.currentDraft);
+}
+/** Cancel an unpaid sale with a reason: nothing is sold; the server only audits it. */
+export async function cancelDraft(db: PosDb, draft: Draft, reason: string, staffUserId?: string | null): Promise<void> {
+  await dropDraft(db, draft.id);
+  if (draft.lines.length) await enqueue(db, 'sale.cancel', { id: draft.id, reason, staff_user_id: staffUserId ?? null, lines: draft.lines.length, at: new Date().toISOString() });
 }

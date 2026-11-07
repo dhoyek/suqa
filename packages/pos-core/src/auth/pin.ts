@@ -29,3 +29,12 @@ export function offlineUnlockAllowed(lastOnlineAt: string | null | undefined, of
   return now - Date.parse(lastOnlineAt) <= offlineDays * 86_400_000;
 }
 export const daysOffline = (lastOnlineAt: string | null | undefined, now = Date.now()): number => (lastOnlineAt ? Math.floor((now - Date.parse(lastOnlineAt)) / 86_400_000) : Infinity);
+
+/** Owner approval for a gated action (refund, void, discount above the limit, stock adjustment): any active owner's PIN. */
+export async function verifyOwnerPin(pin: string, staff: Array<{ user_id: string; role: string; active?: boolean; pin_hash?: string | null; pin_salt?: string | null }>): Promise<string | null> {
+  for (const s of staff) {
+    if (s.role !== 'owner' || s.active === false || !s.pin_hash || !s.pin_salt) continue;
+    if (await verifyPin(pin, s.pin_hash, s.pin_salt)) return s.user_id;
+  }
+  return null;
+}

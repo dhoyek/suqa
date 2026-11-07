@@ -24,6 +24,12 @@ export const TEMPLATES: TemplateDef[] = [
     samples: ['BAT-000021', 'سمانة أبو إيلي', 'البترون', 'https://suqa-dev.netlify.app/courier'],
   },
   {
+    // POS receipt (M2). Link opens the public receipt page /r/<order id>.
+    name: 'receipt', language: 'ar', category: 'UTILITY',
+    text: '🧾 إيصال من {{1}} — رقم {{2}}\n{{3}}\nالإجمالي: {{4}}\nالدفع: {{5}}\nالإيصال الكامل: {{6}}\nشكراً لزيارتكم.',
+    samples: ['سمانة أبو إيلي', 'BAT-000021', '3× لبنة بلدية، 1× خبز عربي', '$10.50 · 939,750 ل.ل.', 'نقدي $10 + 100,000 ل.ل.', 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001'],
+  },
+  {
     name: 'order_message', language: 'ar', category: 'UTILITY',
     text: '💬 رسالة بخصوص الطلب {{1}} من {{2}}:\n{{3}}\nيمكنك الرد على هذه الرسالة مباشرة.',
     samples: ['BAT-000021', 'سمانة أبو إيلي', 'تمام، الطلب جاهز خلال ربع ساعة'],

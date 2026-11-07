@@ -1,4 +1,4 @@
-import { formatMoney, t, type Locale, type LocalizedText, type DisplayCurrency } from '@suqa/shared';
+import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type DisplayCurrency } from '@suqa/shared';
 
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
@@ -15,7 +15,9 @@ export type OrderEvent = {
   couriers: string[];
 };
 
-const addr = (a: Record<string, unknown>) => [a.label, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join(', ');
+const addr = (a: Record<string, unknown>) => [a.label, a.line1, a.line2, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join(', ');
+const mapUrl = (a: Record<string, unknown>) => { const p = pointFromEwkb(a?.location as string | undefined); return p ? `https://maps.google.com/?q=${p.lat},${p.lng}` : ''; };
+const waMe = (phone: string) => `https://wa.me/${String(phone).replace(/\D/g, '')}`;
 const lines = (e: OrderEvent, L: Locale) => e.items.map(i => `• ${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}${i.notes ? ` (${i.notes})` : ''}`).join('\n');
 const money = (e: OrderEvent, usd: number) => formatMoney(Number(usd), Number(e.order.fx_lbp_rate), e.tenant?.display_currency ?? 'both', e.tenant?.default_locale ?? 'en');
 
@@ -33,8 +35,8 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
     Number(o.delivery_fee_usd) > 0 ? `${ar ? 'التوصيل' : 'Delivery'}: ${money(e, o.delivery_fee_usd)}` : null,
     `*${ar ? 'الإجمالي' : 'Total'}: ${money(e, o.total_usd)}*`,
     '',
-    `${ar ? 'العميل' : 'Customer'}: ${o.customer_name} — ${o.customer_phone}`,
-    `${ar ? 'العنوان' : 'Address'}: ${addr(o.address)}`,
+    `${ar ? 'العميل' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    `${ar ? 'العنوان' : 'Address'}: ${[addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ') || '-'}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
     '',
     ar ? `للقبول أو الرفض: ${origin}/shop` : `Accept or reject: ${origin}/shop`,
@@ -80,7 +82,7 @@ const itemsOneLine = (e: OrderEvent, L: Locale) => e.items.map(i => `${i.quantit
 
 export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
-  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name} ${o.customer_phone}`), P(addr(o.address) || '📍'), P(`${origin}/shop`)] };
+  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/shop`)] };
 }
 export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const text = customerStatus(e, origin); if (!text) return null;
@@ -90,7 +92,7 @@ export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
 }
 export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;
-  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(e.shop ? t(e.shop.name, L) : ''), P(a.area ?? a.city ?? addr(o.address)), P(`${origin}/courier`)] };
+  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(e.shop ? t(e.shop.name, L) : ''), P([a.area ?? a.city ?? addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ')), P(`${origin}/courier`)] };
 }
 export function orderMessageTpl(orderNumber: string, from: string, text: string): Tpl {
   return { name: 'order_message', lang: 'ar', params: [P(orderNumber), P(from), P(text)] };

@@ -55,16 +55,17 @@ export async function editOrder(db: PosDb, order: Order, edits: LineEdit[], note
 }
 
 /** Take payment at handover (pickup counter / COD) and close the order. */
-export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Payment, 'id' | 'order_id' | 'at'>>, rate: number, lbpStep: number, changeIn: Currency, shiftId: string | null, status: OrderStatus = 'delivered'): Promise<{ order: Order; settlement: Settlement }> {
+export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Payment, 'id' | 'order_id' | 'at'>>, rate: number, lbpStep: number, changeIn: Currency, shiftId: string | null, status: OrderStatus = 'delivered', extra: { courier_fee_cents?: number; courier_name?: string | null } = {}): Promise<{ order: Order; settlement: Settlement }> {
   const now = new Date().toISOString();
   const pays: Payment[] = payments.map(p => ({ ...p, id: newId(), order_id: order.id, at: now }));
   const s = settle(num(order.total_cents), pays, rate, lbpStep, changeIn);
   const updated: Order = { ...order, status, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp, shift_id: shiftId ?? order.shift_id ?? null,
+    courier_fee_cents: extra.courier_fee_cents ?? order.courier_fee_cents ?? 0, courier_name: extra.courier_name ?? order.courier_name ?? null,
     delivered_at: status === 'delivered' ? now : order.delivered_at, closed_at: status === 'delivered' ? now : order.closed_at, updated_at: now };
   await db.transaction('rw', [db.orders, db.payments, db.outbox], async () => {
     await db.payments.bulkPut(pays); await db.orders.put(updated);
     await enqueue(db, 'order.pay', { id: order.id, status, shift_id: shiftId, payments: pays.map(p => ({ id: p.id, tender: p.tender, amount: p.amount, currency: p.currency, reference: p.reference ?? null, unpaid_name: p.unpaid_name ?? null, unpaid_phone: p.unpaid_phone ?? null, at: p.at })),
-      paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp });
+      paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp, courier_fee_cents: updated.courier_fee_cents, courier_name: updated.courier_name });
   });
   return { order: updated, settlement: s };
 }

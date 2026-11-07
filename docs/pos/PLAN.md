@@ -270,7 +270,7 @@ Order of M4/M5 can swap depending on whether the pilot shop wants its online cat
 4. Printing: port the printing module from Dan's Hsarat POS / Hsarat Kids / academy systems (same printer hardware) — code to be shared at M3.
 5. Import adapter for the pilot shop's current POS: optional, later.
 6. `receipt` WhatsApp utility template on the Yorgo WABA. ✔
-7. Status: M1 live 2026-11-07 (21_pos.sql applied) · M2 live 2026-11-07 (22_pos_m2.sql) · M3 built 2026-11-07 (printing = Hsarat browser-print approach, see SETUP.md). Restore point: branch `snapshot/pre-pos` + `suqa-db-snapshot-2026-11-07.json` (in Dan's `Suqa - General` folder).
+7. Status: M1 live 2026-11-07 (21_pos.sql applied) · M2 live 2026-11-07 (22_pos_m2.sql) · M3 built 2026-11-07 (printing = Hsarat browser-print approach, see SETUP.md) · M4 live 2026-11-07 (23_pos_m4.sql) · M5 live 2026-11-07 (24_pos_m5.sql) · M6 built 2026-11-07 (25_pos_m6.sql pending apply): staff by WhatsApp number, period reports + Excel/CSV, full export, audit/conflict UI, admin access to any POS, cash-on-delivery settlement with driver fee. Restore point: branch `snapshot/pre-pos` + `suqa-db-snapshot-2026-11-07.json` (in Dan's `Suqa - General` folder).
 
 ---
 

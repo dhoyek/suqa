@@ -15,10 +15,15 @@ const LBP_NOTES = [50000, 100000, 500000, 1000000];
  * payments (it moves the typed amount into the list so a second tender can be typed). Suggested amounts are the next notes a
  * customer would hand over for what remains. The layout never reflows when switching tender or currency.
  */
-export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer }: {
+export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number };
+export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, courier, title }: {
   totalCents: number; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
-  onConfirm: (payments: TenderRow[], changeIn: Currency) => Promise<void>; onClose: () => void;
+  /** delivery handover: ask who delivered and the driver's fee (recorded as cash out of the drawer) */
+  courier?: { name?: string | null } | null; title?: string;
+  onConfirm: (payments: TenderRow[], changeIn: Currency, extra?: CourierExtra) => Promise<void>; onClose: () => void;
 }) {
+  const [drvName, setDrvName] = useState(courier?.name ?? ''); const [drvFee, setDrvFee] = useState(''); const [drvCur, setDrvCur] = useState<Currency>('usd');
+  const feeCents = drvCur === 'lbp' ? Math.round(((Number(drvFee) || 0) / rate) * 100) : Math.round((Number(drvFee) || 0) * 100);
   const [tender, setTender] = useState<Tender>('cash_usd');
   const [rows, setRows] = useState<TenderRow[]>([]);
   const [amount, setAmount] = useState('');            // typed amount for the selected tender (string from the numpad)
@@ -59,7 +64,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
     const all = pending ? [...rows, pending] : rows;
     if (settle(totalCents, all, rate, lbpStep, changeIn).remaining_cents > 0) return;
     setBusy(true);
-    try { await onConfirm(all, changeIn); } catch (e) { setErr((e as Error).message); setBusy(false); }
+    try { await onConfirm(all, changeIn, courier ? { courier_name: drvName.trim() || null, courier_fee_cents: feeCents, fee_currency: drvCur, fee_amount: drvCur === 'lbp' ? Math.round(Number(drvFee) || 0) : Math.round((Number(drvFee) || 0) * 100) } : undefined); } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const canConfirm = live.remaining_cents === 0 && (rows.length > 0 || !!pending);
 
@@ -75,7 +80,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
 
   const money = (c: Currency, v: number) => (c === 'lbp' ? fmtLbp(v, locale) : fmtUsd(Math.round(v * 100)));
   return (
-    <Modal open onClose={onClose} title={pt('pay', locale)} wide
+    <Modal open onClose={onClose} title={title ?? pt('pay', locale)} wide
       footer={<>
         <button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button>
         <span style={{ flex: 1 }} />
@@ -91,6 +96,14 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
               <strong>{live.remaining_cents > 0 ? fmtUsd(live.remaining_cents) : changeIn === 'usd' ? fmtUsd(live.change_usd_cents) : fmtLbp(live.change_lbp, locale)}</strong>
               <strong>{live.remaining_cents > 0 ? fmtLbp(roundLbp(usdToLbp(live.remaining_cents, rate), lbpStep, 'up'), locale) : changeIn === 'usd' ? fmtLbp(usdToLbp(live.change_usd_cents, rate), locale) : fmtUsd(live.change_cents)}</strong>
             </div>
+            {courier && <div className="cod-driver">
+              <div className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted" style={{ minWidth: 80 }}>{pt('driverName', locale)}</span><input className="input" value={drvName} onChange={e => setDrvName(e.target.value)} style={{ flex: 1 }} /></div>
+              <div className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted" style={{ minWidth: 80 }}>{pt('driverFee', locale)}</span>
+                <input className="input" dir="ltr" inputMode="decimal" value={drvFee} onChange={e => setDrvFee(e.target.value)} style={{ flex: 1 }} placeholder="0" />
+                <div className="seg"><button className={drvCur === 'usd' ? 'active' : ''} onClick={() => setDrvCur('usd')}>$</button><button className={drvCur === 'lbp' ? 'active' : ''} onClick={() => setDrvCur('lbp')}>ل.ل.</button></div></div>
+              <div className="row spread"><span className="muted">{pt('netToStore', locale)}</span><strong>{fmtUsd(live.paid_cents - feeCents)}</strong></div>
+              <small className="muted">{pt('driverFeeHint', locale)}</small>
+            </div>}
             <div className="row" style={{ gap: 6, alignItems: 'center' }}>
               <span className="muted" style={{ fontSize: 13 }}>{pt('changeIn', locale)}</span>
               <div className="seg"><button className={changeIn === 'lbp' ? 'active' : ''} onClick={() => setChangeIn('lbp')}>ل.ل.</button><button className={changeIn === 'usd' ? 'active' : ''} onClick={() => setChangeIn('usd')}>$</button></div>

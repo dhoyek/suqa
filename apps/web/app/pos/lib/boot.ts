@@ -14,9 +14,10 @@ export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev';
 export type Membership = { shop_id: string; role: string; shop: { id: string; name: Record<string, string>; pos_enabled: boolean; tenant_id: string } };
 
 export async function myMemberships(sb: SupabaseClient): Promise<Membership[]> {
-  const { data, error } = await sb.from('shop_members').select('shop_id, role, shop:shops(id, name, pos_enabled, tenant_id)');
+  // memberships + (for platform admins / tenant members) every POS-enabled shop they administer — 25_pos_m6
+  const { data, error } = await sb.rpc('pos_my_shops');
   if (error) throw new SyncError(/fetch|network/i.test(error.message) ? 'network' : 'server', error.message);
-  return ((data as unknown as Membership[]) ?? []).filter(m => m.shop);
+  return ((data as unknown as Membership[]) ?? []).filter(m => m.shop && m.shop.pos_enabled);
 }
 
 export type Booted = { db: PosDb; engine: SyncEngine; deviceId: string; shop: Shop; role: string; userId: string; firstRun: boolean };

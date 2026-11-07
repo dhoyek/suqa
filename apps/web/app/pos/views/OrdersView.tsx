@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { NEXT, currentShift, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -44,13 +44,8 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
     if (status === 'rejected') return setDialog({ k: 'reject', o });
     if (status === 'cancelled') return setDialog({ k: 'cancel', o });
     if (status === 'accepted' && o.channel === 'online') return setDialog({ k: 'eta', o });
-    if (status === 'delivered' && !isPaid(o)) {
-      if (o.fulfillment === 'pickup') return setDialog({ k: 'pay', o, status });
-      // courier delivery → cash on delivery, recorded as cash USD for the full amount
-      const shift = await currentShift(boot.db);
-      await payOrder(boot.db, o, [{ tender: 'cash_usd', amount: num(o.total_cents) - paidCents(o), currency: 'usd', note: 'COD' }], num(o.rate_lbp_per_usd) || rate, boot.shop.lbp_rounding_step ?? 5000, 'usd', shift?.id ?? null, 'delivered');
-      boot.engine.poke(); return reload();
-    }
+    // handover: pickup → pay dialog; delivery → cash-on-delivery settlement (what the customer paid, who delivered, driver fee)
+    if (status === 'delivered' && !isPaid(o)) return setDialog({ k: 'pay', o, status });
     await setOrderStatus(boot.db, o, status); boot.engine.poke(); await reload();
   };
   const chip = (s: OrderStatus) => <span className={`pill st-${s}`}>{pt(`st_${s}` as Key, locale)}</span>;
@@ -85,7 +80,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
                   {open && (
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
                       {NEXT[o.status].map(n => <button key={n} className={`btn ${n === 'rejected' || n === 'cancelled' ? 'danger' : n === 'delivered' ? 'primary' : ''}`} onClick={() => act(o, n)}>
-                        {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codAuto', locale)) : ''}
+                        {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codSettle', locale)) : ''}
                       </button>)}
                       {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
                       {o.status === 'delivered' && <button className="btn" onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
@@ -104,8 +99,15 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale} customer={{ name: dialog.o.customer_name, phone: dialog.o.customer_phone }}
-        onConfirm={async (pays, changeIn: Currency) => { const shift = await currentShift(boot.db); await payOrder(boot.db, dialog.o, pays, num(dialog.o.rate_lbp_per_usd) || rate, boot.shop.lbp_rounding_step ?? 5000, changeIn, shift?.id ?? null, dialog.status); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
+        customer={{ name: dialog.o.customer_name, phone: dialog.o.customer_phone }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
+        onConfirm={async (pays, changeIn: Currency, extra) => {
+          const shift = await currentShift(boot.db); const r = num(dialog.o.rate_lbp_per_usd) || rate;
+          await payOrder(boot.db, dialog.o, pays, r, boot.shop.lbp_rounding_step ?? 5000, changeIn, shift?.id ?? null, dialog.status, extra ? { courier_fee_cents: extra.courier_fee_cents, courier_name: extra.courier_name } : {});
+          // the driver's fee leaves the drawer → cash out on the open shift, so expected cash stays right
+          if (extra && extra.fee_amount > 0 && shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`, user_id: staff.user_id });
+          boot.engine.poke(); setDialog(null); await reload();
+        }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'return' && <ReturnDialog boot={boot} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} staff={staff} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
     </div>
   );

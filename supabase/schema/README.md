@@ -26,4 +26,5 @@ source of truth.
 | 22_pos_m2.sql | POS M2: `sale.cancel` audit op (dispatcher re-created) |
 | 23_pos_m4.sql | POS M4: `pos_import_products` (dry-run/commit), `pos_bulk_price`, `pos_bulk_visibility`, online stock guard |
 | 24_pos_m5.sql | POS M5: order inbox ops `order.edit` / `order.pay` / `return.commit` (`_pos_order_edit`, `_pos_order_pay`, `_pos_return`), `order_event_payload` with channel + `order.edited` event, WA/phone reject/cancel reverses sale stock |
+| 25_pos_m6.sql | POS M6: `staff_invites` + `pos_staff_invite` / `pos_staff_set` / `pos_staff_list` (add staff by WhatsApp number, claimed on first sign-in), `pos_my_shops` (admins open any POS-enabled shop), `pos_report` (period report), `pos_export` (per-shop export), COD settlement (`orders.courier_fee_cents`, `courier_name`) |
 | ../seed/batroun.sql | first tenant |

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { hashPin, isValidPin, type Device, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { hashPin, isValidPin, type Conflict, type Device, type Staff, type SyncStatus } from '@suqa/pos-core';
+import StaffPanel from '../components/StaffPanel';
 import { pt, type L } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -16,6 +17,18 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick }: 
   const upd = (patch: Partial<PrintSettings>) => { const n = { ...ps, ...patch }; setPs(n); savePrintSettings(n); };
   const confirm = useConfirm();
   const owner = boot.role === 'owner';
+  const online = status?.online ?? true;
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  type Audit = { id: number; at: string; user_id: string | null; action: string; ref_tbl: string | null; ref_id: string | null; after: Record<string, unknown> | null };
+  const [audit, setAudit] = useState<Audit[] | null>(null); const [auditN, setAuditN] = useState(50);
+  useEffect(() => { boot.db.conflicts.orderBy('at').reverse().limit(100).toArray().then(setConflicts); }, [boot, tick]);
+  useEffect(() => {
+    if (!owner || !online) return;
+    sb.from('audit_log').select('id, at, user_id, action, ref_tbl, ref_id, after').eq('shop_id', boot.shop.id).order('at', { ascending: false }).limit(auditN).then(({ data }) => setAudit((data as Audit[]) ?? []));
+  }, [sb, boot, owner, online, auditN, tick]);
+  const who = (id: string | null) => { const m = members.find(x => x.user_id === id); return m?.display_name || m?.full_name || (id ? id.slice(0, 8) : '—'); };
+  const actionLabel = (a: string) => { const k = `a_${a.replace('.', '_')}`; const t = pt(k as 'a_sale_commit', locale); return t === k || !t ? a : t; };
+  const markSeen = async () => { await boot.db.conflicts.filter(c => !c.seen).modify({ seen: true }); setConflicts(await boot.db.conflicts.orderBy('at').reverse().limit(100).toArray()); };
 
   useEffect(() => {
     boot.db.devices.toArray().then(setDevices); boot.db.staff.toArray().then(setMembers);
@@ -57,9 +70,9 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick }: 
       </section>
       <section className="card">
         <h3 style={{ marginTop: 0 }}>{pt('staff', locale)}</h3>
-        <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-          {members.map(m => <li key={m.user_id}>{m.display_name || m.full_name || m.user_id.slice(0, 8)} <span className="muted">· {pt((`role_${m.role}` as 'role_owner'), locale)}{m.pin_hash ? '' : ' · ' + pt('setPin', locale).split(' ').slice(0, 2).join(' ')}</span></li>)}
-        </ul>
+        {owner ? <StaffPanel boot={boot} sb={sb} locale={locale} staff={staff} online={online} /> : <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+          {members.filter(m => m.active).map(m => <li key={m.user_id}>{m.display_name || m.full_name || m.user_id.slice(0, 8)} <span className="muted">· {pt((`role_${m.role}` as 'role_owner'), locale)}</span></li>)}
+        </ul>}
         <div className="row" style={{ marginTop: 10, gap: 10, alignItems: 'center' }}>
           <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
         </div>
@@ -78,10 +91,26 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick }: 
           <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('printerHint', locale)}</p>
         </div>
       </section>
+      {owner && <section className="card">
+        <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('conflicts', locale)}{conflicts.some(c => !c.seen) ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{conflicts.filter(c => !c.seen).length}</span> : null}</h3>{conflicts.some(c => !c.seen) && <button className="btn ghost" onClick={markSeen}>{pt('markSeen', locale)}</button>}</div>
+        <p className="muted" style={{ fontSize: 12 }}>{pt('conflictHint', locale)}</p>
+        {conflicts.length ? <table className="table"><tbody>
+          {conflicts.map(c => <tr key={c.id} className={c.seen ? 'muted' : ''}><td className="muted">{fmtTime(c.at, locale)}</td><td>{c.tbl} · {c.field}</td><td dir="ltr" style={{ fontSize: 12 }}>{JSON.stringify(c.old_value)} → <strong>{JSON.stringify(c.new_value)}</strong></td><td className="muted" style={{ fontSize: 12 }}>{devices.find(d => d.id === c.by_device)?.name ?? ''}</td></tr>)}
+        </tbody></table> : <p className="muted">{pt('noConflicts', locale)}</p>}
+      </section>}
+      {owner && <section className="card">
+        <h3 style={{ marginTop: 0 }}>{pt('auditLog', locale)}</h3>
+        {!online ? <p className="muted">{pt('needOnline', locale)}</p> : audit === null ? <p className="muted">…</p> : <>
+          <table className="table"><tbody>
+            <tr><th style={{ textAlign: 'start' }}>{pt('when', locale)}</th><th style={{ textAlign: 'start' }}>{pt('who', locale)}</th><th style={{ textAlign: 'start' }}>{pt('what', locale)}</th><th></th></tr>
+            {audit.map(a => <tr key={a.id}><td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(a.at, locale)}</td><td>{who(a.user_id)}</td><td>{actionLabel(a.action)}</td><td className="muted" dir="ltr" style={{ fontSize: 12, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.ref_id ? a.ref_id.slice(0, 12) : ''}{a.after ? ' ' + JSON.stringify(a.after).slice(0, 120) : ''}</td></tr>)}
+          </tbody></table>
+          {audit.length >= auditN && <button className="btn ghost" onClick={() => setAuditN(n => n + 100)}>{pt('loadMore', locale)}</button>}
+        </>}
+      </section>}
       <section className="card muted" style={{ fontSize: 13 }}>
         <div>{pt('version', locale)}: {APP_VERSION} · {pt('lastSync', locale)}: {fmtTime(status?.lastSyncAt, locale)} · cursor {status?.cursor ?? 0}</div>
         <div>{pt('storage', locale)}: {persist === null ? '—' : persist ? pt('persistent', locale) : pt('notPersistent', locale)}</div>
-        <div>{pt('rate', locale)} / {pt('shift', locale)} / {pt('reports', locale)}: {pt('comingSoon', locale)}</div>
       </section>
       <form action="/auth/signout" method="post"><button className="btn ghost muted" type="submit">{pt('signOut', locale)}</button></form>
     </div>

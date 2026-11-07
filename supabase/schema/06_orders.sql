@@ -42,6 +42,8 @@ create table if not exists suqa.orders (
   -- money (USD, snapshot)
   subtotal_usd      numeric(12,2) not null check (subtotal_usd >= 0),
   delivery_fee_usd  numeric(12,2) not null default 0,
+  courier_fee_cents int not null default 0,                       -- paid to the driver, USD cents (25_pos_m6)
+  courier_name      text,                                         -- shop's own driver, free text (25_pos_m6)
   total_usd         numeric(12,2) not null,
   fx_lbp_rate       numeric(14,2) not null,                      -- tenant rate at checkout
   commission_rate   numeric(5,4)  not null default 0,

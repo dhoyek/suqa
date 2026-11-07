@@ -186,3 +186,14 @@
 .pos .btn.icon.sync.spin { animation: pos-spin 1s linear infinite; }
 @keyframes pos-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pos .btn.icon.sync.spin { animation: none; opacity: .6; } }
+
+/* pay dialog: fixed geometry — nothing moves when the tender or currency changes */
+.tenders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tenders .chip { min-height: 44px; display: flex; align-items: center; justify-content: center; white-space: normal; text-align: center; line-height: 1.2; }
+.tender-extra { min-height: 48px; }
+.suggest-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; min-height: 92px; }
+.suggest-grid .chip { min-height: 42px; display: flex; align-items: center; justify-content: center; font-weight: 700; direction: ltr; }
+.pay-amount.pristine strong { color: var(--brand-primary); opacity: .75; }
+.tender-list li.pending { border-style: dashed; background: #f9fafb; }
+.pos-modal.wide .pos-modal-body { min-height: 520px; }
+@media (max-width: 640px) { .pos-modal.wide .pos-modal-body { min-height: 0; } }

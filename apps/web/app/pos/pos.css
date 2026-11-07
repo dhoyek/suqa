@@ -119,8 +119,50 @@
 .r-foot { text-align: center; margin-top: 12px; font-size: 12px; }
 .receipt-actions { display: flex; flex-direction: column; gap: 10px; }
 @media (max-width: 760px) { .receipt-wrap { grid-template-columns: 1fr; } }
+/* ---- printing (ported from Hsarat POS: hidden #printArea, @page width set at print time) ---- */
+#printArea { display: none; }
 @media print {
-  body * { visibility: hidden; }
-  #receipt, #receipt * { visibility: visible; }
-  #receipt { position: absolute; inset: 0 auto auto 0; width: 72mm; border: 0; padding: 0; font-size: 12px; }
+  html, body { height: auto; overflow: visible; background: #fff; }
+  body > *:not(#printArea) { display: none !important; }
+  #printArea { display: block !important; width: 100%; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; }
+  @page { size: 58mm auto; margin: 2mm; }
+  #printArea.w80 .vch { font-size: 15px; line-height: 1.5; }
+  #printArea.w80 .vch .club { font-size: 17px; }
+  #printArea.w80 .vch .ev { font-size: 14px; }
+  #printArea.w80 .vch .kiosk { font-size: 20px; padding: 5px 0; }
+  #printArea.w80 .vch .no { font-size: 21px; }
+  #printArea.w80 .vch table { font-size: 19px; }
+  #printArea.w80 .vch table td.q { width: 42px; }
+  #printArea.w80 .vch table td.a { width: 86px; }
+  #printArea.w80 .vch .tot { font-size: 17px; }
+  #printArea.w80 .vch .ft, #printArea.w80 .vch .kv { font-size: 13px; }
+  #printArea.w80 .vch .cut { font-size: 14px; }
+  #printArea.w80 .vch .feed { font-size: 15px; }
+  .vch { width: 100%; page-break-after: always; text-align: center; color: #000; font-size: 12px; line-height: 1.45; }
+  .vch:last-child { page-break-after: auto; }
+  .vch .club { font-size: 13px; font-weight: 700; }
+  .vch .ev { font-size: 11px; }
+  .vch hr { border: none; border-top: 1px dashed #000; margin: 5px 0; }
+  .vch .kiosk { font-size: 15px; font-weight: 800; padding: 3px 0; border: 2px solid #000; margin: 5px 0; }
+  .vch .no { font-size: 16px; font-weight: 800; direction: ltr; }
+  .vch table { width: 100%; font-size: 15px; font-weight: 700; border-collapse: collapse; }
+  .vch table td { border: none; padding: 3px 0; text-align: right; line-height: 1.35; vertical-align: top; }
+  .vch table td.q { text-align: center; width: 30px; direction: ltr; }
+  .vch table td.a { text-align: left; width: 62px; direction: ltr; }
+  .vch table td .u { font-size: 10px; font-weight: 400; }
+  .vch .tot { font-size: 14px; font-weight: 800; direction: rtl; unicode-bidi: isolate; }
+  .vch i { font-style: normal; display: inline-block; direction: ltr; unicode-bidi: isolate; }
+  .vch .tot .sep { padding: 0 3px; }
+  .vch .ft { font-size: 10px; margin-top: 4px; }
+  .vch .kv { font-size: 10px; display: flex; justify-content: space-between; padding: 1px 0; }
+  .vch .rp { font-weight: 800; border: 1px dashed #000; padding: 2px 0; margin-top: 5px; }
+  .vch .cut { font-size: 11px; margin-top: 6px; letter-spacing: 1px; }
+  .vch .feed { font-size: 12px; line-height: 1.6; }
 }
+
+/* KPI tiles (shift / today) */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+.kpi { background: #f9fafb; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; }
+.kpi span { font-size: 12px; color: var(--muted); }
+.kpi strong { font-size: 20px; }
+.kpi small { font-size: 12px; color: var(--muted); }

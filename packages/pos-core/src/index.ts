@@ -6,3 +6,4 @@ export * from './sale';
 export * from './sync/engine';
 export * from './sync/supabase-transport';
 export * from './auth/pin';
+export * from './shift';

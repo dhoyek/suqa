@@ -5,12 +5,15 @@ import { hashPin, isValidPin, type Device, type Staff, type SyncStatus } from '@
 import { pt, type L } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type PrintSettings } from '../lib/print';
 
 export default function SettingsView({ boot, sb, locale, status, staff, tick }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [members, setMembers] = useState<Staff[]>([]);
   const [persist, setPersist] = useState<boolean | null>(null);
   const [pinMsg, setPinMsg] = useState<string | null>(null);
+  const [ps, setPs] = useState<PrintSettings>(() => loadPrintSettings());
+  const upd = (patch: Partial<PrintSettings>) => { const n = { ...ps, ...patch }; setPs(n); savePrintSettings(n); };
   const confirm = useConfirm();
   const owner = boot.role === 'owner';
 
@@ -59,6 +62,20 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick }: 
         </ul>
         <div className="row" style={{ marginTop: 10, gap: 10, alignItems: 'center' }}>
           <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
+        </div>
+      </section>
+      <section className="card">
+        <h3 style={{ marginTop: 0 }}>🖨 {pt('printer', locale)}</h3>
+        <div className="stack" style={{ gap: 10 }}>
+          <div className="row" style={{ gap: 10, alignItems: 'center' }}><span style={{ minWidth: 160 }}>{pt('paper', locale)}</span>
+            <div className="seg"><button className={ps.paper === 58 ? 'active' : ''} onClick={() => upd({ paper: 58 })}>58 mm</button><button className={ps.paper === 80 ? 'active' : ''} onClick={() => upd({ paper: 80 })}>80 mm</button></div></div>
+          <div className="row" style={{ gap: 10, alignItems: 'center' }}><span style={{ minWidth: 160 }}>{pt('feedLines', locale)}</span>
+            <div className="seg">{[0, 1, 2, 3, 4, 5].map(n => <button key={n} className={ps.feed === n ? 'active' : ''} onClick={() => upd({ feed: n })}>{n}</button>)}</div></div>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.cutMark} onChange={e => upd({ cutMark: e.target.checked })} /> {pt('cutMark', locale)}</label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.autoPrint} onChange={e => upd({ autoPrint: e.target.checked })} /> {pt('autoPrint', locale)}</label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.showLbp} onChange={e => upd({ showLbp: e.target.checked })} /> {pt('showLbpOnReceipt', locale)}</label>
+          <div><button className="btn" onClick={() => doPrint(testPrintHtml(boot.shop, locale, ps), ps)}>🖨 {pt('testPrint', locale)}</button></div>
+          <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('printerHint', locale)}</p>
         </div>
       </section>
       <section className="card muted" style={{ fontSize: 13 }}>

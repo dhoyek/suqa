@@ -1,7 +1,8 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, cancelDraft, commitSale, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
-  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Staff } from '@suqa/pos-core';
+import { addToDraft, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
+  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff } from '@suqa/pos-core';
+import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
@@ -19,7 +20,7 @@ type Dialog = null | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discoun
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, locale, index, tick, staff, busyRef }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean> }) {
+export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift') => void }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cat, setCat] = useState<string | null>(null);
@@ -30,13 +31,14 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef }: { bo
   const [toast, setToast] = useState<string | null>(null);
   const [parked, setParked] = useState<Awaited<ReturnType<typeof listParked>>>([]);
   const [members, setMembers] = useState<Staff[]>([]);
+  const [shift, setShift] = useState<Shift | null | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
   const lbpStep = shop.lbp_rounding_step ?? 5000;
   const maxDisc = num(shop.max_discount_pct);
 
   // restore an unfinished cart (crash / tab close), rate, parked list, staff (for owner PIN)
   useEffect(() => { loadCurrentDraft(boot.db).then(d => { if (d) setDraft(d); }); }, [boot]);
-  useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); }, [boot, tick]);
+  useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
   useEffect(() => { busyRef.current = draft.lines.length > 0 || !!dialog; const t = setTimeout(() => { if (draft.lines.length) void saveDraft(boot.db, draft); }, 400); return () => clearTimeout(t); }, [draft, dialog, boot.db, busyRef]);
   // the sold order's server number arrives through the feed
@@ -75,9 +77,11 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef }: { bo
   const cancel = async (reason: string) => { await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
 
   const confirmPay = async (payments: Parameters<typeof commitSale>[1]['payments'], changeIn: Currency) => {
-    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id });
+    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id, shift_id: shift?.id ?? null });
     await dropDraft(boot.db, draft.id);
     setDialog(null); setReceipt(r); boot.engine.poke();
+    const ps = loadPrintSettings();
+    if (ps.autoPrint) doPrint(receiptHtml(r.order, r.lines, r.payments, shop, locale, ps, { cashier: staff.display_name || staff.full_name || '' }));
   };
 
   useShortcuts({
@@ -90,6 +94,12 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef }: { bo
   }, !receipt);
 
   if (receipt) return <Receipt result={receipt} shop={shop} locale={locale} cashier={staff.display_name || staff.full_name || ''} serverNumber={serverNo} onNew={startNew} />;
+  if (shift === null) return (
+    <div className="pos-center" style={{ minHeight: '60dvh' }}><div className="card stack" style={{ textAlign: 'center', maxWidth: 420 }}>
+      <h3 style={{ margin: 0 }}>{pt('shiftRequired', locale)}</h3>
+      <button className="btn primary big" onClick={() => onGo('shift')}>{pt('openShift', locale)}</button>
+    </div></div>
+  );
 
   return (
     <div className="pos-sell">

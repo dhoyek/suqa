@@ -7,6 +7,8 @@ import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
+import ShiftView from './views/ShiftView';
+import ReportsView from './views/ReportsView';
 
 export type View = 'sell' | 'orders' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
 const VIEWS: View[] = ['sell', 'orders', 'items', 'stock', 'shift', 'reports', 'settings'];
@@ -42,9 +44,11 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <Sell {...props} />}
+        {view === 'sell' && <Sell {...props} onGo={setView} />}
+        {view === 'shift' && <ShiftView {...props} />}
+        {view === 'reports' && <ReportsView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
-        {view !== 'sell' && view !== 'settings' && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
+        {['orders', 'items', 'stock'].includes(view) && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
       </main>
     </div>
   );

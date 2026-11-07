@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { fmtLbp, fmtUsd, text, usdToLbp, type CommitResult, type Shop } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
+import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 
 /**
  * Receipt after a sale: shop, date, numbers (local now, shop-wide once synced), lines, totals in USD + LBP, rate, payments, change.
@@ -53,7 +54,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
       <div className="receipt-actions">
         <button className="btn primary big" onClick={onNew} autoFocus>{pt('newSale', locale)} ↵</button>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn" style={{ flex: 1 }} onClick={() => window.print()}>🖨 {pt('print', locale)}</button>
+          <button className="btn" style={{ flex: 1 }} onClick={() => doPrint(receiptHtml(order, lines, payments, shop, locale, loadPrintSettings(), { cashier, serverNumber }))}>🖨 {pt('print', locale)}</button>
           <button className="btn" style={{ flex: 1 }} onClick={() => setShowQr(true)}>▦ {pt('showQr', locale)}</button>
         </div>
         <div className="row" style={{ gap: 8 }}>

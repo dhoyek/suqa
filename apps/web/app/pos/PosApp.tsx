@@ -104,7 +104,7 @@ export default function PosApp({ locale, brand }: { locale: L; brand: string }) 
   if (phase.k === 'locked') return <LockScreen boot={boot} sb={sb} locale={locale} status={status} onUnlock={s => { setStaff(s); setPhase({ k: 'open' }); }} />;
   return (
     <Shell boot={boot} sb={sb} locale={locale} status={status} staff={staff!} index={index.current} tick={tick} updateReady={updateReady} onUpdate={applyUpdate}
-      busyRef={busyRef} onLock={() => { setStaff(null); setPhase({ k: 'locked' }); }} />
+      busyRef={busyRef} onLock={() => { setStaff(null); setPhase({ k: 'locked' }); }} reindex={() => setTick(t => t + 1)} />
   );
 }
 

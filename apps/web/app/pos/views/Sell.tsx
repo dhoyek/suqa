@@ -13,14 +13,15 @@ import PayDialog from '../components/PayDialog';
 import Receipt from '../components/Receipt';
 import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
+import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
+type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift') => void }) {
+export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, reindex }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift') => void; reindex: () => void }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cat, setCat] = useState<string | null>(null);
@@ -63,8 +64,8 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo }
   const onScan = useCallback((code: string) => {
     if (receipt) return;
     const p = index.scan(code);
-    if (p) add(p); else flash(`${pt('unknownBarcode', locale)}: ${code}`);
-  }, [index, add, locale, receipt]);
+    if (p) add(p); else if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`);
+  }, [index, add, locale, receipt, boot.role]);
   useScanner(onScan);
 
   const updateLine = (l: DraftLine) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === l.id ? l : x)) }));
@@ -175,6 +176,7 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo }
         <LineEditor line={l} locale={locale} rate={rate} maxDiscountPct={maxDisc} staff={members} me={staff} initialField={dialog.field}
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
       {dialog?.k === 'pay' && <PayDialog totalCents={totals.total_cents} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}

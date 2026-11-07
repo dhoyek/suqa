@@ -41,3 +41,27 @@ describe('shifts & cash', () => {
     expect(t.sales_count).toBe(2); expect(t.items_count).toBe(3); expect(t.by_tender.cash_lbp.lbp).toBe(1500000);
   });
 });
+
+describe('catalog edits & stock moves (offline → sync)', () => {
+  it('patch, create, barcodes and stock moves apply locally and push', async () => {
+    const { patchProduct, createProduct, recordStockMove, barcodeOwner } = await import('../catalog-edit');
+    const server = new FakeServer();
+    const p = server.addProduct({ id: 'p1', price_usd: 1, on_hand: 5 }, ['111']);
+    const a = await makeDevice(server, 'A');
+    a.transport.fault = () => 'network';
+    const local = (await a.db.products.get('p1'))!;
+    const up = await patchProduct(a.db, local, { fields: { price_usd: 1.5, track_stock: true }, barcodes_add: ['222'], barcodes_remove: ['111'] });
+    expect(Number(up.price_usd)).toBe(1.5);
+    expect(await barcodeOwner(a.db, '222')).toBe('p1'); expect(await barcodeOwner(a.db, '111')).toBeNull();
+    const n = await createProduct(a.db, { name: { ar: 'خبز', en: 'Bread' }, price_usd: 0.5, track_stock: true }, ['333']);
+    expect(await barcodeOwner(a.db, '333')).toBe(n.id);
+    expect(await recordStockMove(a.db, (await a.db.products.get('p1'))!, { kind: 'receive', qty: 10, unit_cost_cents: 80, user_id: 'u' })).toBe(10);
+    expect(await recordStockMove(a.db, (await a.db.products.get('p1'))!, { kind: 'count', qty: 12, user_id: 'u' })).toBe(-3);   // 15 → 12
+    expect(Number((await a.db.products.get('p1'))!.on_hand)).toBe(12);
+    expect(await a.db.outbox.count()).toBe(4);
+    a.transport.fault = null; await a.engine.sync();
+    expect(a.engine.status.pending).toBe(0); expect(a.engine.status.rejected).toBe(0);
+    expect(server.products.get(n.id)?.name).toEqual({ ar: 'خبز', en: 'Bread' }); expect(server.barcodes.some(b => b.barcode === '333' && b.product_id === n.id)).toBe(true);
+    expect(Number(server.products.get('p1')!.price_usd)).toBe(1.5); expect(Number(server.products.get('p1')!.on_hand)).toBe(12);
+  });
+});

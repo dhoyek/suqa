@@ -9,6 +9,8 @@ import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 import ShiftView from './views/ShiftView';
 import ReportsView from './views/ReportsView';
+import ItemsView from './views/ItemsView';
+import StockView from './views/StockView';
 
 export type View = 'sell' | 'orders' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
 const VIEWS: View[] = ['sell', 'orders', 'items', 'stock', 'shift', 'reports', 'settings'];
@@ -18,7 +20,7 @@ const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'o
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
   boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; index: CatalogIndex; tick: number;
-  updateReady: boolean; onUpdate: () => void; busyRef: MutableRefObject<boolean>; onLock: () => void;
+  updateReady: boolean; onUpdate: () => void; busyRef: MutableRefObject<boolean>; onLock: () => void; reindex: () => void;
 }) {
   const { boot, locale, status, staff, updateReady, onUpdate, onLock } = props;
   const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
@@ -45,10 +47,12 @@ export default function Shell(props: {
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} />}
+        {view === 'items' && <ItemsView {...props} />}
+        {view === 'stock' && <StockView {...props} />}
         {view === 'shift' && <ShiftView {...props} />}
         {view === 'reports' && <ReportsView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
-        {['orders', 'items', 'stock'].includes(view) && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
+        {view === 'orders' && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
       </main>
     </div>
   );

@@ -22,4 +22,5 @@ source of truth.
 | 08_rls.sql | row-level security policies |
 | 09_realtime.sql | realtime publication (orders) |
 | 10_admin.sql | admin RPCs (find user by email, people, stats) |
+| 21_pos.sql | POS: devices, change feed (sync_log), idempotent ops (pos_push/pos_pull/pos_snapshot), stock ledger, payments, shifts, returns, PIN, RLS |
 | ../seed/batroun.sql | first tenant |

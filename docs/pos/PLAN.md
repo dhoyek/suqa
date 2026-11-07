@@ -262,14 +262,15 @@ Order of M4/M5 can swap depending on whether the pilot shop wants its online cat
 
 ---
 
-## 7. Decisions I need from you
+## 7. Decisions (approved 2026-11-07)
 
-1. **Sync engine**: hand-rolled Dexie + change feed (recommended) vs PowerSync — OK to proceed with the recommendation?
-2. **One `orders` table for all channels** (recommended, §2) vs a separate `sales` table.
-3. Defaults: LBP rounding step (**5,000**?), `offline_days` (**7**), `max_discount_pct` (**10**), stock deducted at **ready** or delivered for online orders, allow negative stock **on** for the pilot.
-4. Printing: send me the Hsarat POS printing code when we reach M3 (what transport does it use — USB/Web Serial, Bluetooth, LAN?).
-5. The pilot shop's current POS export sample → `samples/` (git-ignored) before M4.
-6. A `receipt` WhatsApp utility template will need approval on the Yorgo WABA (I'll draft it like the others).
+1. **Sync engine**: hand-rolled Dexie + change feed. ✔
+2. **One `orders` table for all channels**. ✔
+3. `offline_days` is a shop setting 1–90, **default 30** (risk accepted: a revoke/PIN change only reaches a device when it next connects; a device lost while offline loses its unsynced sales; a banner warns after 3 days unsynced). Currency display **both** everywhere. LBP rounding step 5,000, `max_discount_pct` 10, deduct at `ready`, negative stock allowed — all shop settings.
+4. Printing: port the printing module from Dan's Hsarat POS / Hsarat Kids / academy systems (same printer hardware) — code to be shared at M3.
+5. Import adapter for the pilot shop's current POS: optional, later.
+6. `receipt` WhatsApp utility template on the Yorgo WABA. ✔
+7. Status: M1 started 2026-11-07. Restore point: branch `snapshot/pre-pos` + `suqa-db-snapshot-2026-11-07.json` (in Dan's `Suqa - General` folder).
 
 ---
 

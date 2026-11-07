@@ -16,7 +16,8 @@ export default function SignupForm({ next, tenantId, locale, labels }: { next: s
     const phone = f.phone.trim().replace(/[\s-]/g, '').replace(/^0/, '+961').replace(/^961/, '+961');
     const { data, error } = await sb.auth.signUp({
       email: f.email.trim(), password: f.password,
-      options: { data: { full_name: f.full_name.trim(), phone, tenant_id: tenantId, locale } },
+      options: { data: { full_name: f.full_name.trim(), phone, tenant_id: tenantId, locale },
+                 emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });
     setBusy(false);
     if (error) { setError(`${labels.failed}: ${error.message}`); return; }

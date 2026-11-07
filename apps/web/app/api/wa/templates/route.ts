@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
-import { TEMPLATES } from '@/lib/server/wa-templates';
+import { TEMPLATES, templateComponents } from '@/lib/server/wa-templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     if (have.some(t => t.name === d.name && t.language === d.language)) { results[d.name] = 'exists'; continue; }
     const res = await fetch(`${GRAPH}/${waba}/message_templates`, {
       method: 'POST', headers: { ...auth(), 'content-type': 'application/json' },
-      body: JSON.stringify({ name: d.name, language: d.language, category: d.category, components: [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }] }),
+      body: JSON.stringify({ name: d.name, language: d.language, category: d.category, components: templateComponents(d) }),
     });
     const json = await res.json().catch(() => ({}));
     results[d.name] = res.ok ? json : { error: json.error?.error_user_msg ?? json.error?.message ?? json };

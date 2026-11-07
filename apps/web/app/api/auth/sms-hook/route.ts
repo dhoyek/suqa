@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyStandardWebhook } from '@/lib/server/standard-webhooks';
-import { waSendText } from '@/lib/server/whatsapp';
+import { waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,8 +17,17 @@ export async function POST(req: Request) {
   const otp = body.sms?.otp;
   if (!phone || !otp) return NextResponse.json({ error: 'missing phone or otp' }, { status: 400 });
   const brand = (body.user?.user_metadata?.brand as string) || 'Suqa';
+  const text = `${otp} هو رمز الدخول إلى ${brand}. لا تشاركه مع أحد.\n${otp} is your ${brand} sign-in code. Don't share it.`;
   try {
-    await waSendText(phone, `${otp} هو رمز الدخول إلى ${brand}. لا تشاركه مع أحد.\n${otp} is your ${brand} sign-in code. Don't share it.`);
+    if (process.env.WHATSAPP_TEMPLATES === '1') {
+      // Authentication template: body param = code, copy-code button param = code
+      await waSendTemplate(phone, 'login_code', 'ar', [
+        { type: 'body', parameters: [{ type: 'text', text: otp }] },
+        { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otp }] },
+      ]).catch(async err => { console.warn('[sms-hook] template failed, sending text', (err as Error).message.slice(0, 160)); await waSendText(phone, text); });
+    } else {
+      await waSendText(phone, text);
+    }
     return NextResponse.json({});
   } catch (e) {
     console.error('[sms-hook]', (e as Error).message);

@@ -2,9 +2,12 @@ import 'server-only';
 
 // Meta utility templates used for order notifications (mirrors docs/whatsapp-templates.md).
 // Submitted with POST /api/wa/templates (secret-protected); Meta reviews them, usually within minutes.
-export type TemplateDef = { name: string; language: string; category: 'UTILITY'; text: string; samples: string[] };
+export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[] };
 
 export const TEMPLATES: TemplateDef[] = [
+  // Sign-in code. Meta fixes the wording of authentication templates; we only choose the options
+  // (security note + 5-minute expiry + copy-code button). text/samples are informational here.
+  { name: 'login_code', language: 'ar', category: 'AUTHENTICATION', text: '{{1}} هو رمز التحقق الخاص بك.', samples: ['123456'] },
   {
     name: 'order_new_shop', language: 'ar', category: 'UTILITY',
     text: '🛒 طلب جديد {{1}} عبر {{2}}.\nالطلب: {{3}}\nالإجمالي: {{4}}\nالعميل: {{5}}\nالعنوان: {{6}}\nلقبول الطلب أو رفضه افتح لوحة المتجر: {{7}}\nشكراً.',
@@ -26,3 +29,13 @@ export const TEMPLATES: TemplateDef[] = [
     samples: ['BAT-000021', 'سمانة أبو إيلي', 'تمام، الطلب جاهز خلال ربع ساعة'],
   },
 ];
+
+/** Graph API components for a template definition. Authentication templates have a fixed Meta-defined body. */
+export function templateComponents(d: TemplateDef) {
+  if (d.category === 'AUTHENTICATION') return [
+    { type: 'BODY', add_security_recommendation: true },
+    { type: 'FOOTER', code_expiration_minutes: 5 },
+    { type: 'BUTTONS', buttons: [{ type: 'OTP', otp_type: 'COPY_CODE' }] },
+  ];
+  return [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }];
+}

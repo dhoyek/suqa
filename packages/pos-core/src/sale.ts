@@ -39,7 +39,7 @@ export function draftTotals(d: Draft, rate: number, lbpStep: number): Totals { r
 
 export interface CommitInput {
   draft: Draft; payments: Array<Omit<Payment, 'id' | 'order_id' | 'at'> & { id?: string }>; rate: number; lbpStep: number; changeIn: Currency;
-  staff_user_id?: string | null; shift_id?: string | null; status?: Order['status']; now?: Date;
+  staff_user_id?: string | null; shift_id?: string | null; status?: Order['status']; now?: Date; delivery_fee_cents?: number;
 }
 export interface CommitResult { order: Order; lines: OrderLine[]; payments: Payment[]; settlement: Settlement; totals: Totals; local_number: string }
 
@@ -55,7 +55,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
   const t = totals(draft.lines, draft.discount_cents, rate, lbpStep);
   const pays: Payment[] = input.payments.map(p => ({ ...p, id: p.id ?? newId(), order_id: draft.id, at: now }));
   const s = settle(t.total_cents, pays, rate, lbpStep, changeIn);
-  if (s.remaining_cents > 0) throw new Error('not_fully_paid');
+  if (s.remaining_cents > 0 && (draft.channel === 'walkin' || pays.length)) throw new Error('not_fully_paid');
 
   return db.transaction('rw', [db.meta, db.orders, db.orderLines, db.payments, db.stockMoves, db.products, db.outbox, db.customers], async () => {
     const prefix = ((await db.meta.get(META.devicePrefix))?.value as string) ?? '?';
@@ -72,7 +72,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
       customer_id: null, customer_name: draft.customer_name ?? '', customer_phone: draft.customer_phone ?? '', customer_notes: draft.notes ?? null,
       address: draft.address ?? {}, fulfillment: draft.fulfillment ?? 'pickup', notify_customer: draft.channel !== 'walkin',
       rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: draft.discount_reason ?? null,
-      total_cents: t.total_cents, total_lbp: t.total_lbp, total_usd: t.total_cents / 100,
+      total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), total_usd: (t.total_cents + (input.delivery_fee_cents ?? 0)) / 100, delivery_fee_usd: (input.delivery_fee_cents ?? 0) / 100,
       paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
       placed_at: now, delivered_at: status === 'delivered' ? now : null, closed_at: status === 'delivered' ? now : null, updated_at: now,
     };
@@ -101,7 +101,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
         id: order.id, local_number, channel: order.channel, status, staff_user_id: order.staff_user_id, shift_id: order.shift_id,
         customer_name: order.customer_name, customer_phone: order.customer_phone, notes: order.customer_notes, address: order.address, fulfillment: order.fulfillment,
         notify_customer: order.notify_customer, rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: order.discount_reason,
-        total_cents: t.total_cents, total_lbp: t.total_lbp, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
+        total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), delivery_fee_cents: input.delivery_fee_cents ?? 0, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
         placed_at: now, approved_by: draft.approved_by ?? null,
         voided: draft.lines.filter(l => l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, qty: l.quantity, reason: l.void_reason ?? null })),
         lines: lines.filter(l => !l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, unit: l.unit, qty: l.quantity, price_currency: l.price_currency,

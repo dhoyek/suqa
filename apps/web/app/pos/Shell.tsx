@@ -11,6 +11,7 @@ import ShiftView from './views/ShiftView';
 import ReportsView from './views/ReportsView';
 import ItemsView from './views/ItemsView';
 import StockView from './views/StockView';
+import OrdersView from './views/OrdersView';
 
 export type View = 'sell' | 'orders' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
 const VIEWS: View[] = ['sell', 'orders', 'items', 'stock', 'shift', 'reports', 'settings'];
@@ -25,8 +26,11 @@ export default function Shell(props: {
   const { boot, locale, status, staff, updateReady, onUpdate, onLock } = props;
   const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => { boot.db.orders.where('status').equals('pending').count().then(setPendingCount); }, [boot, props.tick]);
   const online = status?.online ?? true;
-  const [manual, setManual] = useState(false);                      // user pressed sync → show the icon turning briefly
+  const [manual, setManual] = useState(false);
+  const [newOrderReq, setNewOrderReq] = useState(0);                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
@@ -34,7 +38,7 @@ export default function Shell(props: {
     <div className="pos" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       <header className="pos-bar">
         <nav className="pos-nav">
-          {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}><span className="ico">{ICON[v]}</span><span>{pt(LABEL[v], locale)}</span></button>)}
+          {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
           <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>
@@ -49,13 +53,13 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <Sell {...props} onGo={setView} />}
+        {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} />}
+        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} />}
         {view === 'shift' && <ShiftView {...props} />}
         {view === 'reports' && <ReportsView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
-        {view === 'orders' && <div className="card muted" style={{ margin: 16 }}>{pt('comingSoon', locale)}</div>}
       </main>
     </div>
   );

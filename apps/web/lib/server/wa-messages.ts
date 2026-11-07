@@ -3,7 +3,8 @@ import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type Di
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
 export type OrderEvent = {
-  event: 'order.created' | 'order.status';
+  event: 'order.created' | 'order.status' | 'order.edited';
+  channel?: 'online' | 'walkin' | 'whatsapp' | 'phone';
   old_status?: string | null;
   order: { id: string; number: string; status: string; basket_id?: string | null; fulfillment?: 'delivery' | 'pickup'; notify_customer?: boolean; customer_name: string; customer_phone: string; customer_notes?: string | null;
     address: Record<string, unknown>; subtotal_usd: number; delivery_fee_usd: number; total_usd: number; fx_lbp_rate: number;
@@ -111,6 +112,18 @@ export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const o = e.order; const L = e.tenant?.default_locale ?? 'ar';
   const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
   return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(text.split('\n')[0]), P(link)] };
+}
+/** The shop changed the order (missing item: removed / substituted / quantity) → the customer sees the new list and total. */
+export function customerEdited(e: OrderEvent, origin: string): string {
+  const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
+  const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
+  return [ar ? `✏️ تم تعديل طلبك ${o.number} من ${shop}` : `✏️ Your order ${o.number} from ${shop} was updated`, o.shop_notes ? (ar ? `السبب: ${o.shop_notes}` : `Reason: ${o.shop_notes}`) : null, '', lines(e, L), '', `*${ar ? 'الإجمالي الجديد' : 'New total'}: ${money(e, o.total_usd)}*`, '', link].filter(x => x !== null).join('\n');
+}
+export function customerEditedTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order;
+  const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
+  const summary = `${ar ? '✏️ تم تعديل الطلب' : '✏️ Order updated'}${o.shop_notes ? ` (${o.shop_notes})` : ''}: ${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`;
+  return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(summary), P(link)] };
 }
 export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;

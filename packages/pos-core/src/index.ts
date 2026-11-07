@@ -8,3 +8,4 @@ export * from './sync/supabase-transport';
 export * from './auth/pin';
 export * from './shift';
 export * from './catalog-edit';
+export * from './orders';

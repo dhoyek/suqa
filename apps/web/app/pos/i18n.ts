@@ -134,6 +134,23 @@ const T = {
   countedQty: { ar: 'الكمية المعدودة', en: 'Counted qty' }, systemQty: { ar: 'في النظام', en: 'In system' }, unitCost: { ar: 'كلفة الوحدة', en: 'Unit cost' }, history: { ar: 'الحركات', en: 'Movements' },
   scanToReceive: { ar: 'امسح صنفاً لاستلامه', en: 'Scan an item to receive it' }, reviewed: { ar: 'تمت المراجعة', en: 'Reviewed' },
   move_sale: { ar: 'بيع', en: 'sale' }, move_return: { ar: 'إرجاع', en: 'return' }, move_receive: { ar: 'استلام', en: 'receive' }, move_adjust: { ar: 'تعديل', en: 'adjust' }, move_count: { ar: 'جرد', en: 'count' }, move_damaged: { ar: 'تالف', en: 'damaged' }, move_reserve: { ar: 'حجز (طلب أونلاين)', en: 'reserved (online)' }, move_release: { ar: 'إلغاء حجز', en: 'released' },
+  // orders inbox (M5)
+  fulfillment: { ar: 'طريقة التسليم', en: 'Fulfillment' },
+  st_pending: { ar: 'جديد', en: 'New' }, st_accepted: { ar: 'مقبول', en: 'Accepted' }, st_preparing: { ar: 'قيد التحضير', en: 'Preparing' }, st_ready: { ar: 'جاهز', en: 'Ready' },
+  st_out_for_delivery: { ar: 'في الطريق', en: 'On the way' }, st_delivered: { ar: 'تم التسليم', en: 'Delivered' }, st_rejected: { ar: 'مرفوض', en: 'Rejected' }, st_cancelled: { ar: 'ملغى', en: 'Cancelled' },
+  act_accepted: { ar: 'قبول', en: 'Accept' }, act_rejected: { ar: 'رفض', en: 'Reject' }, act_preparing: { ar: 'بدء التحضير', en: 'Start preparing' }, act_ready: { ar: 'جاهز', en: 'Ready' },
+  act_out_for_delivery: { ar: 'في الطريق', en: 'Out for delivery' }, act_delivered: { ar: 'تم التسليم', en: 'Delivered' }, act_pickedUp: { ar: 'تم الاستلام', en: 'Picked up' }, act_cancelled: { ar: 'إلغاء', en: 'Cancel' },
+  colNew: { ar: 'جديدة', en: 'New' }, colActive: { ar: 'قيد العمل', en: 'In progress' }, colOnWay: { ar: 'في الطريق', en: 'On the way' }, colDone: { ar: 'منتهية اليوم', en: 'Done today' },
+  noOrders: { ar: 'لا طلبات', en: 'No orders' }, eta: { ar: 'الوقت المتوقع (دقائق)', en: 'ETA (minutes)' }, rejectReason: { ar: 'سبب الرفض', en: 'Reject reason' },
+  editOrder: { ar: 'تعديل الطلب', en: 'Edit order' }, editNote: { ar: 'سبب التعديل (يُرسل للزبون)', en: 'Reason (sent to the customer)' }, substitute: { ar: 'إضافة بديل', en: 'Add substitute' }, removeLine: { ar: 'حذف', en: 'Remove' },
+  notifyOn: { ar: 'إشعار الزبون', en: 'Notify customer' }, pickupBadge: { ar: 'استلام من المحل', en: 'Pickup' }, deliveryBadge: { ar: 'توصيل', en: 'Delivery' }, deliveryFee: { ar: 'رسوم التوصيل', en: 'Delivery fee' },
+  newOrder: { ar: 'طلب جديد (واتساب / هاتف)', en: 'New order (WhatsApp / phone)' }, channelLabel: { ar: 'القناة', en: 'Channel' }, address: { ar: 'العنوان', en: 'Address' }, mapPin: { ar: 'رابط الموقع (خرائط)', en: 'Map pin link' },
+  saveToOrders: { ar: 'حفظ في الطلبات', en: 'Save to orders' }, payAtHandover: { ar: 'يُدفع عند التسليم', en: 'Paid at handover' }, collectPayment: { ar: 'تحصيل الدفع', en: 'Collect payment' },
+  orderSaved: { ar: 'حُفظ الطلب في الطلبات', en: 'Order saved to the inbox' }, unpaidOrder: { ar: 'غير مدفوع', en: 'unpaid' }, codAuto: { ar: 'دفع عند التوصيل (نقدي)', en: 'Cash on delivery' },
+  // returns
+  returnTitle: { ar: 'إرجاع', en: 'Return' }, returnQty: { ar: 'الكمية المرجعة', en: 'Return qty' }, toStock: { ar: 'إلى المخزون', en: 'To stock' }, toDamaged: { ar: 'تالف', en: 'Damaged' },
+  refund: { ar: 'المبلغ المسترد', en: 'Refund' }, refundIn: { ar: 'الاسترداد بـ', en: 'Refund in' }, returnDone: { ar: 'تم الإرجاع', en: 'Returned' }, returnReason: { ar: 'سبب الإرجاع', en: 'Reason' },
+  findOrder: { ar: 'رقم الفاتورة أو امسح QR الإيصال', en: 'Receipt number or scan the receipt QR' },
   signOut: { ar: 'تسجيل الخروج', en: 'Sign out' },
   backToShop: { ar: 'لوحة المحل', en: 'Shop dashboard' },
 } as const;

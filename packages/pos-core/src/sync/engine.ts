@@ -27,7 +27,7 @@ export interface EngineOptions {
 const TABLE_STORE: Record<string, keyof PosDb & string> = {
   products: 'products', product_barcodes: 'barcodes', categories: 'categories', quick_buttons: 'quickButtons', exchange_rates: 'rates',
   shop_members: 'staff', devices: 'devices', orders: 'orders', order_items: 'orderLines', payments: 'payments', stock_moves: 'stockMoves',
-  shifts: 'shifts', cash_moves: 'cashMoves', conflict_log: 'conflicts',
+  shifts: 'shifts', cash_moves: 'cashMoves', conflict_log: 'conflicts', returns: 'returns', return_lines: 'returnLines',
 };
 const defaultBackoff = (tries: number) => Math.min(5 * 60_000, 1000 * 2 ** Math.min(tries, 8)) * (0.8 + Math.random() * 0.4);
 

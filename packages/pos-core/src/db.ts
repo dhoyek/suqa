@@ -29,6 +29,8 @@ export class PosDb extends Dexie {
   outbox!: Table<OutboxOp, number>;
   conflicts!: Table<Conflict, string>;
   drafts!: Table<DraftRow, string>;
+  returns!: Table<Record<string, unknown> & { id: string }, string>;
+  returnLines!: Table<Record<string, unknown> & { id: string }, string>;
 
   constructor(name: string) {
     super(name);
@@ -58,6 +60,11 @@ export class PosDb extends Dexie {
     // v3: parked / in-progress sales live in IndexedDB too (crash recovery, park/resume). Outbox untouched.
     this.version(3).stores({
       drafts: 'id, parked, updated_at',
+    });
+    // v4: returns mirror (M5). Outbox untouched.
+    this.version(4).stores({
+      returns: 'id, order_id, at',
+      returnLines: 'id, return_id',
     });
   }
 }

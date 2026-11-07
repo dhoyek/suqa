@@ -21,7 +21,7 @@ type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; f
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, reindex }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift') => void; reindex: () => void }) {
+export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, reindex, newOrderRequest }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; reindex: () => void; newOrderRequest?: number }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cat, setCat] = useState<string | null>(null);
@@ -33,12 +33,15 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
   const [parked, setParked] = useState<Awaited<ReturnType<typeof listParked>>>([]);
   const [members, setMembers] = useState<Staff[]>([]);
   const [shift, setShift] = useState<Shift | null | undefined>(undefined);
+  const [fee, setFee] = useState(0);                                         // delivery fee (cents) for whatsapp/phone delivery orders
   const searchRef = useRef<HTMLInputElement>(null);
   const lbpStep = shop.lbp_rounding_step ?? 5000;
   const maxDisc = num(shop.max_discount_pct);
 
   // restore an unfinished cart (crash / tab close), rate, parked list, staff (for owner PIN)
   useEffect(() => { loadCurrentDraft(boot.db).then(d => { if (d) setDraft(d); }); }, [boot]);
+  // "＋ new order" from the inbox: start a WhatsApp order and open the customer dialog
+  useEffect(() => { if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'pickup' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
   useEffect(() => { busyRef.current = draft.lines.length > 0 || !!dialog; const t = setTimeout(() => { if (draft.lines.length) void saveDraft(boot.db, draft); }, 400); return () => clearTimeout(t); }, [draft, dialog, boot.db, busyRef]);
@@ -46,6 +49,9 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
   useEffect(() => { if (receipt) boot.db.orders.get(receipt.order.id).then(o => { if (o?.number) setServerNo(o.number); }); }, [tick, receipt, boot.db]);
 
   const totals = useMemo(() => draftTotals(draft, rate, lbpStep), [draft, rate, lbpStep]);
+  const isOrder = draft.channel !== 'walkin';
+  const feeCents = isOrder && draft.fulfillment === 'delivery' ? fee : 0;
+  const grand = totals.total_cents + feeCents;
   const results = useMemo(() => (q.trim() ? index.search(q, 60, cat) : index.byCategory(cat, 60)), [q, cat, index, tick]);
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
@@ -78,13 +84,19 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
   const cancel = async (reason: string) => { await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
 
   const confirmPay = async (payments: Parameters<typeof commitSale>[1]['payments'], changeIn: Currency) => {
-    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id, shift_id: shift?.id ?? null });
+    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: isOrder ? 'accepted' : undefined });
     await dropDraft(boot.db, draft.id);
     setDialog(null); setReceipt(r); boot.engine.poke();
     const ps = loadPrintSettings();
     if (ps.autoPrint) doPrint(receiptHtml(r.order, r.lines, r.payments, shop, locale, ps, { cashier: staff.display_name || staff.full_name || '' }));
   };
 
+  const saveToOrders = async () => {
+    if (!live.length || !isOrder) return;
+    if (!draft.customer_phone) { setDialog({ k: 'customer' }); return; }
+    await commitSale(boot.db, { draft, payments: [], rate, lbpStep, changeIn: 'usd', staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: 'accepted' });
+    await dropDraft(boot.db, draft.id); boot.engine.poke(); flash(pt('orderSaved', locale)); await startNew(); onGo('orders');
+  };
   useShortcuts({
     F2: () => { setDialog(null); searchRef.current?.focus(); searchRef.current?.select(); },
     F4: () => { const l = live[live.length - 1]; if (l) setDialog({ k: 'line', id: l.id, field: 'qty' }); },
@@ -136,7 +148,7 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
             {!!parked.length && <button className="btn" onClick={() => setDialog({ k: 'park' })}>⏸ {parked.length}</button>}
-            <button className="btn icon" title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>{draft.customer_phone ? '👤✓' : '👤'}</button>
+            <button className={`btn ${isOrder ? 'primary' : 'icon'}`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>{isOrder ? `${pt(draft.channel as 'whatsapp', locale)} · ${draft.customer_name || draft.customer_phone || '👤'}` : draft.customer_phone ? '👤✓' : '👤'}</button>
           </span>
         </div>
         <div className="cart-lines">
@@ -158,15 +170,17 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
         </div>
         <div className="cart-totals">
           {totals.discount_cents > 0 && <div><span>{pt('discount', locale)}{draft.discount_reason ? ` · ${draft.discount_reason}` : ''}</span><span>−{fmtUsd(totals.discount_cents)}</span></div>}
-          <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(totals.total_cents)}</span></div>
-          <div className="big lbp"><span></span><span>{fmtLbp(totals.total_lbp_rounded, locale)}</span></div>
+          {feeCents > 0 && <div><span>{pt('deliveryFee', locale)}</span><span>{fmtUsd(feeCents)}</span></div>}
+          <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(grand)}</span></div>
+          <div className="big lbp"><span></span><span>{fmtLbp(Math.round((grand * rate) / 100 / lbpStep) * lbpStep, locale)}</span></div>
           <div className="muted" style={{ fontSize: 11 }}>{rate.toLocaleString('en-US')} / $1</div>
         </div>
         <div className="cart-actions">
           <button className="btn" disabled={!live.length} onClick={() => setDialog({ k: 'discount' })}>{pt('discount', locale)} <kbd>F6</kbd></button>
           <button className="btn" disabled={!live.length} onClick={() => setDialog({ k: 'park' })}>{pt('park', locale)} <kbd>F9</kbd></button>
           <button className="btn danger" disabled={!live.length} onClick={() => setDialog({ k: 'cancel' })}>✕</button>
-          <button className="btn primary pay" disabled={!live.length} onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)} {fmtUsd(totals.total_cents)} <kbd>F8</kbd></button>
+          {isOrder && <button className="btn primary pay" disabled={!live.length} onClick={saveToOrders}>📥 {pt('saveToOrders', locale)} · {fmtUsd(grand)} <span className="muted" style={{ fontSize: 11 }}>({pt('payAtHandover', locale)})</span></button>}
+          <button className={`btn ${isOrder ? '' : 'primary'} pay`} disabled={!live.length} onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)} {fmtUsd(grand)} <kbd>F8</kbd></button>
         </div>
       </aside>
 
@@ -175,14 +189,14 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
       {dialog?.k === 'line' && (() => { const l = draft.lines.find(x => x.id === dialog.id); return l ? (
         <LineEditor line={l} locale={locale} rate={rate} maxDiscountPct={maxDisc} staff={members} me={staff} initialField={dialog.field}
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
-      {dialog?.k === 'pay' && <PayDialog totalCents={totals.total_cents} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'customer' && <CustomerDialog locale={locale} draft={draft} onDone={(name, phone) => { setDraft(d => ({ ...d, customer_name: name, customer_phone: phone })); setDialog(null); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'customer' && <CustomerDialog locale={locale} draft={draft} fee={fee} onDone={(patch, f) => { setDraft(d => ({ ...d, ...patch })); setFee(f); setDialog(null); }} onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -245,10 +259,28 @@ function ReasonDialog({ locale, title, onDone, onClose }: { locale: L; title: st
   </Modal>;
 }
 
-function CustomerDialog({ locale, draft, onDone, onClose }: { locale: L; draft: Draft; onDone: (name: string, phone: string) => void; onClose: () => void }) {
+function CustomerDialog({ locale, draft, fee, onDone, onClose }: { locale: L; draft: Draft; fee: number; onDone: (patch: Partial<Draft>, feeCents: number) => void; onClose: () => void }) {
+  const [channel, setChannel] = useState<Draft['channel']>(draft.channel);
   const [name, setName] = useState(draft.customer_name ?? ''); const [phone, setPhone] = useState(draft.customer_phone ?? '');
-  return <Modal open onClose={onClose} title={pt('customer', locale)} footer={<><button className="btn ghost" onClick={() => onDone('', '')}>✕</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => onDone(name.trim(), phone.trim())}>{pt('ok', locale)}</button></>}>
-    <label className="label">{pt('customerPhone', locale)}</label><input className="input" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} autoFocus />
+  const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.fulfillment ?? 'pickup');
+  const addr = (draft.address ?? {}) as Record<string, string>;
+  const [line1, setLine1] = useState(addr.line1 ?? ''); const [map, setMap] = useState(addr.map_url ?? ''); const [f, setF] = useState(fee ? (fee / 100).toString() : '');
+  const isOrder = channel !== 'walkin';
+  const ok = !isOrder || phone.trim().length >= 6;
+  const submit = () => { if (!ok) return; onDone({ channel, customer_name: name.trim(), customer_phone: phone.trim(), fulfillment: isOrder ? ful : 'pickup', address: isOrder && ful === 'delivery' ? { line1: line1.trim(), map_url: map.trim() } : {} }, isOrder && ful === 'delivery' ? Math.round((Number(f) || 0) * 100) : 0); };
+  return <Modal open onClose={onClose} title={pt('customer', locale)} footer={<><button className="btn ghost" onClick={() => onDone({ channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {} }, 0)}>✕</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={submit}>{pt('ok', locale)}</button></>}>
+    <label className="label">{pt('channelLabel', locale)}</label>
+    <div className="seg" style={{ marginBottom: 8 }}>{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div>
+    <label className="label">{pt('customerPhone', locale)}{isOrder ? ' *' : ''}</label><input className="input" inputMode="tel" dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} autoFocus />
     <label className="label">{pt('customerName', locale)}</label><input className="input" value={name} onChange={e => setName(e.target.value)} />
+    {isOrder && <>
+      <label className="label">{pt('fulfillment', locale)}</label>
+      <div className="seg" style={{ marginBottom: 8 }}><button className={ful === 'pickup' ? 'active' : ''} onClick={() => setFul('pickup')}>🛍 {pt('pickupBadge', locale)}</button><button className={ful === 'delivery' ? 'active' : ''} onClick={() => setFul('delivery')}>🛵 {pt('deliveryBadge', locale)}</button></div>
+      {ful === 'delivery' && <>
+        <label className="label">{pt('address', locale)}</label><input className="input" value={line1} onChange={e => setLine1(e.target.value)} />
+        <label className="label">{pt('mapPin', locale)}</label><input className="input" dir="ltr" placeholder="https://maps.app.goo.gl/…" value={map} onChange={e => setMap(e.target.value)} />
+        <label className="label">{pt('deliveryFee', locale)} ($)</label><input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => setF(e.target.value)} />
+      </>}
+    </>}
   </Modal>;
 }

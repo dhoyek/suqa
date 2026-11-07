@@ -25,4 +25,5 @@ source of truth.
 | 21_pos.sql | POS: devices, change feed (sync_log), idempotent ops (pos_push/pos_pull/pos_snapshot), stock ledger, payments, shifts, returns, PIN, RLS |
 | 22_pos_m2.sql | POS M2: `sale.cancel` audit op (dispatcher re-created) |
 | 23_pos_m4.sql | POS M4: `pos_import_products` (dry-run/commit), `pos_bulk_price`, `pos_bulk_visibility`, online stock guard |
+| 24_pos_m5.sql | POS M5: order inbox ops `order.edit` / `order.pay` / `return.commit` (`_pos_order_edit`, `_pos_order_pay`, `_pos_return`), `order_event_payload` with channel + `order.edited` event, WA/phone reject/cancel reverses sale stock |
 | ../seed/batroun.sql | first tenant |

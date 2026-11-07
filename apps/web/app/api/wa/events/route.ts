@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -41,7 +41,10 @@ export async function POST(req: Request) {
   };
 
   if (e.event === 'order.created') {
-    to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop', shopNewOrderTpl(e, origin));
+    // orders the shop typed into its own POS (whatsapp/phone) don't need a shop alert
+    if (!e.channel || e.channel === 'online') to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop', shopNewOrderTpl(e, origin));
+  } else if (e.event === 'order.edited') {
+    if (e.order.notify_customer !== false) to(e.order.customer_phone, customerEdited(e, origin), 'customer', customerEditedTpl(e, origin));
   } else if (e.event === 'order.status') {
     if (shouldNotifyCustomer(e)) to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
     if (e.order.status === 'ready' && e.order.fulfillment !== 'pickup' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {

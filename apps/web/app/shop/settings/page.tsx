@@ -13,7 +13,7 @@ export default async function ShopSettingsPage({ searchParams }: { searchParams:
   if (!shop) return null;
   const L = tenant.default_locale;
   const keys = ['myShop', 'shopDetails', 'nameAr', 'nameEn', 'descAr', 'descEn', 'logo', 'cover', 'photo', 'changePhoto', 'remove', 'contact', 'publicPhone', 'whatsapp', 'addressText',
-    'openingHours', 'closedDay', 'addRange', 'pauseOrders', 'pauseHint', 'followHours', 'forceOpen', 'forceClosed', 'minOrderUsd', 'prepMinutes', 'save', 'saved'] as const;
+    'openingHours', 'closedDay', 'addRange', 'pauseOrders', 'pauseHint', 'followHours', 'forceOpen', 'forceClosed', 'minOrderUsd', 'prepMinutes', 'save', 'saved', 'pickupEnabled'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
   return <MyShopForm key={shop.id} shop={shop} locale={L} canEdit={shop.role === 'owner'} labels={labels} />;
 }

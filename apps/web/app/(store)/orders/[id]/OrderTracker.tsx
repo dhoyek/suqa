@@ -10,7 +10,7 @@ import { formatMoney, t as tr, type DisplayCurrency, type Locale, type Order, ty
 
 type Row = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
 
-export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes' | 'threadTitle' | 'threadCustomer' | 'threadShop', string> }) {
+export default function OrderTracker(props: { initial: Row; locale: Locale; fx: number; displayCurrency: DisplayCurrency; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<'orderPlaced' | 'cancelOrder' | 'total' | 'deliveryFee' | 'call' | 'eta' | 'myOrders' | 'notes' | 'threadTitle' | 'threadCustomer' | 'threadShop' | 'readyForPickup' | 'pickedUp' | 'pickupBadge', string> }) {
   const { locale: L, fx, displayCurrency, statusLabels, labels } = props;
   const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -43,16 +43,16 @@ export default function OrderTracker(props: { initial: Row; locale: Locale; fx: 
       </div>
       <section className="card">
         <div className="row spread"><strong>{tr(o.shop?.name, L)}</strong>{o.shop?.phone && <a className="btn" href={`tel:${o.shop.phone}`}>{labels.call}</a>}</div>
-        {!terminalBad && <div style={{ marginTop: 12 }}><StatusTimeline status={o.status} labels={statusLabels} /></div>}
+        {!terminalBad && <div style={{ marginTop: 12 }}><StatusTimeline status={o.status} labels={o.fulfillment === 'pickup' ? { ...statusLabels, ready: labels.readyForPickup, delivered: labels.pickedUp } : statusLabels} pickup={o.fulfillment === 'pickup'} /></div>}
         {terminalBad && o.reject_reason && <div className="error" style={{ marginTop: 8 }}>{o.reject_reason}</div>}
         {!terminalBad && o.status !== 'delivered' && o.eta_minutes != null && <div className="muted" style={{ fontSize: 13 }}>{labels.eta}: ~{o.eta_minutes} min</div>}
         <OrderThread orderId={o.id} you="customer" labels={{ title: labels.threadTitle, customer: labels.threadCustomer, shop: labels.threadShop }} />
       </section>
       <section className="card stack">
         {o.items?.map(i => <div className="row spread" key={i.id} style={{ fontSize: 14 }}><span><span className="qty">{Number(i.quantity)}×</span> {tr(i.name, L)}</span><span>{money(i.line_total_usd)}</span></div>)}
-        <div className="row spread muted" style={{ fontSize: 13 }}><span>{labels.deliveryFee}</span><span>{money(o.delivery_fee_usd)}</span></div>
+        {o.fulfillment === 'pickup' ? <div className="muted" style={{ fontSize: 13 }}>🛍️ {labels.pickupBadge}</div> : <div className="row spread muted" style={{ fontSize: 13 }}><span>{labels.deliveryFee}</span><span>{money(o.delivery_fee_usd)}</span></div>}
         <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{money(o.total_usd)}</strong></div>
-        <div className="muted" style={{ fontSize: 13 }}>{o.address?.line1}{o.address?.line2 ? `, ${o.address.line2}` : ''}</div>
+        {o.fulfillment !== 'pickup' && <div className="muted" style={{ fontSize: 13 }}>{o.address?.line1}{o.address?.line2 ? `, ${o.address.line2}` : ''}</div>}
         {o.customer_notes && <div style={{ fontSize: 13 }}><span className="muted">{labels.notes}:</span> {o.customer_notes}</div>}
       </section>
       <div className="row spread">

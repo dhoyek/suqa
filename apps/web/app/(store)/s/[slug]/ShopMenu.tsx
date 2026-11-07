@@ -1,15 +1,15 @@
 'use client';
 import { useConfirm } from '@/components/ConfirmProvider';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type LocalizedText, type Product } from '@suqa/shared';
 import { waLink } from '@/lib/whatsapp';
 
-type Labels = Record<'add' | 'soldOut' | 'replaceCart' | 'cart' | 'checkout' | 'items' | 'askOnWhatsapp' | 'waHello' | 'waAskItem' | 'waFrom', string>;
+type Labels = Record<'add' | 'soldOut' | 'replaceCart' | 'cart' | 'checkout' | 'items' | 'askOnWhatsapp' | 'waHello' | 'waAskItem' | 'waFrom' | 'searchItems' | 'noMatches' | 'all', string>;
 
 export default function ShopMenu({ shop, products, locale: L, fx, displayCurrency, labels }: {
-  shop: { id: string; slug: string; name: LocalizedText; min_order_usd: number; whatsapp: string | null }; products: Product[];
+  shop: { id: string; slug: string; name: LocalizedText; min_order_usd: number; whatsapp: string | null; pickup_enabled?: boolean }; products: Product[];
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels;
 }) {
   const { add, setQty, qtyOf: qtyIn, selectedCount, selectedSubtotal, shopOf, setSelected } = useCart();
@@ -19,6 +19,16 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
   const qtyOf = (id: string) => qtyIn(shop.id, id);
+  // Category chips + substring search (any position, both languages, case-insensitive)
+  const [sec, setSec] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+  const visible = useMemo(() => {
+    const needle = norm(q.trim());
+    return products.filter(p => (sec === null || (p.section ?? '') === sec)
+      && (!needle || norm(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.description?.ar ?? ''} ${p.description?.en ?? ''}`).includes(needle)));
+  }, [products, sec, q]);
+  const visibleSections = sections.filter(s => visible.some(p => (p.section ?? '') === s));
   // Prefilled WhatsApp message with the item's details and a link back to the shop page.
   const askLink = (p: Product) => waLink(shop.whatsapp, [
     `${labels.waHello} ${tr(shop.name, L)} 👋`, labels.waAskItem,
@@ -30,10 +40,18 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   return (
     <>
       <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
-        {sections.map(sec => (
+        <input className="input search" type="search" placeholder={labels.searchItems} value={q} onChange={e => setQ(e.target.value)} aria-label={labels.searchItems} />
+        {sections.filter(Boolean).length > 1 && (
+          <nav className="row chips">
+            <button type="button" className={`chip ${sec === null ? 'active' : ''}`} onClick={() => setSec(null)}>{labels.all}</button>
+            {sections.filter(Boolean).map(s => <button type="button" key={s} className={`chip ${sec === s ? 'active' : ''}`} onClick={() => setSec(s)}>{s}</button>)}
+          </nav>
+        )}
+        {!visible.length && <p className="muted">{labels.noMatches}</p>}
+        {visibleSections.map(sec => (
           <section className="card" key={sec || '_'}>
             {sec && <div className="col-title" style={{ marginTop: 0 }}>{sec}</div>}
-            {products.filter(p => (p.section ?? '') === sec).map(p => {
+            {visible.filter(p => (p.section ?? '') === sec).map(p => {
               const q = qtyOf(p.id);
               return (
                 <div className={`product ${p.is_available ? '' : 'off'}`} key={p.id}>
@@ -45,7 +63,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
                   </div>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
+                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(shop.id, p.id, q - 1)} aria-label="−">−</button>
                         <span className="qty">{q}</span>

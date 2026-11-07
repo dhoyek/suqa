@@ -190,3 +190,9 @@ Repo `suqa` · packages `@suqa/*` · DB schema `suqa` · env prefix `SUQA_` · i
 - UI: `OrderThread` (chat bubbles) under the status stepper on the customer order page and on each merchant order card.
 - Constraint to remember: a number on the Cloud API cannot be used in the WhatsApp app any more — shops keep their own number and talk to the platform number; only shops with a dedicated SIM get a `wa_numbers` row.
 - Sign-in code over WhatsApp (2026-11-07): Meta **authentication** template `login_code` (copy-code button, 5-min expiry) sent by `/api/auth/sms-hook` when `WHATSAPP_TEMPLATES=1`, plain text fallback. Email confirmation links now carry `emailRedirectTo` → `/auth/callback` (Supabase Site URL + Redirect URLs must list the site).
+
+## Pickup, optional steps, notification stages, favourites, in-shop search (2026-11-07)
+- `20_fulfillment.sql`: `orders.fulfillment` ('delivery'|'pickup'), `shops.pickup_enabled`, `orders.notify_customer`, `suqa.favorites`; transitions loosened (accepted → ready/out_for_delivery/delivered…); `place_order`/`place_basket` take `p_fulfillment`, address optional for pickup (no zone, fee 0).
+- Customer WhatsApp updates: only for statuses in `tenants.settings.notify_stages` (default accepted, ready, out_for_delivery, delivered, rejected — admin checkboxes) AND when the merchant left "🔔 إشعار العميل" on for that step. Pickup wording for ready/delivered; driver alert carries shop + map, customer phone + wa.me, address + map, items, total.
+- Merchant board: Card/Column/Actions hoisted out of the component (fixes the remount/scroll-jump on every click); pickup orders show 🛍️ and "جاهز للاستلام / تم الاستلام"; steps skippable.
+- Storefront: ★ favourites (signed-in, `suqa.favorites`) with a Favourites chip on the home grid; shop page has category chips + substring search (Arabic-normalised).

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { shopNewOrder, customerStatus, courierReady, type OrderEvent } from '../server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shouldNotifyCustomer, type OrderEvent } from '../server/wa-messages';
 
 const base: OrderEvent = {
   event: 'order.created', old_status: null,
@@ -30,7 +30,21 @@ describe('wa-messages', () => {
     const en = { ...base, tenant: { ...base.tenant!, default_locale: 'en' as const } };
     expect(customerStatus({ ...en, order: { ...en.order, status: 'ready' } }, 'https://x.test')).toMatch(/^📦 Your order/);
   });
-  it('courier message names the shop and area', () => {
-    expect(courierReady(base, 'https://x.test')).toContain('أبو إيلي → Batroun');
+  it('courier message has shop, customer contact, address, items and link', () => {
+    const m = courierReady(base, 'https://x.test');
+    expect(m).toContain('من: أبو إيلي'); expect(m).toContain('https://wa.me/96170483148'); expect(m).toContain('Batroun');
+    expect(m).toContain('0.5 kg زعتر'); expect(m).toContain('https://x.test/courier');
+  });
+  it('pickup orders word ready/delivered differently and skip the address', () => {
+    const pk = { ...base, order: { ...base.order, fulfillment: 'pickup' as const, status: 'ready' } };
+    expect(customerStatus(pk, 'https://x.test')).toContain('جاهز للاستلام');
+    expect(shopNewOrder(pk, 'https://x.test')).toContain('استلام من المتجر');
+    expect(shopNewOrder(pk, 'https://x.test')).not.toContain('العنوان');
+  });
+  it('customer notification honours the tenant stages and the per-order flag', () => {
+    expect(shouldNotifyCustomer({ ...base, order: { ...base.order, status: 'preparing' } })).toBe(false);
+    expect(shouldNotifyCustomer({ ...base, order: { ...base.order, status: 'accepted' } })).toBe(true);
+    expect(shouldNotifyCustomer({ ...base, order: { ...base.order, status: 'accepted', notify_customer: false } })).toBe(false);
+    expect(shouldNotifyCustomer({ ...base, tenant: { ...base.tenant!, notify_stages: ['delivered'] }, order: { ...base.order, status: 'accepted' } })).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { isOpenNow } from '@/lib/hours';
 import { t as tr } from '@suqa/shared';
 import ShopMenu from './ShopMenu';
 import { waLink, telLink } from '@/lib/whatsapp';
+import FavoriteButton from '@/components/FavoriteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,8 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         {s.cover_url && <img className="shop-cover" src={s.cover_url} alt="" />}
         <div className="row" style={{ gap: 12, alignItems: 'center' }}>
           {s.logo_url && <img className="shop-logo" src={s.logo_url} alt="" />}
-          <h1 style={{ margin: '4px 0', fontSize: 22 }}>{tr(s.name, L)}</h1>
+          <h1 style={{ margin: '4px 0', fontSize: 22, flex: 1 }}>{tr(s.name, L)}</h1>
+          <FavoriteButton shopId={s.id} tenantId={tenant.id} labels={{ add: ui('addFavorite', L), remove: ui('removeFavorite', L) }} />
         </div>
         <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
         <div className="row" style={{ fontSize: 13, marginTop: 6 }}>
@@ -41,10 +43,10 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
           </div>
         )}
       </header>
-      <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone }}
+      <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone, pickup_enabled: s.pickup_enabled !== false }}
         products={products} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
         labels={{ add: ui('add', L), soldOut: ui('soldOut', L), replaceCart: ui('replaceCart', L), cart: ui('cart', L), checkout: ui('checkout', L), items: ui('items', L),
-          askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L) }} />
+          askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L), searchItems: ui('searchItems', L), noMatches: ui('noMatches', L), all: ui('all', L) }} />
     </>
   );
 }

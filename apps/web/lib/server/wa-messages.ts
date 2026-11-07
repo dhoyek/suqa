@@ -5,12 +5,12 @@ import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type Di
 export type OrderEvent = {
   event: 'order.created' | 'order.status';
   old_status?: string | null;
-  order: { id: string; number: string; status: string; basket_id?: string | null; customer_name: string; customer_phone: string; customer_notes?: string | null;
+  order: { id: string; number: string; status: string; basket_id?: string | null; fulfillment?: 'delivery' | 'pickup'; notify_customer?: boolean; customer_name: string; customer_phone: string; customer_notes?: string | null;
     address: Record<string, unknown>; subtotal_usd: number; delivery_fee_usd: number; total_usd: number; fx_lbp_rate: number;
     reject_reason?: string | null; eta_minutes?: number | null; shop_notes?: string | null; courier_id?: string | null };
   items: { name: LocalizedText; unit?: string | null; quantity: number; line_total_usd: number; notes?: string | null }[];
-  shop: { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; phone?: string | null } | null;
-  tenant: { id: string; slug: string; brand_name: string; default_locale: Locale; display_currency: DisplayCurrency; courier_enabled: boolean; delivery_mode: 'per_shop' | 'courier' } | null;
+  shop: { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; phone?: string | null; address?: string | null; location?: string | null } | null;
+  tenant: { id: string; slug: string; brand_name: string; default_locale: Locale; display_currency: DisplayCurrency; courier_enabled: boolean; delivery_mode: 'per_shop' | 'courier'; notify_stages?: string[] } | null;
   courier_phone?: string | null;
   couriers: string[];
 };
@@ -28,6 +28,7 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
   const ar = L === 'ar';
   return [
     ar ? `🛒 *طلب جديد ${o.number}* — ${e.tenant?.brand_name ?? ''}` : `🛒 *New order ${o.number}* — ${e.tenant?.brand_name ?? ''}`,
+    o.fulfillment === 'pickup' ? (ar ? '🛍️ استلام من المتجر' : '🛍️ Pickup at the shop') : null,
     '',
     lines(e, L),
     '',
@@ -36,7 +37,7 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
     `*${ar ? 'الإجمالي' : 'Total'}: ${money(e, o.total_usd)}*`,
     '',
     `${ar ? 'العميل' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
-    `${ar ? 'العنوان' : 'Address'}: ${[addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ') || '-'}`,
+    o.fulfillment === 'pickup' ? null : `${ar ? 'العنوان' : 'Address'}: ${[addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ') || '-'}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
     '',
     ar ? `للقبول أو الرفض: ${origin}/shop` : `Accept or reject: ${origin}/shop`,
@@ -44,18 +45,31 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
 }
 
 /** Status change → the customer. Returns null for statuses we don't notify. */
+/** Which statuses message the customer (tenant setting; merchant can silence a single step with notify_customer=false). */
+export function shouldNotifyCustomer(e: OrderEvent): boolean {
+  if (e.order.notify_customer === false) return false;
+  const stages = e.tenant?.notify_stages ?? ['accepted', 'ready', 'out_for_delivery', 'delivered', 'rejected'];
+  return stages.includes(e.order.status);
+}
+
 export function customerStatus(e: OrderEvent, origin: string): string | null {
   const L = e.tenant?.default_locale ?? 'ar';
   const ar = L === 'ar';
   const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
+  const pickup = o.fulfillment === 'pickup';
+  const shopWhere = [e.shop?.address, e.shop?.location ? mapUrl({ location: e.shop.location }) : ''].filter(Boolean).join(' ');
   const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
   const eta = o.eta_minutes ? (ar ? ` — الوقت المتوقع ${o.eta_minutes} دقيقة` : ` — ETA ${o.eta_minutes} min`) : '';
   const body: Record<string, string | null> = {
     accepted:         ar ? `✅ تم قبول طلبك ${o.number} من ${shop}${eta}.` : `✅ ${shop} accepted your order ${o.number}${eta}.`,
     preparing:        ar ? `👩‍🍳 ${shop} يجهّز طلبك ${o.number}.` : `👩‍🍳 ${shop} is preparing your order ${o.number}.`,
-    ready:            ar ? `📦 طلبك ${o.number} جاهز وسيُسلَّم قريباً.` : `📦 Your order ${o.number} is ready and will be delivered shortly.`,
+    ready:            pickup
+      ? (ar ? `🛍️ طلبك ${o.number} جاهز للاستلام من ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.` : `🛍️ Your order ${o.number} is ready for pickup at ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.`)
+      : (ar ? `📦 طلبك ${o.number} جاهز وسيُسلَّم قريباً.` : `📦 Your order ${o.number} is ready and will be delivered shortly.`),
     out_for_delivery: ar ? `🛵 طلبك ${o.number} في الطريق إليك.` : `🛵 Your order ${o.number} is on its way.`,
-    delivered:        ar ? `🎉 تم تسليم طلبك ${o.number}. شكراً لدعمك متاجر البلدة!` : `🎉 Your order ${o.number} was delivered. Thank you for supporting local shops!`,
+    delivered:        pickup
+      ? (ar ? `🎉 شكراً! تم استلام طلبك ${o.number}. نتمنى لك يوماً سعيداً.` : `🎉 Thanks! Order ${o.number} picked up. Have a great day.`)
+      : (ar ? `🎉 تم تسليم طلبك ${o.number}. شكراً لدعمك متاجر البلدة!` : `🎉 Your order ${o.number} was delivered. Thank you for supporting local shops!`),
     rejected:         ar ? `❌ عذراً، لم يتمكن ${shop} من قبول طلبك ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.` : `❌ Sorry, ${shop} could not accept your order ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.`,
     cancelled:        null,  // customer did it themselves
     pending:          null,
@@ -67,10 +81,18 @@ export function customerStatus(e: OrderEvent, origin: string): string | null {
 /** Order ready → couriers (only in courier delivery mode). */
 export function courierReady(e: OrderEvent, origin: string): string {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar';
-  const o = e.order; const a = o.address as Record<string, unknown>;
-  return ar
-    ? `📦 طلب جاهز للتوصيل ${o.number} من ${e.shop ? t(e.shop.name, L) : ''} → ${a.area ?? a.city ?? ''}\nاستلمه من: ${origin}/courier`
-    : `📦 Order ${o.number} ready for pickup at ${e.shop ? t(e.shop.name, L) : ''} → ${a.area ?? a.city ?? ''}\nTake it: ${origin}/courier`;
+  const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
+  const shopWhere = [e.shop?.address, e.shop?.location ? mapUrl({ location: e.shop.location }) : ''].filter(Boolean).join(' ');
+  const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ');
+  return [
+    ar ? `📦 *طلب جاهز للتوصيل ${o.number}*` : `📦 *Order ${o.number} ready for delivery*`,
+    `${ar ? 'من' : 'From'}: ${shop}${shopWhere ? ` — ${shopWhere}` : ''}`,
+    `${ar ? 'إلى' : 'To'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,
+    `${ar ? 'الطلب' : 'Items'}: ${itemsOneLine(e, L)} — ${ar ? 'المجموع' : 'total'} ${money(e, o.total_usd)}${Number(o.delivery_fee_usd) > 0 ? ` (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})` : ''}`,
+    o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
+    ar ? `استلمه من: ${origin}/courier` : `Take it: ${origin}/courier`,
+  ].filter(Boolean).join('\n');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -92,7 +114,8 @@ export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
 }
 export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;
-  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(e.shop ? t(e.shop.name, L) : ''), P([a.area ?? a.city ?? addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ')), P(`${origin}/courier`)] };
+  const shopWhere = [e.shop?.address, e.shop?.location ? mapUrl({ location: e.shop.location }) : ''].filter(Boolean).join(' ');
+  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(`${e.shop ? t(e.shop.name, L) : ''} ${shopWhere}`), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)} — ${[a.area ?? a.city ?? addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ')} — ${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`), P(`${origin}/courier`)] };
 }
 export function orderMessageTpl(orderNumber: string, from: string, text: string): Tpl {
   return { name: 'order_message', lang: 'ar', params: [P(orderNumber), P(from), P(text)] };

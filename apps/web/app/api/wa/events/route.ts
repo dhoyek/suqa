@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, tplComponents, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -43,8 +43,8 @@ export async function POST(req: Request) {
   if (e.event === 'order.created') {
     to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop', shopNewOrderTpl(e, origin));
   } else if (e.event === 'order.status') {
-    to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
-    if (e.order.status === 'ready' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {
+    if (shouldNotifyCustomer(e)) to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
+    if (e.order.status === 'ready' && e.order.fulfillment !== 'pickup' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {
       const msg = courierReady(e, origin); const tpl = courierReadyTpl(e, origin);
       for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier', tpl);
     }

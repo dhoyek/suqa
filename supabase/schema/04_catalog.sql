@@ -17,6 +17,7 @@ create table if not exists suqa.shops (
   is_open_override boolean,                                      -- null = follow hours; true/false = force
   min_order_usd    numeric(12,2) not null default 0,
   prep_minutes     int not null default 30,
+  pickup_enabled   boolean not null default true,              -- customers may collect from the shop (20_fulfillment)
   commission_rate  numeric(5,4) check (commission_rate between 0 and 1),  -- null = tenant default
   sort_order       int not null default 0,
   created_at       timestamptz not null default now(),

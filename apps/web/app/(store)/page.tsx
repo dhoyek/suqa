@@ -16,6 +16,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
     id: s.id, slug: s.slug, name: s.name, description: s.description, category_id: s.category_id, min_order_usd: Number(s.min_order_usd), logo_url: s.logo_url ?? null,
     open: isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone),
   }));
-  return <ShopGrid cats={cats} shops={cards} initial={c ?? null} locale={L}
-    labels={{ all: ui('shops', L), minOrder: ui('minOrder', L), empty: ui('noShopsInCategory', L) }} />;
+  return <ShopGrid cats={cats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id}
+    labels={{ all: ui('shops', L), minOrder: ui('minOrder', L), empty: ui('noShopsInCategory', L), favorites: ui('favorites', L), noFavorites: ui('noFavorites', L), addFavorite: ui('addFavorite', L), removeFavorite: ui('removeFavorite', L) }} />;
 }

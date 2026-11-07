@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { LocalizedText } from '@suqa/shared';
 
 export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number };
-export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number };
+export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number; pickup_enabled?: boolean };
 export type CartShop = ShopRef & { lines: CartLine[]; selected: boolean };
 /** v2: one cart, grouped by shop. `selected` = included in the next checkout (AliExpress-style). */
 export type Cart = { v: 2; shops: CartShop[] };

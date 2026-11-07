@@ -60,7 +60,7 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
               <strong>{tr(p.shop?.name, L)} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>{p.number}</span></strong>
               <span className={`badge ${p.status}`}>{statusLabels[p.status]}</span>
             </div>
-            {!bad && <StatusTimeline status={p.status} labels={statusLabels} compact />}
+            {!bad && <StatusTimeline status={p.status} labels={statusLabels} compact pickup={p.fulfillment === 'pickup'} />}
             {bad && p.reject_reason && <div className="error">{p.reject_reason}</div>}
             {p.items?.map(i => <div className="row spread" key={i.id} style={{ fontSize: 14 }}><span><span className="qty">{Number(i.quantity)}×</span> {tr(i.name, L)}</span><span>{money(i.line_total_usd)}</span></div>)}
             <div className="row spread muted" style={{ fontSize: 13 }}>

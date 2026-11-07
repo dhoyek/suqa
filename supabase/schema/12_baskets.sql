@@ -19,6 +19,7 @@ create table if not exists suqa.baskets (
   customer_name     text not null,
   customer_phone    text not null,
   customer_notes    text,
+  fulfillment       text not null default 'delivery' check (fulfillment in ('delivery','pickup')),   -- 20_fulfillment
   subtotal_usd      numeric(12,2) not null check (subtotal_usd >= 0),
   delivery_fee_usd  numeric(12,2) not null default 0,            -- courier mode: the single fee; per_shop: sum of the parts' fees
   total_usd         numeric(12,2) not null,

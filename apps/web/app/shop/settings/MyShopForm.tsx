@@ -14,7 +14,7 @@ const DAY_LABEL: Record<string, { en: string; ar: string }> = {
   fri: { en: 'Fri', ar: 'الجمعة' }, sat: { en: 'Sat', ar: 'السبت' }, sun: { en: 'Sun', ar: 'الأحد' },
 };
 type Labels = Record<'myShop' | 'shopDetails' | 'nameAr' | 'nameEn' | 'descAr' | 'descEn' | 'logo' | 'cover' | 'photo' | 'changePhoto' | 'remove' | 'contact' | 'publicPhone' | 'whatsapp' | 'addressText'
-  | 'openingHours' | 'closedDay' | 'addRange' | 'pauseOrders' | 'pauseHint' | 'followHours' | 'forceOpen' | 'forceClosed' | 'minOrderUsd' | 'prepMinutes' | 'save' | 'saved', string>;
+  | 'openingHours' | 'closedDay' | 'addRange' | 'pauseOrders' | 'pauseHint' | 'followHours' | 'forceOpen' | 'forceClosed' | 'minOrderUsd' | 'prepMinutes' | 'save' | 'saved' | 'pickupEnabled', string>;
 
 export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop: Shop; locale: Locale; canEdit: boolean; labels: Labels }) {
   const sb = useMemo(() => supabaseBrowser(), []);
@@ -22,7 +22,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop:
   const [f, setF] = useState({
     name_ar: shop.name.ar ?? '', name_en: shop.name.en ?? '', desc_ar: shop.description?.ar ?? '', desc_en: shop.description?.en ?? '',
     phone: shop.phone ?? '', whatsapp: shop.whatsapp ?? '', address_text: shop.address_text ?? '',
-    min_order: String(shop.min_order_usd ?? 0), prep: String(shop.prep_minutes ?? 30),
+    min_order: String(shop.min_order_usd ?? 0), prep: String(shop.prep_minutes ?? 30), pickup: shop.pickup_enabled !== false,
     logo_url: shop.logo_url ?? null as string | null, cover_url: shop.cover_url ?? null as string | null,
     override: shop.is_open_override === true ? 'open' : shop.is_open_override === false ? 'closed' : 'hours',
   });
@@ -50,7 +50,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop:
       name: { ar: f.name_ar.trim() || f.name_en.trim(), en: f.name_en.trim() || f.name_ar.trim() },
       description: { ar: f.desc_ar.trim(), en: f.desc_en.trim() },
       phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
-      min_order_usd: Number(f.min_order) || 0, prep_minutes: Math.max(0, Number(f.prep) || 0),
+      min_order_usd: Number(f.min_order) || 0, prep_minutes: Math.max(0, Number(f.prep) || 0), pickup_enabled: f.pickup,
       logo_url: f.logo_url, cover_url: f.cover_url, opening_hours: hours,
       is_open_override: f.override === 'open' ? true : f.override === 'closed' ? false : null,
     }).eq('id', shop.id);
@@ -86,6 +86,9 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop:
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}><label className="label">{labels.minOrderUsd}</label><input className="input" dir="ltr" inputMode="decimal" disabled={dis} value={f.min_order} onChange={e => setF({ ...f, min_order: e.target.value })} /></div>
           <div style={{ flex: 1 }}><label className="label">{labels.prepMinutes}</label><input className="input" dir="ltr" inputMode="numeric" disabled={dis} value={f.prep} onChange={e => setF({ ...f, prep: e.target.value })} /></div>
+        </div>
+        <div className="row">
+          <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.pickup} onChange={e => setF({ ...f, pickup: e.target.checked })} /> 🛍️ {labels.pickupEnabled}</label>
         </div>
       </section>
 

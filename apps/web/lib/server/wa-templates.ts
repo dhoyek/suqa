@@ -26,7 +26,7 @@ export const TEMPLATES: TemplateDef[] = [
   {
     // POS receipt (M2). v1 ('receipt') was rejected INVALID_FORMAT with the link as a body variable; v2 puts it in a URL button.
     name: 'receipt_v2', language: 'ar', category: 'UTILITY',
-    text: 'إيصال من {{1}} — رقم {{2}}\nالأصناف: {{3}}\nالإجمالي: {{4}}\nالدفع: {{5}}\nشكراً لزيارتكم.',
+    text: 'شكراً لتسوّقكم من {{1}}. هذا إيصال عمليّة الشراء رقم {{2}}.\nالأصناف التي اشتريتموها: {{3}}\nالمبلغ الإجمالي بالدولار والليرة: {{4}}\nطريقة الدفع المستخدمة: {{5}}\nيمكنكم فتح الإيصال الكامل وحفظه من الزر أدناه. نتمنى أن نراكم قريباً.',
     samples: ['سمانة أبو إيلي', 'BAT-000021', '3× لبنة بلدية، 1× خبز عربي', '$10.50 · 939,750 ل.ل.', 'نقدي $10 + 100,000 ل.ل.'],
     button: { text: 'عرض الإيصال', url: 'https://suqa-dev.netlify.app/r/{{1}}', example: 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001' },
   },

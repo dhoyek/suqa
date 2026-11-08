@@ -224,6 +224,8 @@ const T = {
   a_order_pay: { ar: 'دفع طلب', en: 'Order paid' }, a_return_commit: { ar: 'مرتجع', en: 'Return' }, a_stock_move: { ar: 'حركة مخزون', en: 'Stock move' }, a_product_patch: { ar: 'تعديل صنف', en: 'Item edited' },
   a_shift_open: { ar: 'فتح وردية', en: 'Shift opened' }, a_shift_close: { ar: 'إقفال وردية', en: 'Shift closed' }, a_cash_move: { ar: 'حركة صندوق', en: 'Cash move' }, a_rate_set: { ar: 'تغيير سعر الصرف', en: 'Rate changed' },
   a_pin_set: { ar: 'تعيين PIN', en: 'PIN set' }, a_device_register: { ar: 'تسجيل جهاز', en: 'Device registered' }, a_device_revoke: { ar: 'إلغاء جهاز', en: 'Device revoked' },
+  a_order_delete: { ar: 'حذف طلب', en: 'Order deleted' }, a_debt_settle: { ar: 'تسديد دين', en: 'Debt settled' }, a_customer_upsert: { ar: 'تعديل زبون', en: 'Customer saved' },
+  a_supplier_upsert: { ar: 'تعديل مورّد', en: 'Supplier saved' }, a_purchase_commit: { ar: 'فاتورة شراء', en: 'Purchase' }, a_purchase_void: { ar: 'إلغاء فاتورة شراء', en: 'Purchase voided' }, a_supplier_pay: { ar: 'دفعة لمورّد', en: 'Supplier payment' }, a_settings: { ar: 'إعدادات المحل', en: 'Shop settings' },
   a_staff_add: { ar: 'إضافة موظف', en: 'Staff added' }, a_staff_invite: { ar: 'دعوة موظف', en: 'Staff invited' }, a_staff_set: { ar: 'تعديل موظف', en: 'Staff changed' }, a_import: { ar: 'استيراد أصناف', en: 'Items imported' }, a_bulk: { ar: 'تعديل جماعي', en: 'Bulk change' },
 } as const;
 export type Key = keyof typeof T;

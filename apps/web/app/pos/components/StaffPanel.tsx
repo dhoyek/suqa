@@ -46,6 +46,14 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
     if (error) { setMsg(error.message); return; }
     boot.engine.poke(); await load();
   };
+  const changePhone = async (m: Member) => {
+    const v = prompt(pt('staffPhoneNew', locale), m.phone ? '+' + m.phone.replace(/^\+/, '') : '+961');
+    if (v == null || !v.trim()) return;
+    if (!(await confirm(pt('staffPhoneConfirm', locale).replace('{name}', m.display_name || m.full_name || '').replace('{phone}', v.trim()), { danger: true }))) return;
+    const { error } = await sb.rpc('pos_staff_phone', { p_shop: boot.shop.id, p_user: m.user_id, p_phone: v.trim() });
+    if (error) { setMsg(/phone_taken/.test(error.message) ? pt('phoneTaken', locale) : /bad_phone/.test(error.message) ? pt('customerPhone', locale) + ' ?' : error.message); return; }
+    setMsg(pt('saved', locale)); await load();
+  };
   const cancelInvite = async (i: Invite) => { await sb.from('staff_invites').delete().eq('id', i.id); await load(); };
   const waLink = (to: string, n: string) => {
     const shop = text(boot.shop.name, locale); const url = `${location.origin}/login`;
@@ -57,7 +65,7 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
     <div className="stack" style={{ gap: 10 }}>
       <table className="table"><tbody>
         {members.map(m => <tr key={m.user_id} className={m.active ? '' : 'muted'}>
-          <td><strong style={{ cursor: online ? 'pointer' : 'default' }} title={pt('staffName', locale)} onClick={() => { if (!online) return; const v = prompt(pt('staffName', locale), m.display_name || m.full_name || ''); if (v != null && v.trim()) void set(m, { p_name: v.trim() }); }}>{m.display_name || m.full_name || '—'} ✎</strong>{m.user_id === staff.user_id ? ` (${pt('you', locale)})` : ''}<div className="muted" dir="ltr" style={{ fontSize: 12 }}>{m.phone ? '+' + m.phone : ''}</div></td>
+          <td><strong style={{ cursor: online ? 'pointer' : 'default' }} title={pt('staffName', locale)} onClick={() => { if (!online) return; const v = prompt(pt('staffName', locale), m.display_name || m.full_name || ''); if (v != null && v.trim()) void set(m, { p_name: v.trim() }); }}>{m.display_name || m.full_name || '—'} ✎</strong>{m.user_id === staff.user_id ? ` (${pt('you', locale)})` : ''}<div className="muted" dir="ltr" style={{ fontSize: 12 }}>{m.phone ? '+' + m.phone.replace(/^\+/, '') : ''}{online && <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', fontSize: 12 }} title={pt('staffPhoneNew', locale)} onClick={() => changePhone(m)}>✎</button>}</div></td>
           <td>{online ? <select className="input" value={m.role === 'staff' ? 'cashier' : m.role} onChange={e => set(m, { p_role: e.target.value })} style={{ width: 'auto', minHeight: 36 }}>{ROLES.map(r => <option key={r} value={r}>{pt(`role_${r}` as 'role_owner', locale)}</option>)}</select> : pt(`role_${m.role}` as 'role_owner', locale)}</td>
           <td className="muted">{m.pin ? 'PIN ✓' : pt('noPin', locale)}</td>
           <td style={{ whiteSpace: 'nowrap' }}>

@@ -36,4 +36,5 @@ source of truth.
 | 32_pos_notify.sql | Customer WhatsApp stages per shop: `shops.notify_stages text[]` (null = tenant default), `order_event_payload` carries shop/tenant stages (tenant default accepted/ready/out_for_delivery/rejected — no `delivered`), `pos_shop_settings` accepts `notify_stages` |
 | 33_pos_merge.sql | Customers & suppliers: `shop_customers.active`, ops `customer.merge` / `customer.delete` / `supplier.merge` / `supplier.delete` (history re-pointed, delete only without history → `has_history`), dispatcher re-created |
 | 34_pos_m12.sql | Scheduled orders `orders.needed_at` (sale.commit payload, op `order.needed`), customer address book `shop_customers.addresses` (`_addr_remember`, touch + upsert re-created), volume indexes on orders, `prune_sync_log(days)`, dispatcher re-created |
+| 35_pos_staff_phone.sql | `pos_staff_phone(shop, user, phone)` — owner moves an employee's login to a new WhatsApp number (auth.users + profiles, refuses numbers in use) |
 | ../seed/batroun.sql | first tenant |

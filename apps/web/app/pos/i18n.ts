@@ -184,6 +184,7 @@ const T = {
   addrUpdate: { ar: 'تحديث العنوان المحفوظ', en: 'Update the saved address' }, addrSaveNew: { ar: 'حفظه كعنوان جديد', en: 'Save as a new address' }, addrOnce: { ar: 'هذه المرة فقط', en: 'Just this once' },
   asap: { ar: 'فوراً', en: 'ASAP' }, hour: { ar: 'س', en: 'h' }, tomorrow: { ar: 'غداً', en: 'Tomorrow' }, late: { ar: 'متأخر', en: 'late' }, inTime: { ar: 'بعد', en: 'in' },
   categories: { ar: 'الفئات', en: 'Categories' }, clearFilter: { ar: 'مسح الفلتر', en: 'Clear filter' },
+  staffPhoneNew: { ar: 'رقم الموظف الجديد (واتساب)', en: 'New staff number (WhatsApp)' }, staffPhoneConfirm: { ar: 'تغيير رقم {name} إلى {phone}؟ سيسجّل الدخول بالرقم الجديد من الآن.', en: 'Change {name}’s number to {phone}? They will sign in with the new number from now on.' }, phoneTaken: { ar: 'هذا الرقم مستخدم في حساب آخر', en: 'That number belongs to another account' },
   pickCustomer: { ar: 'اختيار زبون', en: 'Pick customer' }, newCustomerWillSave: { ar: 'رقم جديد — سيُحفظ كزبون عند التأكيد', en: 'New number — will be saved as a customer on confirm' },
   notifyStages: { ar: 'إشعارات الزبون عبر واتساب', en: 'Customer WhatsApp notifications' },
   notifyHint: { ar: 'يصل الزبون رسالة قصيرة عند كل مرحلة مختارة. الطلبات المسجّلة من الكاشير تُرسل تأكيد القبول مباشرة.', en: 'The customer gets a short message at each selected stage. Orders typed in at the POS send the acceptance confirmation right away.' }, maxDiscount: { ar: 'أقصى حسم للكاشير (%)', en: 'Max cashier discount (%)' }, lbpStep: { ar: 'تقريب الليرة إلى', en: 'Round LBP to' },
@@ -238,7 +239,7 @@ const T = {
   a_pin_set: { ar: 'تعيين PIN', en: 'PIN set' }, a_device_register: { ar: 'تسجيل جهاز', en: 'Device registered' }, a_device_revoke: { ar: 'إلغاء جهاز', en: 'Device revoked' },
   a_order_delete: { ar: 'حذف طلب', en: 'Order deleted' }, a_debt_settle: { ar: 'تسديد دين', en: 'Debt settled' }, a_customer_upsert: { ar: 'تعديل زبون', en: 'Customer saved' },
   a_supplier_upsert: { ar: 'تعديل مورّد', en: 'Supplier saved' }, a_purchase_commit: { ar: 'فاتورة شراء', en: 'Purchase' }, a_purchase_void: { ar: 'إلغاء فاتورة شراء', en: 'Purchase voided' }, a_supplier_pay: { ar: 'دفعة لمورّد', en: 'Supplier payment' }, a_settings: { ar: 'إعدادات المحل', en: 'Shop settings' },
-  a_staff_add: { ar: 'إضافة موظف', en: 'Staff added' }, a_staff_invite: { ar: 'دعوة موظف', en: 'Staff invited' }, a_staff_set: { ar: 'تعديل موظف', en: 'Staff changed' }, a_import: { ar: 'استيراد أصناف', en: 'Items imported' }, a_bulk: { ar: 'تعديل جماعي', en: 'Bulk change' },
+  a_staff_phone: { ar: 'تغيير رقم موظف', en: 'Staff number changed' }, a_staff_add: { ar: 'إضافة موظف', en: 'Staff added' }, a_staff_invite: { ar: 'دعوة موظف', en: 'Staff invited' }, a_staff_set: { ar: 'تعديل موظف', en: 'Staff changed' }, a_import: { ar: 'استيراد أصناف', en: 'Items imported' }, a_bulk: { ar: 'تعديل جماعي', en: 'Bulk change' },
 } as const;
 export type Key = keyof typeof T;
 // never throws: an unknown key (new audit action, status…) renders as the key itself

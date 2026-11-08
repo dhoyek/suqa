@@ -76,7 +76,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
         <span className="muted" style={{ fontSize: 13 }}>{pt('showColumns', locale)}:</span>
         {COLS.map(c => <button key={c} className={`chip ${show.has(c) ? 'active' : ''}`} onClick={() => toggleCol(c)}>{colLabel(c)} <span className="muted">{cols[c].length}</span></button>)}
       </div>
-      <div className="orders-cols" style={{ gridTemplateColumns: `repeat(${Math.min(4, show.size)}, 1fr)` }}>
+      <div className="orders-cols" style={{ ['--cols' as string]: Math.min(4, show.size) }}>
         {COLS.filter(c => show.has(c)).map(c => (
           <section key={c} className={`orders-col ${c}`}>
             <h4>{colLabel(c)} <span className="muted">{cols[c].length}</span></h4>

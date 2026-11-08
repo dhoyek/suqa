@@ -201,7 +201,7 @@
 /* orders inbox */
 .orders-wrap { display: flex; flex-direction: column; min-height: 100%; }
 /* rows size to their content and the page scrolls (a fixed-height grid let a row overlap the one below it on tablets) */
-.orders-cols { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: auto; align-items: start; gap: 10px; padding: 10px 12px 24px; }
+.orders-cols { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); grid-auto-rows: auto; align-items: start; gap: 10px; padding: 10px 12px 24px; }
 .orders-col { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 200px; min-width: 0; }
 .order-card { min-width: 0; overflow-wrap: anywhere; }
 .orders-col h4 { margin: 0 0 4px; font-size: 14px; }
@@ -218,8 +218,8 @@
 .pos .pill.st-delivered { background: #e5e7eb; } .pos .pill.st-rejected, .pos .pill.st-cancelled { background: #fee2e2; color: var(--bad); }
 .nav-badge { position: absolute; top: -4px; inset-inline-end: -8px; background: var(--bad); color: #fff; font-size: 11px; border-radius: 999px; padding: 0 5px; min-width: 16px; line-height: 16px; }
 .pos-nav button .ico { position: relative; }
-@media (max-width: 1000px) { .orders-cols { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 600px) { .orders-cols { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .orders-cols { grid-template-columns: repeat(min(var(--cols, 4), 2), 1fr); } }
+@media (max-width: 760px) { .orders-cols { grid-template-columns: 1fr; } .orders-col { min-height: 0; } .orders-col:empty { display: none; } }
 .cod-driver { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: #fffbeb; }
 
 /* ---------- touch / tablet pass (M6) ---------- */
@@ -329,6 +329,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* foldables & tablets (Fold unfolded ≈ 900px, iPad ≈ 820–1024px): two-column boards, roomy cart */
 @media (min-width: 761px) and (max-width: 1100px) {
   .pos-nav button { min-width: 60px; padding: 6px 8px; }
-  .orders-cols { grid-template-columns: 1fr 1fr; }
+  .orders-cols { grid-template-columns: repeat(min(var(--cols, 4), 2), 1fr); }
   .cust-page { grid-template-columns: 300px 1fr; }
 }

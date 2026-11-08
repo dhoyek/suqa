@@ -54,6 +54,7 @@ create table if not exists suqa.orders (
   eta_minutes       int,
   -- timestamps
   placed_at         timestamptz not null default now(),
+  needed_at         timestamptz,                         -- 34: when the customer wants it (scheduled orders)
   accepted_at       timestamptz,
   delivered_at      timestamptz,
   closed_at         timestamptz,                                 -- delivered/rejected/cancelled

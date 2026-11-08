@@ -32,7 +32,9 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
   const reload = async () => {
     const since = new Date(Date.now() - 36 * 3600_000).toISOString();
     const all = (await boot.db.orders.toArray()).filter(o => o.channel !== 'walkin' && !o.parked && (!o.closed_at || o.closed_at > since));
-    all.sort((a, b) => (a.placed_at < b.placed_at ? 1 : -1));
+    // open orders: the ones wanted soonest first (scheduled ones by their time, ASAP ones by when they came in); closed ones newest first
+    const open = (o: Order) => !o.closed_at; const k = (o: Order) => o.needed_at ?? o.placed_at;
+    all.sort((a, b) => open(a) && open(b) ? (k(a) < k(b) ? -1 : 1) : (a.placed_at < b.placed_at ? 1 : -1));
     setOrders(all);
     const ids = all.map(o => o.id);
     const ls = await boot.db.orderLines.where('order_id').anyOf(ids).toArray(); const ps = await boot.db.payments.where('order_id').anyOf(ids).toArray();
@@ -86,7 +88,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
               return (
                 <article key={o.id} className={`order-card ${open ? 'open' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
                   <div className="row spread" style={{ alignItems: 'center' }}>
-                    <strong>{o.number ?? o.local_number}</strong>
+                    <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}</strong>
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <a dir="ltr" href={`https://wa.me/${o.customer_phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{o.customer_phone}</a>}</div>
@@ -178,4 +180,13 @@ function EditOrderDialog({ boot, locale, index, order, lines, onDone, onClose }:
       <label className="label" style={{ marginTop: 8 }}>{pt('editNote', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} />
     </Modal>
   );
+}
+
+/** "⏰ 17:30 · بعد 40 د" / "متأخر 10 د"; shows the date when it is not today. */
+function neededLabel(iso: string, locale: L): string {
+  const d = new Date(iso); const diff = Math.round((d.getTime() - Date.now()) / 60000);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const t = d.toLocaleTimeString(locale === 'ar' ? 'ar-LB' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) + (sameDay ? '' : ' ' + d.toLocaleDateString(locale === 'ar' ? 'ar-LB' : 'en-GB', { day: 'numeric', month: 'short' }));
+  const rel = Math.abs(diff) >= 120 ? `${Math.round(Math.abs(diff) / 60)} ${pt('hour', locale)}` : `${Math.abs(diff)} ${pt('min', locale)}`;
+  return diff < 0 ? `${t} · ${pt('late', locale)} ${rel}` : `${t} · ${pt('inTime', locale)} ${rel}`;
 }

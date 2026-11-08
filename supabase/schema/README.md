@@ -35,4 +35,5 @@ source of truth.
 | 31_pos_m11.sql | POS M11: pack barcodes (`product_barcodes.pack_qty/pack_price_*`, patch handler accepts objects), customer `credit_limit_cents` / `discount_pct`, shop `default_margin_pct` + scale-barcode settings (`scale_prefix/code_len/value_kind/value_divisor`), settings + customer upsert re-created |
 | 32_pos_notify.sql | Customer WhatsApp stages per shop: `shops.notify_stages text[]` (null = tenant default), `order_event_payload` carries shop/tenant stages (tenant default accepted/ready/out_for_delivery/rejected — no `delivered`), `pos_shop_settings` accepts `notify_stages` |
 | 33_pos_merge.sql | Customers & suppliers: `shop_customers.active`, ops `customer.merge` / `customer.delete` / `supplier.merge` / `supplier.delete` (history re-pointed, delete only without history → `has_history`), dispatcher re-created |
+| 34_pos_m12.sql | Scheduled orders `orders.needed_at` (sale.commit payload, op `order.needed`), customer address book `shop_customers.addresses` (`_addr_remember`, touch + upsert re-created), volume indexes on orders, `prune_sync_log(days)`, dispatcher re-created |
 | ../seed/batroun.sql | first tenant |

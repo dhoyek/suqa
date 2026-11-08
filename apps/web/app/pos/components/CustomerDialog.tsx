@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type OrderLine, type ShopCustomer } from '@suqa/pos-core';
+import { addressBook, coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, sameAddress, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type OrderLine, type SavedAddress, type ShopCustomer } from '@suqa/pos-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -17,6 +17,8 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const a0 = (draft.address ?? {}) as CustomerAddress;
   const [line1, setLine1] = useState(a0.line1 ?? ''); const [map, setMap] = useState(a0.map_url ?? ''); const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(a0.lat != null && a0.lng != null ? { lat: a0.lat, lng: a0.lng } : null);
   const [notes, setNotes] = useState(draft.notes ?? ''); const [when, setWhen] = useState('');
+  const [needed, setNeeded] = useState<string>(draft.needed_at ? toLocalInput(draft.needed_at) : '');   // datetime-local value, '' = as soon as possible
+  const [addrSel, setAddrSel] = useState<string>('new'); const [askAddr, setAskAddr] = useState<null | { repeat?: OrderLine[] }>(null);
   const defFee = Math.round(num(boot.shop.default_delivery_fee_usd) * 100);
   const [f, setF] = useState(fee ? (fee / 100).toString() : defFee ? (defFee / 100).toString() : '');
   const [matches, setMatches] = useState<ShopCustomer[]>([]); const [picked, setPicked] = useState<ShopCustomer | null>(null); const [showList, setShowList] = useState(false);
@@ -53,8 +55,9 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
 
   const pick = (c: ShopCustomer, closeList = true, replace = false) => {
     setPicked(c); setPhone(c.phone); if (replace || !name || c.name) setName(c.name || (replace ? '' : name));
-    const a = c.address ?? {};
+    const book = addressBook(c); const a: SavedAddress | CustomerAddress = book[0] ?? c.address ?? {};
     if (a.line1 && (replace || !line1)) setLine1(a.line1); if (a.map_url && (replace || !map)) setMap(a.map_url); if (a.lat != null && a.lng != null && (replace || !coords)) setCoords({ lat: a.lat, lng: a.lng });
+    if (book[0] && (replace || !line1)) setAddrSel(book[0].id);
     if (replace && isOrder && (a.line1 || a.lat != null)) setFul('delivery');
     if (closeList) setShowList(false); setPicker(false);
   };
@@ -62,18 +65,34 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const onPin = (p: { lat: number; lng: number }) => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); };
   const address: CustomerAddress = useMemo(() => ({ ...(line1.trim() ? { line1: line1.trim() } : {}), ...(map.trim() ? { map_url: map.trim() } : {}), ...(coords ? { lat: coords.lat, lng: coords.lng } : {}) }), [line1, map, coords]);
   const ok = !isOrder || key.length >= 6;
+  const book = useMemo(() => addressBook(picked), [picked]);
+  const selected = book.find(a => a.id === addrSel) ?? null;
+  const addrDirty = !!selected && Object.keys(address).length > 0 && !(selected.line1 === (address.line1 ?? selected.line1) && (selected.lat == null || address.lat == null || sameAddress(selected, address)));
+  const useAddr = (a: SavedAddress) => { setAddrSel(a.id); setLine1(a.line1 ?? ''); setMap(a.map_url ?? ''); setCoords(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null); };
+  const neededIso = needed ? new Date(needed).toISOString() : null;
+  const bump = (min: number) => { const d = new Date(Date.now() + min * 60000); d.setSeconds(0, 0); setNeeded(toLocalInput(d.toISOString())); };
+  const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); setNeeded(toLocalInput(d.toISOString())); };
 
+  /** A saved address was edited → ask whether to update it, keep it as a new one, or use it this once. */
   const submit = async (repeat?: OrderLine[]) => {
     if (!ok) return;
-    const n = name.trim();
-    if (key.length >= 6) {   // save the edits back to the customer record (name / address) — never clears a saved address with an empty one
-      const changed = !picked || picked.name !== n || (ful === 'delivery' && JSON.stringify(picked.address ?? {}) !== JSON.stringify(address));
-      if (changed) await upsertCustomer(boot.db, boot.shop.id, { phone: phone.trim(), name: n, ...(ful === 'delivery' && Object.keys(address).length ? { address } : {}) }).catch(() => undefined);
+    if (isOrder && ful === 'delivery' && addrDirty && !askAddr) { setAskAddr({ repeat }); return; }
+    await finish('new', repeat);
+  };
+  const finish = async (mode: 'update' | 'new' | 'once', repeat?: OrderLine[]) => {
+    setAskAddr(null);
+    const n = name.trim(); const delivery = isOrder && ful === 'delivery'; const hasAddr = delivery && Object.keys(address).length > 0;
+    const addr: CustomerAddress = mode === 'once' ? { ...address, transient: true } : address;
+    if (key.length >= 6) {   // save the edits back to the customer record (name / address book) — never clears a saved address with an empty one
+      const changed = !picked || picked.name !== n || (hasAddr && mode !== 'once' && (!selected || addrDirty));
+      let addresses: SavedAddress[] | undefined;
+      if (hasAddr && mode === 'update' && selected && picked) addresses = (picked.addresses?.length ? picked.addresses : book).map(a => a.id === selected.id ? { ...a, ...address, last_used_at: new Date().toISOString() } : a);
+      if (changed || addresses) await upsertCustomer(boot.db, boot.shop.id, { phone: phone.trim(), name: n, ...(hasAddr && mode !== 'once' ? { address } : {}), ...(addresses ? { addresses } : {}) }).catch(() => undefined);
       boot.engine.poke();
     }
     const noteText = [when.trim() ? `⏰ ${when.trim()}` : '', notes.trim()].filter(Boolean).join(' · ') || null;
-    onDone({ patch: { channel, customer_name: n, customer_phone: phone.trim(), discount_pct: picked?.discount_pct ? Number(picked.discount_pct) : null, fulfillment: isOrder ? ful : 'pickup', address: isOrder && ful === 'delivery' ? { ...address } as Record<string, unknown> : {}, notes: noteText },
-      feeCents: isOrder && ful === 'delivery' ? Math.round((Number(f) || 0) * 100) : 0, repeat });
+    onDone({ patch: { channel, customer_name: n, customer_phone: phone.trim(), discount_pct: picked?.discount_pct ? Number(picked.discount_pct) : null, fulfillment: isOrder ? ful : 'pickup', address: delivery ? { ...addr } as Record<string, unknown> : {}, notes: noteText, needed_at: isOrder ? neededIso : null },
+      feeCents: delivery ? Math.round((Number(f) || 0) * 100) : 0, repeat });
   };
 
   return (
@@ -118,7 +137,12 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
           <div className="stack">
             {isOrder && ful === 'delivery' && <>
               <label className="label">{pt('address', locale)}</label>
+              {book.length > 0 && <select className="input" value={selected ? selected.id : 'new'} onChange={e => { const a = book.find(x => x.id === e.target.value); if (a) useAddr(a); else { setAddrSel('new'); setLine1(''); setMap(''); setCoords(null); } }}>
+                {book.map(a => <option key={a.id} value={a.id}>📍 {a.label ? `${a.label} · ` : ''}{a.line1 || (a.lat != null ? `${a.lat.toFixed(4)}, ${a.lng?.toFixed(4)}` : '—')}</option>)}
+                <option value="new">＋ {pt('newAddress', locale)}</option>
+              </select>}
               <input className="input" value={line1} placeholder={pt('addressHint', locale)} onChange={e => setLine1(e.target.value)} />
+              {addrDirty && <small className="muted">✎ {pt('addrEdited', locale)}</small>}
               <label className="label">{pt('mapPin', locale)}</label>
               <div className="row" style={{ gap: 6 }}>
                 <input className="input" dir="ltr" placeholder="https://maps.google.com/?q=…" value={map} onChange={e => onMapText(e.target.value)} style={{ flex: 1 }} />
@@ -134,7 +158,15 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
               <label className="label">{pt('orderNotes', locale)}</label>
               <input className="input" value={notes} placeholder={pt('orderNotesHint', locale)} onChange={e => setNotes(e.target.value)} />
               <label className="label">{pt('neededAt', locale)}</label>
-              <input className="input" value={when} placeholder={pt('neededAtHint', locale)} onChange={e => setWhen(e.target.value)} />
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <button className={`chip ${!needed ? 'active' : ''}`} onClick={() => setNeeded('')}>⚡ {pt('asap', locale)}</button>
+                <button className="chip" onClick={() => bump(30)}>+30 {pt('min', locale)}</button><button className="chip" onClick={() => bump(60)}>+1 {pt('hour', locale)}</button><button className="chip" onClick={() => bump(120)}>+2 {pt('hour', locale)}</button>
+                <button className="chip" onClick={tomorrow}>{pt('tomorrow', locale)} 10:00</button>
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input" type="datetime-local" dir="ltr" value={needed} min={toLocalInput(new Date().toISOString())} onChange={e => setNeeded(e.target.value)} style={{ flex: 1 }} />
+                <input className="input" value={when} placeholder={pt('neededAtHint', locale)} onChange={e => setWhen(e.target.value)} style={{ flex: 1 }} />
+              </div>
             </>}
             {last && isOrder && <div className="card" style={{ background: '#fafafa', fontSize: 13 }}>
               <strong>{pt('lastOrder', locale)}</strong> <span className="muted">{last.order.number ?? last.order.local_number}</span>
@@ -144,6 +176,14 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
         </div>
       </Modal>
       {pickMap && <MapPicker locale={locale} initial={coords} onDone={onPin} onClose={() => setPickMap(false)} />}
+      {askAddr && <Modal open onClose={() => setAskAddr(null)} title={pt('addrChangedTitle', locale)}>
+        <p className="muted" style={{ marginTop: 0 }}>{pt('addrChangedHint', locale)}</p>
+        <div className="stack">
+          <button className="btn primary big" onClick={() => finish('update', askAddr.repeat)}>✎ {pt('addrUpdate', locale)}</button>
+          <button className="btn big" onClick={() => finish('new', askAddr.repeat)}>＋ {pt('addrSaveNew', locale)}</button>
+          <button className="btn ghost big" onClick={() => finish('once', askAddr.repeat)}>{pt('addrOnce', locale)}</button>
+        </div>
+      </Modal>}
       {picker && <CustomerPicker boot={boot} locale={locale} onPick={c => pick(c, true, true)} onNew={() => { setPicker(false); setPhone(''); setName(''); setPicked(null); setTimeout(() => phoneRef.current?.focus(), 50); }} onClose={() => setPicker(false)} />}
     </>
   );
@@ -165,4 +205,11 @@ function CustomerPicker({ boot, locale, onPick, onNew, onClose }: { boot: Booted
       </div>
     </Modal>
   );
+}
+
+/** ISO → value for <input type="datetime-local"> in the device's local time. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }

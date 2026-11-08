@@ -41,7 +41,7 @@ export interface Order {
   rate_lbp_per_usd: number; subtotal_cents: number; discount_cents: number; discount_reason?: string | null; total_cents: number; total_lbp: number;
   delivery_fee_usd?: number | string; total_usd?: number | string; courier_fee_cents?: number; courier_name?: string | null;
   paid_usd_cents: number; paid_lbp: number; change_usd_cents: number; change_lbp: number;
-  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null;
+  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null;
   placed_at: string; accepted_at?: string | null; delivered_at?: string | null; closed_at?: string | null; updated_at?: string;
 }
 export interface OrderLine {
@@ -60,12 +60,14 @@ export interface Supplier { id: string; shop_id: string; name: string; phone?: s
 export interface Purchase { id: string; shop_id: string; supplier_id: string; number: string; kind: 'purchase' | 'return'; invoice_no?: string | null; invoice_date: string; currency: Currency; rate: number; subtotal: number; discount: number; total: number; total_cents: number; note?: string | null; status: 'posted' | 'void'; void_reason?: string | null; user_id?: string | null; approved_by?: string | null; device_id?: string | null; at: string; updated_at?: string }
 export interface PurchaseLine { id: string; purchase_id: string; shop_id: string; product_id: string; name: Localized; qty: number; unit_cost: number; unit_cost_cents: number; line_total_cents: number; new_price_usd?: number | null; new_price_lbp?: number | null; expiry?: string | null; sort: number }
 export interface SupplierPayment { id: string; shop_id: string; supplier_id: string; purchase_id?: string | null; tender: 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'transfer'; currency: Currency; amount: number; amount_cents: number; rate: number; from_drawer: boolean; shift_id?: string | null; note?: string | null; user_id?: string | null; at: string }
-export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number }
-export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
+export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number; label?: string; transient?: boolean }
+/** One entry of a customer's address book (shop_customers.addresses). */
+export interface SavedAddress extends CustomerAddress { id: string; last_used_at?: string | null }
+export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; addresses?: SavedAddress[]; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7

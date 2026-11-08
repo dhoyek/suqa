@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer } from '../sync/fake-server';
 import { makeDevice, wipeAll, RATE } from './helpers';
 import { addToDraft, commitSale, newDraft } from '../sale';
-import { coordsFrom, customerHasHistory, deleteCustomer, fmtPhone, lastOrderOf, mergeCustomers, normPhone, openOrdersOf, searchCustomers, upsertCustomer } from '../customers';
+import { addressBook, sameAddress, coordsFrom, customerHasHistory, deleteCustomer, fmtPhone, lastOrderOf, mergeCustomers, normPhone, openOrdersOf, searchCustomers, upsertCustomer } from '../customers';
 
 afterEach(wipeAll);
 
@@ -48,5 +48,14 @@ describe('shop customers', () => {
     expect((await searchCustomers(a.db, 'keep')).length).toBe(0);
     const fresh = await upsertCustomer(a.db, server.shop.id, { phone: '70999888', name: 'Fresh' });
     await deleteCustomer(a.db, fresh); expect(await a.db.shopCustomers.get(fresh.id)).toBeUndefined();
+  });
+  it('address book: saved entries most recent first, legacy single address as fallback, fuzzy equality', () => {
+    const c = { id: 'c', shop_id: 's', phone: '70', phone_key: '70', name: 'x', orders_count: 0, address: { line1: 'Old' },
+      addresses: [{ id: 'a', line1: 'Home', last_used_at: '2026-01-01' }, { id: 'b', line1: 'Work', lat: 34.1, lng: 35.6, last_used_at: '2026-02-01' }] };
+    expect(addressBook(c).map(a => a.id)).toEqual(['b', 'a']);
+    expect(addressBook({ ...c, addresses: [] }).map(a => a.line1)).toEqual(['Old']);
+    expect(sameAddress({ line1: ' home ' }, { line1: 'Home' })).toBe(true);
+    expect(sameAddress({ lat: 34.1, lng: 35.6 }, { lat: 34.10005, lng: 35.60005, line1: 'anything' })).toBe(true);
+    expect(sameAddress({ line1: 'Home' }, { line1: 'Work' })).toBe(false);
   });
 });

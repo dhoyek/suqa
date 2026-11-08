@@ -17,7 +17,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
+type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'cats' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
@@ -54,8 +54,12 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const isOrder = draft.channel !== 'walkin';
   const feeCents = isOrder && draft.fulfillment === 'delivery' ? fee : 0;
   const grand = totals.total_cents + feeCents;
-  const results = useMemo(() => (q.trim() ? index.search(q, 60, cat) : index.byCategory(cat, 60)), [q, cat, index, tick]);
+  const [pop, setPop] = useState<Map<string, number>>(new Map());
+  useEffect(() => { boot.db.orderLines.toArray().then(ls => { const m = new Map<string, number>(); for (const l of ls) if (l.product_id && !l.voided) m.set(l.product_id, (m.get(l.product_id) ?? 0) + 1); setPop(m); }); }, [boot, tick]);
+  // search first: typing searches everything; browsing shows the most-sold items of the (optional) category first
+  const results = useMemo(() => (q.trim() ? index.search(q, 60, cat) : index.byCategory(cat, 400).sort((a, b) => (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0)).slice(0, 60)), [q, cat, index, tick, pop]);
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
+  const catName = cat ? text(cats.find(c => c.id === cat)?.name ?? {}, locale) : null;
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
@@ -132,9 +136,11 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (results.length === 1 ? results[0] : null); if (p) add(p); } }} />
           <button className="btn big" style={{ width: 'auto' }} title={pt('cameraScan', locale)} onClick={() => setDialog({ k: 'camera' })}>📷</button>
           <button className="btn big" style={{ width: 'auto' }} title={pt('openItem', locale)} onClick={() => setDialog({ k: 'open' })}>＋</button>
+          {!!cats.length && <button className={`btn big cat-btn ${cat ? 'primary' : ''}`} style={{ width: 'auto' }} title={pt('categories', locale)} onClick={() => setDialog({ k: 'cats' })}>🗂</button>}
         </div>
+        {catName && <div className="row" style={{ gap: 6, alignItems: 'center' }}><span className="pill">🗂 {catName}</span><button className="chip" onClick={() => setCat(null)}>✕ {pt('clearFilter', locale)}</button></div>}
         {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p)}>{b.label || text(p.name, locale)}</button> : null)}</div>}
-        <div className="chips">
+        <div className="chips cat-chips">
           <button className={`chip ${cat === null ? 'active' : ''}`} onClick={() => setCat(null)}>{pt('all', locale)}</button>
           {cats.map(c => <button key={c.id} className={`chip ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>{text(c.name, locale)}</button>)}
         </div>
@@ -203,6 +209,12 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'cats' && <Modal open onClose={() => setDialog(null)} title={pt('categories', locale)} footer={<><button className="btn" onClick={() => { setCat(null); setDialog(null); }}>✕ {pt('clearFilter', locale)}</button><span style={{ flex: 1 }} /><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button></>}>
+        <div className="cat-grid">
+          <button className={`item-tile ${cat === null ? 'active' : ''}`} onClick={() => { setCat(null); setDialog(null); }}>{pt('all', locale)}</button>
+          {cats.map(c => <button key={c.id} className={`item-tile ${cat === c.id ? 'active' : ''}`} onClick={() => { setCat(c.id); setDialog(null); }}>{text(c.name, locale)}</button>)}
+        </div>
+      </Modal>}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}

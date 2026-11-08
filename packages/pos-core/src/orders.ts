@@ -98,3 +98,10 @@ export async function deleteOrder(db: PosDb, order: Order, approved_by: string |
     await enqueue(db, 'order.delete', { id: order.id, approved_by });
   });
 }
+
+/** Move the time an order is wanted for (null = as soon as possible). */
+export async function setOrderNeeded(db: PosDb, order: Order, needed_at: string | null): Promise<Order> {
+  const updated: Order = { ...order, needed_at, updated_at: new Date().toISOString() };
+  await db.transaction('rw', [db.orders, db.outbox], async () => { await db.orders.put(updated); await enqueue(db, 'order.needed', { id: order.id, needed_at }); });
+  return updated;
+}

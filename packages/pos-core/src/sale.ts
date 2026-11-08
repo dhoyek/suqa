@@ -12,7 +12,7 @@ export interface DraftLine {
 }
 export interface Draft {
   id: string; channel: Channel; lines: DraftLine[]; discount_cents: number; discount_reason?: string | null;
-  customer_name?: string; customer_phone?: string; notes?: string | null; fulfillment?: 'delivery' | 'pickup'; address?: Record<string, unknown>;
+  customer_name?: string; customer_phone?: string; notes?: string | null; fulfillment?: 'delivery' | 'pickup'; address?: Record<string, unknown>; needed_at?: string | null;
   approved_by?: string | null; started_at: string;
   discount_pct?: number | null;        // customer discount % — applied on the subtotal at pay time when larger than discount_cents
 }
@@ -75,7 +75,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
       id: draft.id, tenant_id: shop?.tenant_id ?? '', shop_id: shop?.id ?? '', number: null, local_number,
       status, channel: draft.channel, device_id: deviceId ?? null, staff_user_id: input.staff_user_id ?? null, shift_id: input.shift_id ?? null, parked: false,
       customer_id: null, customer_name: draft.customer_name ?? '', customer_phone: draft.customer_phone ?? '', customer_notes: draft.notes ?? null,
-      address: draft.address ?? {}, fulfillment: draft.fulfillment ?? 'pickup', notify_customer: draft.channel !== 'walkin',
+      address: draft.address ?? {}, fulfillment: draft.fulfillment ?? 'pickup', notify_customer: draft.channel !== 'walkin', needed_at: draft.needed_at ?? null,
       rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: draft.discount_reason ?? (draft.discount_pct && t.discount_cents ? `${draft.discount_pct}%` : null),
       total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), total_usd: (t.total_cents + (input.delivery_fee_cents ?? 0)) / 100, delivery_fee_usd: (input.delivery_fee_cents ?? 0) / 100,
       paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
@@ -104,7 +104,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
       op_id: newId(), kind: 'sale.commit', schema_version: CURRENT_SCHEMA_VERSION, created_at: now, state: 'pending', tries: 0, next_try_at: 0,
       payload: {
         id: order.id, local_number, channel: order.channel, status, staff_user_id: order.staff_user_id, shift_id: order.shift_id,
-        customer_name: order.customer_name, customer_phone: order.customer_phone, notes: order.customer_notes, address: order.address, fulfillment: order.fulfillment,
+        customer_name: order.customer_name, customer_phone: order.customer_phone, notes: order.customer_notes, address: order.address, fulfillment: order.fulfillment, needed_at: order.needed_at ?? null,
         notify_customer: order.notify_customer, rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: order.discount_reason,
         total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), delivery_fee_cents: input.delivery_fee_cents ?? 0, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
         placed_at: now, approved_by: draft.approved_by ?? null,

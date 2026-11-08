@@ -21,6 +21,7 @@ create table if not exists suqa.shop_customers (
   orders_count  int not null default 0,
   last_order_at timestamptz,
   active        boolean not null default true,     -- 33: hidden from pickers when false
+  addresses     jsonb not null default '[]'::jsonb, -- 34: address book [{id,label,line1,map_url,lat,lng,last_used_at}]
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (shop_id, phone_key)

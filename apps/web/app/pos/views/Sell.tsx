@@ -173,6 +173,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
                 <button onClick={() => updateLine({ ...l, quantity: Math.max(l.decimal_qty ? 0.001 : 1, l.quantity - 1) })}>−</button>
                 <span>{l.quantity}</span>
                 <button onClick={() => updateLine({ ...l, quantity: l.quantity + 1 })}>+</button>
+                <button className="rm" title={pt('voidLine', locale)} onClick={() => updateLine({ ...l, voided: true })}>✕</button>
               </div>
               <strong className="num">{fmtUsd(Math.max(0, (l.price_currency === 'usd' ? Math.round(l.unit_price_cents * l.quantity) : Math.round((Math.round(l.unit_price_lbp * l.quantity) * 100) / rate)) - l.discount_cents))}</strong>
             </div>

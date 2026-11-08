@@ -30,6 +30,7 @@
 .item-name { font-weight: 700; font-size: 15px; line-height: 1.25; }
 .item-price { font-size: 13px; color: var(--brand-primary); font-weight: 600; }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.pos .qty-btns .rm { color: var(--bad); margin-inline-start: 4px; }
 @media (max-width: 760px) { .pos-sell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .pos-pane.cart { border-inline-start: 0; border-top: 1px solid var(--line); max-height: 45dvh; } }
 
 /* lock screen */

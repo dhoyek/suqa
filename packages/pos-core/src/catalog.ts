@@ -98,7 +98,7 @@ export class CatalogIndex {
   private rebuild(): void {
     this.rows = [];
     for (const p of this.byId.values()) {
-      this.rows.push({ id: p.id, norm: normalize(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.sku ?? ''} ${p.description?.ar ?? ''} ${p.description?.en ?? ''}`) });
+      this.rows.push({ id: p.id, norm: normalize(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.sku ?? ''} ${[...(this.barcodesOf.get(p.id) ?? [])].join(' ')} ${p.description?.ar ?? ''} ${p.description?.en ?? ''}`) });
     }
     this.dirty = false;
   }

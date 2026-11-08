@@ -55,7 +55,8 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .topbar { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--line); }
 .topbar .container { display: flex; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 10px; }
 .brand { font-weight: 800; color: var(--brand-primary); font-size: 18px; text-decoration: none; }
-.tabs { display: flex; gap: 4px; margin-inline-start: auto; }
+.tabs { display: flex; gap: 4px; margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; }
+.tab.pos-tab { background: var(--brand-primary); color: #fff; }
 .tab { padding: 8px 12px; border-radius: 10px; text-decoration: none; color: var(--muted); font-weight: 600; }
 .tab.active { background: #eef6f8; color: var(--brand-primary); }
 

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DebtAllocation, DebtSettlement, Barcode, CashMove, Category, Conflict, CustomerSeen, Device, Order, OrderLine, OutboxOp, Payment, Product, QuickButton, Rate, Shift, Staff, StockMove } from './types';
+import type { DebtAllocation, DebtSettlement, ShopCustomer, Barcode, CashMove, Category, Conflict, CustomerSeen, Device, Order, OrderLine, OutboxOp, Payment, Product, QuickButton, Rate, Shift, Staff, StockMove } from './types';
 
 // One IndexedDB database per shop: suqa-pos-<shopId>. A user with two shops never mixes their data.
 //
@@ -33,6 +33,7 @@ export class PosDb extends Dexie {
   returnLines!: Table<Record<string, unknown> & { id: string }, string>;
   debtSettlements!: Table<DebtSettlement, string>;
   debtAllocations!: Table<DebtAllocation, string>;
+  shopCustomers!: Table<ShopCustomer, string>;
 
   constructor(name: string) {
     super(name);
@@ -73,6 +74,7 @@ export class PosDb extends Dexie {
       debtSettlements: 'id, phone, at',
       debtAllocations: 'id, settlement_id, order_id',
     });
+    this.version(6).stores({ shopCustomers: 'id, phone_key, name, last_order_at' });   // M8 customers
   }
 }
 

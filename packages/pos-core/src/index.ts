@@ -11,3 +11,4 @@ export * from './catalog-edit';
 export * from './orders';
 export * from './reports';
 export * from './debts';
+export * from './customers';

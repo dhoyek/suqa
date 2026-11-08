@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hashPin, isValidPin, type Conflict, type Device, type Staff, type SyncStatus } from '@suqa/pos-core';
 import StaffPanel from '../components/StaffPanel';
+import ShopSettings from '../components/ShopSettings';
 import { pt, type L } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -79,6 +80,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
         </div>
       </section>
+      {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🌐 {pt('language', locale)}</h3>
         <div className="row" style={{ gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -20,6 +20,7 @@ create table if not exists suqa.shops (
   pickup_enabled   boolean not null default true,              -- customers may collect from the shop (20_fulfillment)
   -- POS (21_pos)
   pos_enabled          boolean not null default false,         -- tenant switches the POS on per shop
+  default_delivery_fee_usd numeric(12,2) not null default 0,     -- pre-filled delivery fee for WhatsApp/phone orders (28_pos_customers)
   offline_days         int     not null default 30 check (offline_days between 1 and 90),   -- PIN unlock allowed this long without internet
   max_discount_pct     numeric(5,2) not null default 10,       -- above this a cashier needs the owner PIN
   allow_negative_stock boolean not null default true,

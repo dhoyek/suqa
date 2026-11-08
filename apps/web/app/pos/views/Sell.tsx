@@ -7,6 +7,7 @@ import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
+import CustomerDialog from '../components/CustomerDialog';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
@@ -196,7 +197,9 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'customer' && <CustomerDialog locale={locale} draft={draft} fee={fee} onDone={(patch, f) => { setDraft(d => ({ ...d, ...patch })); setFee(f); setDialog(null); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'customer' && <CustomerDialog boot={boot} locale={locale} draft={draft} fee={fee} onDone={r => {
+        setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = addToDraft(n, p, num(l.quantity)); } return n; });
+        setFee(r.feeCents); setDialog(null); }} onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -256,31 +259,5 @@ function ReasonDialog({ locale, title, onDone, onClose }: { locale: L; title: st
   const [r, setR] = useState('');
   return <Modal open onClose={onClose} title={title} footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><button className="btn danger" onClick={() => onDone(r.trim())}>{title}</button></>}>
     <label className="label">{pt('cancelReason', locale)}</label><input className="input" value={r} onChange={e => setR(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') onDone(r.trim()); }} />
-  </Modal>;
-}
-
-function CustomerDialog({ locale, draft, fee, onDone, onClose }: { locale: L; draft: Draft; fee: number; onDone: (patch: Partial<Draft>, feeCents: number) => void; onClose: () => void }) {
-  const [channel, setChannel] = useState<Draft['channel']>(draft.channel);
-  const [name, setName] = useState(draft.customer_name ?? ''); const [phone, setPhone] = useState(draft.customer_phone ?? '');
-  const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.fulfillment ?? 'pickup');
-  const addr = (draft.address ?? {}) as Record<string, string>;
-  const [line1, setLine1] = useState(addr.line1 ?? ''); const [map, setMap] = useState(addr.map_url ?? ''); const [f, setF] = useState(fee ? (fee / 100).toString() : '');
-  const isOrder = channel !== 'walkin';
-  const ok = !isOrder || phone.trim().length >= 6;
-  const submit = () => { if (!ok) return; onDone({ channel, customer_name: name.trim(), customer_phone: phone.trim(), fulfillment: isOrder ? ful : 'pickup', address: isOrder && ful === 'delivery' ? { line1: line1.trim(), map_url: map.trim() } : {} }, isOrder && ful === 'delivery' ? Math.round((Number(f) || 0) * 100) : 0); };
-  return <Modal open onClose={onClose} title={pt('customer', locale)} footer={<><button className="btn ghost" onClick={() => onDone({ channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {} }, 0)}>✕</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={submit}>{pt('ok', locale)}</button></>}>
-    <label className="label">{pt('channelLabel', locale)}</label>
-    <div className="seg" style={{ marginBottom: 8 }}>{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div>
-    <label className="label">{pt('customerPhone', locale)}{isOrder ? ' *' : ''}</label><input className="input" inputMode="tel" dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} autoFocus />
-    <label className="label">{pt('customerName', locale)}</label><input className="input" value={name} onChange={e => setName(e.target.value)} />
-    {isOrder && <>
-      <label className="label">{pt('fulfillment', locale)}</label>
-      <div className="seg" style={{ marginBottom: 8 }}><button className={ful === 'pickup' ? 'active' : ''} onClick={() => setFul('pickup')}>🛍 {pt('pickupBadge', locale)}</button><button className={ful === 'delivery' ? 'active' : ''} onClick={() => setFul('delivery')}>🛵 {pt('deliveryBadge', locale)}</button></div>
-      {ful === 'delivery' && <>
-        <label className="label">{pt('address', locale)}</label><input className="input" value={line1} onChange={e => setLine1(e.target.value)} />
-        <label className="label">{pt('mapPin', locale)}</label><input className="input" dir="ltr" placeholder="https://maps.app.goo.gl/…" value={map} onChange={e => setMap(e.target.value)} />
-        <label className="label">{pt('deliveryFee', locale)} ($)</label><input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => setF(e.target.value)} />
-      </>}
-    </>}
   </Modal>;
 }

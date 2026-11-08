@@ -249,3 +249,12 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* Logical properties keep both directions right; explicit RTL tweaks */
 [dir="rtl"] .pos .num, [dir="rtl"] .pos .kpi strong, [dir="rtl"] .pos .kpi small { direction: ltr; unicode-bidi: isolate; }
 [dir="rtl"] .pos input[type="date"] { direction: ltr; text-align: end; }
+
+/* customer dialog (M8) */
+.cust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .cust-grid { grid-template-columns: 1fr; } }
+.cust-list { position: absolute; inset-inline: 0; top: 100%; z-index: 5; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 260px; overflow: auto; }
+.cust-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: start; min-height: 44px; cursor: pointer; }
+.cust-list button:hover, .cust-list button:focus { background: #eef6f8; }
+.cust-list button small { font-size: 12px; }
+.leaflet-container { font: inherit; }

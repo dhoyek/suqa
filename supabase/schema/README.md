@@ -29,4 +29,5 @@ source of truth.
 | 25_pos_m6.sql | POS M6: `staff_invites` + `pos_staff_invite` / `pos_staff_set` / `pos_staff_list` (add staff by WhatsApp number, claimed on first sign-in), `pos_my_shops` (admins open any POS-enabled shop), `pos_report` (period report), `pos_export` (per-shop export), COD settlement (`orders.courier_fee_cents`, `courier_name`) |
 | 26_pos_m7.sql | POS M7 debt book: `debt_settlements` + `debt_allocations`, `order_debt_cents`, `open_debts`, op `debt.settle` (dispatcher re-created), snapshot keeps every order that carried a debt, report `unpaid` = open debts + `debt_collected_cents` |
 | 27_pos_order_delete.sql | POS: `order.delete` op (`_pos_order_delete`, cancelled/rejected only, audit copy kept), dispatcher re-created, `stock_moves_apply` allows detaching the order reference |
+| 28_pos_customers.sql | POS M8: `shop_customers` (synced; auto-filled from every order, `_phone_key` matching), op `customer.upsert`, `pos_shop_settings` (owner edits POS switches from the POS), `shops.default_delivery_fee_usd`; dispatcher + snapshot re-created |
 | ../seed/batroun.sql | first tenant |

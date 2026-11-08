@@ -11,8 +11,8 @@ export interface DebtLine {
 }
 export interface DebtPerson { phone: string; name: string; lines: DebtLine[]; outstanding_cents: number; original_cents: number; last_at: string }
 
-/** Canonical local form so "+961 70 000 000", "0096170000000", "070000000" and "70000000" are the same person. */
-export const normPhone = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '').replace(/^00/, '').replace(/^961/, '').replace(/^0/, '');
+import { normPhone } from './customers';
+export { normPhone };
 
 const unpaidCents = (p: Payment, o: Order) => (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || 1)) : num(p.amount));
 

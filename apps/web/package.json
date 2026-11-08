@@ -15,6 +15,7 @@
     "@suqa/pos-core": "*",
     "@suqa/shared": "*",
     "barcode-detector": "^3.0.5",
+    "leaflet": "^1.9.4",
     "next": "^15.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
@@ -24,6 +25,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.12",
     "@types/node": "^22",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",

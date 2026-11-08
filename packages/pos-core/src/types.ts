@@ -29,7 +29,7 @@ export interface Device { id: string; shop_id: string; name: string; prefix: str
 export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;
   allow_negative_stock: boolean; lbp_rounding_step: number; deduct_stock_at: 'ready' | 'delivered'; hide_online_when_zero: boolean;
-  receipt_footer?: string | null; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
+  receipt_footer?: string | null; default_delivery_fee_usd?: number | string; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
 }
 
 export interface Order {
@@ -55,10 +55,12 @@ export interface CashMove { id: string; shift_id: string; kind: 'in' | 'out'; am
 export interface DebtSettlement { id: string; shop_id: string; phone: string; name?: string | null; tender: Exclude<Tender, 'unpaid'>; currency: Currency; amount: number; amount_cents: number; rate: number; note?: string | null; user_id?: string | null; device_id?: string | null; shift_id?: string | null; at: string }
 export interface DebtAllocation { id: string; settlement_id: string; shop_id: string; order_id: string; amount_cents: number }
 export interface Conflict { id: string; tbl: string; row_id: string; field: string; old_value: unknown; new_value: unknown; by_device?: string | null; at: string; seen: boolean }
+export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number }
+export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7
@@ -78,7 +80,7 @@ export interface Snapshot {
   cursor: number; server_now: string; role: Role; device: Pick<Device, 'id' | 'prefix' | 'name'>; shop: Shop;
   categories: Category[]; products: Product[]; product_barcodes: Barcode[]; quick_buttons: QuickButton[]; exchange_rates: Rate[];
   shop_members: Staff[]; devices: Device[]; orders: Order[]; order_items: OrderLine[]; payments: Payment[]; shifts: Shift[]; cash_moves: CashMove[]; stock_moves: StockMove[];
-  debt_settlements?: DebtSettlement[]; debt_allocations?: DebtAllocation[];
+  debt_settlements?: DebtSettlement[]; debt_allocations?: DebtAllocation[]; shop_customers?: ShopCustomer[];
 }
 
 export class SyncError extends Error {

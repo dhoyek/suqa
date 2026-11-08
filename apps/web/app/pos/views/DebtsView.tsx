@@ -24,7 +24,7 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
   const step = boot.shop.lbp_rounding_step ?? 5000;
 
   useEffect(() => {
-    debtLines(boot.db).then(setAll);
+    (async () => { const ls = await debtLines(boot.db); const cs = await boot.db.shopCustomers.toArray(); const byKey = new Map(cs.map(c => [c.phone_key, c.name])); setAll(ls.map(l => ({ ...l, name: l.name || byKey.get(l.phone) || '' }))); })();
     boot.db.debtSettlements.orderBy('at').reverse().limit(50).toArray().then(setHistory);
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
   }, [boot, tick, done]);

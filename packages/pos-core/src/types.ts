@@ -30,6 +30,7 @@ export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;
   allow_negative_stock: boolean; lbp_rounding_step: number; deduct_stock_at: 'ready' | 'delivered'; hide_online_when_zero: boolean;
   receipt_footer?: string | null; default_delivery_fee_usd?: number | string; default_margin_pct?: number | string; scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: 'weight' | 'price_lbp' | 'price_usd'; scale_value_divisor?: number; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
+  notify_stages?: string[] | null;             // customer WhatsApp stages (null = tenant default)
 }
 
 export interface Order {

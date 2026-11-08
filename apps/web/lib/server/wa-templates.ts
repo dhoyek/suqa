@@ -31,6 +31,13 @@ export const TEMPLATES: TemplateDef[] = [
     button: { text: 'عرض الإيصال', url: 'https://suqa-dev.netlify.app/r/{{1}}', example: 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001' },
   },
   {
+    // Compact order update (replaces order_status): one line of status, tracking button. {{1}} shop, {{2}} order no, {{3}} status line.
+    name: 'order_update_v2', language: 'ar', category: 'UTILITY',
+    text: '{{1}} — طلب {{2}}\n{{3}}',
+    samples: ['سمانة أبو إيلي', 'BAT-000030', '✅ تم قبول طلبك: 2× لبنة، 1× خبز — $8.50 — توصيل خلال 30 دقيقة'],
+    button: { text: 'تتبّع الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
+  },
+  {
     // POS M9: ask a customer for their location pin (delivery orders typed in at the POS).
     name: 'location_request', language: 'ar', category: 'UTILITY',
     text: 'مرحباً {{1}}، لتوصيل طلبكم من {{2}} نرجو إرسال موقعكم على واتساب: اضغطوا على 📎 ثم «الموقع» وأرسلوا موقع البيت. شكراً.',

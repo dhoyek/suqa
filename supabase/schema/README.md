@@ -33,4 +33,5 @@ source of truth.
 | 29_pos_m9.sql | POS M9: `pos_delivery_fee(shop, lat, lng)` (zone fee for a pin), `wa_attach_location` (WhatsApp location replies pinned on customers + open delivery orders) |
 | 30_pos_m10.sql | POS M10 purchases-lite: `suppliers` (balance by trigger), `purchases` + `purchase_lines`, `supplier_payments`, ops `supplier.upsert` / `purchase.commit` / `purchase.void` / `supplier.pay`, stock kinds `purchase` / `purchase_return`; dispatcher, snapshot, report re-created |
 | 31_pos_m11.sql | POS M11: pack barcodes (`product_barcodes.pack_qty/pack_price_*`, patch handler accepts objects), customer `credit_limit_cents` / `discount_pct`, shop `default_margin_pct` + scale-barcode settings (`scale_prefix/code_len/value_kind/value_divisor`), settings + customer upsert re-created |
+| 32_pos_notify.sql | Customer WhatsApp stages per shop: `shops.notify_stages text[]` (null = tenant default), `order_event_payload` carries shop/tenant stages (tenant default accepted/ready/out_for_delivery/rejected — no `delivered`), `pos_shop_settings` accepts `notify_stages` |
 | ../seed/batroun.sql | first tenant |

@@ -16,12 +16,15 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
   const [days, setDays] = useState(String(s.offline_days ?? 30)); const [footer, setFooter] = useState(s.receipt_footer ?? '');
   const [marginPct, setMarginPct] = useState(String(num(s.default_margin_pct) || ''));
   const [scPrefix, setScPrefix] = useState(s.scale_prefix ?? ''); const [scLen, setScLen] = useState(String(s.scale_code_len ?? 5)); const [scKind, setScKind] = useState<'weight' | 'price_lbp' | 'price_usd'>(s.scale_value_kind ?? 'weight'); const [scDiv, setScDiv] = useState(String(s.scale_value_divisor ?? 1000));
+  const STAGES = ['accepted', 'ready', 'out_for_delivery', 'delivered', 'rejected'] as const;
+  const DEF_STAGES: string[] = ['accepted', 'ready', 'out_for_delivery', 'rejected'];
+  const [stages, setStages] = useState<string[]>(s.notify_stages ?? DEF_STAGES);
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true); setMsg(null);
     try {
       const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, receipt_footer: footer.trim() || null,
-        default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000 };
+        default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000, notify_stages: stages };
       const { data, error } = await sb.rpc('pos_shop_settings', { p_shop: s.id, p_patch: patch });
       if (error) { setMsg(error.message); return; }
       Object.assign(boot.shop, data as Shop); await setMeta(boot.db, META.shop, boot.shop); setMsg(pt('saved', locale));
@@ -53,6 +56,11 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
         <F label={pt('scaleCodeLen', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scLen} onChange={e => setScLen(e.target.value)} /></F>
         <F label={pt('scaleValue', locale)}><select className="input" value={scKind} onChange={e => setScKind(e.target.value as typeof scKind)}><option value="weight">{pt('scaleWeight', locale)}</option><option value="price_lbp">{pt('scalePriceLbp', locale)}</option><option value="price_usd">{pt('scalePriceUsd', locale)}</option></select></F>
         <F label={pt('scaleDivisor', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scDiv} onChange={e => setScDiv(e.target.value)} /></F>
+      </div>
+      <h4 style={{ margin: '14px 0 4px' }}>💬 {pt('notifyStages', locale)}</h4>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 6px' }}>{pt('notifyHint', locale)}</p>
+      <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+        {STAGES.map(st => <label key={st} className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={stages.includes(st)} onChange={e => setStages(e.target.checked ? [...stages, st] : stages.filter(x => x !== st))} /> {pt(`st_${st}`, locale)}</label>)}
       </div>
       <label className="label" style={{ marginTop: 8 }}>{pt('receiptFooter', locale)}</label>
       <input className="input" value={footer} onChange={e => setFooter(e.target.value)} />

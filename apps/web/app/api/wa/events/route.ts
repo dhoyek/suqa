@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -31,7 +31,8 @@ export async function POST(req: Request) {
     // which still delivers inside the customer's 24 h window.
     const send = useTpl && tpl
       ? waSendTemplate(n, tpl.name, tpl.lang, tplComponents(tpl), from).catch(err => {
-          console.warn('[wa events] template failed, sending text', tpl.name, (err as Error).message.slice(0, 160));
+          console.warn('[wa events] template failed', tpl.name, (err as Error).message.slice(0, 160));
+          if (tpl.fallback) return waSendTemplate(n, tpl.fallback.name, tpl.fallback.lang, tplComponents(tpl.fallback), from).catch(() => waSendText(n, text, from));
           return waSendText(n, text, from);
         })
       : waSendText(n, text, from);
@@ -43,6 +44,8 @@ export async function POST(req: Request) {
   if (e.event === 'order.created') {
     // orders the shop typed into its own POS (whatsapp/phone) don't need a shop alert
     if (!e.channel || e.channel === 'online') to(e.shop?.whatsapp, shopNewOrder(e, origin), 'shop', shopNewOrderTpl(e, origin));
+    // WhatsApp/phone orders typed in at the POS start as accepted → the customer gets the confirmation right away
+    else if (e.order.status === 'accepted' && shouldNotifyCustomer(e)) to(e.order.customer_phone, customerConfirm(e, origin), 'customer', customerConfirmTpl(e, origin));
   } else if (e.event === 'order.edited') {
     if (e.order.notify_customer !== false) to(e.order.customer_phone, customerEdited(e, origin), 'customer', customerEditedTpl(e, origin));
   } else if (e.event === 'order.status') {

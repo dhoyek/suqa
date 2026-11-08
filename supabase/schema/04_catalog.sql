@@ -26,6 +26,7 @@ create table if not exists suqa.shops (
   scale_code_len       int not null default 5,
   scale_value_kind     text not null default 'weight' check (scale_value_kind in ('weight','price_lbp','price_usd')),
   scale_value_divisor  int not null default 1000,
+  notify_stages        text[],                                     -- customer WhatsApp steps; null = tenant default (32_pos_notify)
   offline_days         int     not null default 30 check (offline_days between 1 and 90),   -- PIN unlock allowed this long without internet
   max_discount_pct     numeric(5,2) not null default 10,       -- above this a cashier needs the owner PIN
   allow_negative_stock boolean not null default true,

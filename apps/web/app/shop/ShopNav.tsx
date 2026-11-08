@@ -19,10 +19,9 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
         </select>
       )}
       <nav className="tabs">
-        {labels.pos && <a href="/pos" className="tab pos-tab">🧾 {labels.pos}</a>}
-        <Link href={`/shop${q}`} className={`tab ${path === '/shop' ? 'active' : ''}`}>{labels.orders}</Link>
-        <Link href={`/shop/products${q}`} className={`tab ${path.startsWith('/shop/products') ? 'active' : ''}`}>{labels.products}</Link>
-        <Link href={`/shop/settings${q}`} className={`tab ${path.startsWith('/shop/settings') ? 'active' : ''}`}>{labels.myShop}</Link>
+        <a href="/pos#orders" className="tab pos-tab">🧾 {labels.pos} · {labels.orders}</a>
+        <a href="/pos#items" className="tab">🏷 {labels.products}</a>
+        <Link href={`/shop/settings${q}`} className={`tab ${path.startsWith('/shop/settings') ? 'active' : ''}`}>⚙ {labels.myShop}</Link>
         {slug && <Link href={`/s/${slug}`} className="tab" title={labels.viewAsCustomer}>👁 {labels.viewAsCustomer}</Link>}
         <Link href="/" className="tab" title={labels.home}>🏠</Link>
         <form action="/auth/signout" method="post"><button className="btn ghost muted" type="submit">{labels.signOut}</button></form>

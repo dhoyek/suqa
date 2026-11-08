@@ -336,3 +336,11 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
 .cat-grid .item-tile.active { outline: 2px solid var(--brand, #1f6f8b); }
 @media (max-width: 760px) { .cat-chips { display: none; } }
+/* phones: order actions as big tappable tiles, tables scroll inside the card without wrapping cells */
+@media (max-width: 760px) {
+  .order-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .order-actions .btn { flex: 1 1 45%; min-height: 44px; font-size: 14px; }
+  .order-card .thread { font-size: 13px; }
+  .pos .card .table td, .pos .card .table th { white-space: nowrap; }
+  .cust-grid .row { flex-wrap: wrap; }
+}

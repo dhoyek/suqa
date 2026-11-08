@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
+import { pointFromEwkb } from '@suqa/shared';
+import OrderThread from '@/components/OrderThread';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
@@ -22,7 +24,8 @@ const loadCols = (): Set<Col> => { try { const v = JSON.parse(localStorage.getIt
  * Reads the local mirror (works offline); every action queues an op; the feed brings other devices' actions back within seconds.
  * Handover: pickup → pay dialog; courier delivery → cash on delivery recorded automatically; already-paid orders just close.
  */
-export default function OrdersView({ boot, locale, index, tick, staff, onNewOrder }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; onNewOrder: () => void }) {
+export default function OrdersView({ boot, locale, index, tick, staff, status, onNewOrder }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; status?: SyncStatus | null; onNewOrder: () => void }) {
+  const online = status?.online ?? (typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
@@ -94,7 +97,9 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
                   <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <span className="row" style={{ gap: 6, display: 'inline-flex', alignItems: 'center' }}><span dir="ltr">{o.customer_phone}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(o.customer_phone)}`} title={pt('call', locale)} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(o.customer_phone)}`} target="_blank" rel="noreferrer" title="WhatsApp" onClick={e => e.stopPropagation()}>💬</a></span>}</div>
                   <div className="order-items">{ls.map(l => <div key={l.id}>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''}</div>)}</div>
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
-                  {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {String((o.address as Record<string, unknown>).line1 ?? (o.address as Record<string, unknown>).area ?? '')}{(o.address as Record<string, unknown>).map_url ? <> · <a href={String((o.address as Record<string, unknown>).map_url)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>map</a></> : null}</div>}
+                  {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
+                  {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
+                  {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(num(o.total_lbp), locale)}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
@@ -193,3 +198,13 @@ function neededLabel(iso: string, locale: L): string {
 
 /** wa.me / tel want the international number without '+': 70 483 148 → 96170483148. */
 const waDigits = (p: string) => { const k = p.replace(/\D/g, '').replace(/^00/, ''); return k.startsWith('961') ? k : '961' + k.replace(/^0/, ''); };
+
+/** Online orders carry line1/line2/notes/label + a PostGIS point; POS-typed ones carry line1 + map_url/lat/lng. */
+function addrLine(a: Record<string, unknown>): string {
+  return [a.line1, a.line2].filter(Boolean).map(String).join(', ') || String(a.label ?? a.area ?? '') + (a.notes ? ` — ${a.notes}` : '');
+}
+function mapHref(a: Record<string, unknown>): string | null {
+  if (a.map_url) return String(a.map_url);
+  const p = (a.lat != null && a.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a.location as string | null | undefined);
+  return p ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : null;
+}

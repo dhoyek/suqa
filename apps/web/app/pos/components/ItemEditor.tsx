@@ -4,6 +4,7 @@ import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type Cata
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
+import ImageUpload from '@/components/ImageUpload';
 import Modal from './Modal';
 import OwnerPin from './OwnerPin';
 
@@ -23,6 +24,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   const [price, setPrice] = useState(product ? (product.price_currency === 'lbp' ? String(product.price_lbp) : String(Number(product.price_usd))) : '');
   const [cost, setCost] = useState(product?.cost_cents != null ? (product.cost_cents / 100).toString() : '');
   const [sku, setSku] = useState(product?.sku ?? '');
+  const [dAr, setDAr] = useState(product?.description?.ar ?? ''); const [dEn, setDEn] = useState(product?.description?.en ?? ''); const [img, setImg] = useState<string | null>(product?.image_url ?? null);
+  const online = typeof navigator === 'undefined' ? true : navigator.onLine;
   type Bc = { barcode: string; pack_qty: number; pack_price_usd: number | null };
   const [bcs, setBcs] = useState<Bc[]>(() => (product ? index.barcodes(product.id).map(b => { const r = index.barcodeRows.get(b); return { barcode: b, pack_qty: Number(r?.pack_qty ?? 1) || 1, pack_price_usd: r?.pack_price_usd != null && r.pack_price_usd !== '' ? Number(r.pack_price_usd) : null }; }) : presetBarcode ? [{ barcode: normBarcode(presetBarcode), pack_qty: 1, pack_price_usd: null }] : []));
   const marginPct = Number(boot.shop.default_margin_pct) || 0;
@@ -50,7 +53,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
       price_usd: cur === 'usd' ? priceNum : Number(product?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(product?.price_lbp ?? 0),
       sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0,
-      visible_online: vis, is_available: avail, is_active: active,
+      visible_online: vis, is_available: avail, is_active: active, image_url: img,
+      description: { ar: dAr.trim(), en: dEn.trim() },
     };
     if (owner) fields.cost_cents = cost === '' ? null : Math.round(Number(cost) * 100);
     return fields;
@@ -83,6 +87,12 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
           {owner && <label className="label">{pt('cost', locale)} ($)<div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" inputMode="decimal" value={cost} onChange={e => setCost(e.target.value)} style={{ flex: 1 }} />{marginPct > 0 && <button type="button" className="btn" title={`${pt('defaultMargin', locale)} ${marginPct}%`} onClick={priceFromMargin}>{pt('fromMargin', locale)} {marginPct}%</button>}</div>
             {Number(cost) > 0 && cur === 'usd' && Number(price) > 0 && <small className={`muted ${Number(price) < Number(cost) ? 'bad' : ''}`}>{pt('margin', locale)} {Math.round(((Number(price) - Number(cost)) / Number(price)) * 100)}%</small>}</label>}
           <label className="label">{pt('sku', locale)}<input className="input" dir="ltr" value={sku} onChange={e => setSku(e.target.value)} /></label>
+          <label className="label">{pt('descAr', locale)}<input className="input" value={dAr} onChange={e => setDAr(e.target.value)} /></label>
+          <label className="label">{pt('descEn', locale)}<input className="input" dir="ltr" value={dEn} onChange={e => setDEn(e.target.value)} /></label>
+          <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('photo', locale)}
+            {online ? <ImageUpload shopId={boot.shop.id} kind="product" value={img} onChange={setImg} locale={locale} shape="square" labels={{ add: pt('addPhoto', locale), change: pt('changePhoto', locale), remove: pt('removePhoto', locale) }} />
+              : <small className="muted">{pt('photoOffline', locale)}</small>}
+          </div>
           <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('barcodes', locale)}
             <div className="stack" style={{ gap: 4, margin: '4px 0' }}>{bcs.map((b, i) => <div key={b.barcode} className="row" style={{ gap: 6, alignItems: 'center' }}>
               <span className="chip" dir="ltr" style={{ minWidth: 120 }}>{b.barcode}</span>

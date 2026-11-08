@@ -9,8 +9,8 @@ export default function StoreHeader({ brand, labels, signedIn, staff = false, po
       <div className="container">
         <Link href="/" className="brand">{brand}</Link>
         <nav className="tabs">
-          {signedIn && pos && <a href="/pos" className="tab">🧾 {labels.pos}</a>}
-          {signedIn && staff && <Link href="/shop" className="tab">{labels.myShop}</Link>}
+          {signedIn && staff && <a href="/pos" className="tab">🧾 {labels.pos}</a>}
+          {signedIn && staff && <Link href="/shop/settings" className="tab">{labels.myShop}</Link>}
           {signedIn ? <Link href="/orders" className="tab">{labels.myOrders}</Link> : <Link href="/login?next=/orders" className="tab">{labels.signIn}</Link>}
           <Link href="/cart" className="tab cart-tab" aria-label={labels.cart}>
             🧺 {count > 0 && <span className="count">{count}</span>}

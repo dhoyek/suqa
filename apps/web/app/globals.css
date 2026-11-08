@@ -192,3 +192,10 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .product { flex-wrap: wrap; }
 .checkout-bar { display: none; }
 @media (max-width: 640px) { .checkout-bar { display: block; } .checkout-inline { display: none; } .stack:has(> .checkout-bar) { padding-bottom: 80px; } }
+/* phones: the top tabs scroll sideways instead of stacking; checkout/cart cards breathe */
+@media (max-width: 640px) {
+  .topbar .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .topbar .tabs::-webkit-scrollbar { display: none; }
+  .topbar .tabs .tab { white-space: nowrap; }
+  .addr .btn { min-height: 36px; }
+}

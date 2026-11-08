@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender , debtLines, findCustomer, normPhone } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
+import type { Booted } from '../lib/boot';
 import Modal, { NumPad } from './Modal';
 
 type TenderRow = Omit<Payment, 'id' | 'order_id' | 'at'>;
@@ -16,10 +17,10 @@ const LBP_NOTES = [50000, 100000, 500000, 1000000];
  * customer would hand over for what remains. The layout never reflows when switching tender or currency.
  */
 export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number };
-export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, courier, title }: {
+export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, courier, title, boot, isOwner }: {
   totalCents: number; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
   /** delivery handover: ask who delivered and the driver's fee (recorded as cash out of the drawer) */
-  courier?: { name?: string | null } | null; title?: string;
+  courier?: { name?: string | null } | null; title?: string; boot?: Booted; isOwner?: boolean;
   onConfirm: (payments: TenderRow[], changeIn: Currency, extra?: CourierExtra) => Promise<void>; onClose: () => void;
 }) {
   const [drvName, setDrvName] = useState(courier?.name ?? ''); const [drvFee, setDrvFee] = useState(''); const [drvCur, setDrvCur] = useState<Currency>('usd');
@@ -56,7 +57,19 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
     return out.sort((a, b) => a - b).slice(0, 6);
   }, [cur, committed.remaining_cents]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const validatePending = () => { if (tender === 'unpaid' && (!uName.trim() || !uPhone.trim())) { setErr(pt('unpaidNeedsName', locale)); return false; } return true; };
+  const [credit, setCredit] = useState<{ limit: number; outstanding: number } | null>(null);
+  useEffect(() => {
+    if (!boot || tender !== 'unpaid' || normPhone(uPhone).length < 6) { setCredit(null); return; }
+    let on = true;
+    (async () => { const c = await findCustomer(boot.db, uPhone); if (!c?.credit_limit_cents) { if (on) setCredit(null); return; } const ls = await debtLines(boot.db, { openOnly: true, phones: [uPhone] }); if (on) setCredit({ limit: c.credit_limit_cents, outstanding: ls.reduce((s, l) => s + l.outstanding_cents, 0) }); })();
+    return () => { on = false; };
+  }, [boot, tender, uPhone]);
+  const overLimit = credit && pending ? credit.outstanding + pending.amount > credit.limit : false;
+  const validatePending = () => {
+    if (tender === 'unpaid' && (!uName.trim() || !uPhone.trim())) { setErr(pt('unpaidNeedsName', locale)); return false; }
+    if (tender === 'unpaid' && overLimit && !isOwner) { setErr(pt('creditLimitExceeded', locale)); return false; }
+    return true;
+  };
   const addRow = () => { if (!pending || !validatePending()) return; setRows(r => [...r, pending]); setAmount(''); setRef(''); setPristine(true); };
   const confirm = async () => {
     if (busy) return;
@@ -115,6 +128,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           <div className="tender-extra">
             {(tender === 'card' || tender === 'wallet') && <input className="input" placeholder={pt('reference', locale)} value={ref} onChange={e => setRef(e.target.value)} />}
             {tender === 'unpaid' && <div className="row" style={{ gap: 8 }}><input className="input" placeholder={pt('customerName', locale)} value={uName} onChange={e => setUName(e.target.value)} /><input className="input" placeholder={pt('customerPhone', locale)} inputMode="tel" value={uPhone} onChange={e => setUPhone(e.target.value)} /></div>}
+            {tender === 'unpaid' && credit && <small className={overLimit ? 'bad' : 'muted'}>{pt('creditLimit', locale)} {fmtUsd(credit.limit)} · {pt('outstanding', locale)} {fmtUsd(credit.outstanding)}{overLimit ? ` — ${pt(isOwner ? 'creditLimitOwner' : 'creditLimitExceeded', locale)}` : ''}</small>}
           </div>
           <ul className="tender-list">
             {rows.map((r, i) => <li key={i}><span>{pt(r.tender, locale)}{r.reference ? ` · ${r.reference}` : ''}{r.unpaid_name ? ` · ${r.unpaid_name}` : ''}</span><strong>{r.currency === 'lbp' ? fmtLbp(r.amount, locale) : fmtUsd(r.amount)}</strong><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></li>)}

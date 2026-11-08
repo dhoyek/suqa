@@ -1,3 +1,5 @@
+export interface ScaleConfig { prefix: string | null; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number }
+export interface ScanHit { product: Product; qty: number; pack?: { qty: number; barcode: string }; unit_price_cents?: number; unit_price_lbp?: number; fixed_total_cents?: number; fixed_total_lbp?: number; scale?: boolean }
 import type { Barcode, Category, Localized, Product, QuickButton } from './types';
 
 // Arabic/Latin normalisation shared with the store's menu search: strip tashkeel, unify alef forms, ta marbuta → ha, alef maqsura → ya,
@@ -22,6 +24,7 @@ interface IndexRow { id: string; norm: string }
 export class CatalogIndex {
   byId = new Map<string, Product>();
   byBarcode = new Map<string, string>();        // barcode → product id
+  barcodeRows = new Map<string, Barcode>();     // barcode → row (pack qty / pack price)
   private barcodesOf = new Map<string, Set<string>>();
   categories = new Map<string, Category>();
   quickButtons: QuickButton[] = [];
@@ -29,7 +32,7 @@ export class CatalogIndex {
   private dirty = true;
 
   load(products: Product[], barcodes: Barcode[], _categories: Category[], quickButtons: QuickButton[]): void {
-    this.byId.clear(); this.byBarcode.clear(); this.barcodesOf.clear(); this.categories.clear();
+    this.byId.clear(); this.byBarcode.clear(); this.barcodeRows.clear(); this.barcodesOf.clear(); this.categories.clear();
     for (const p of products) if (p.is_active) this.byId.set(p.id, p);
     for (const b of barcodes) this.addBarcode(b);
     this.rebuildSections();
@@ -46,11 +49,11 @@ export class CatalogIndex {
   }
   removeProduct(id: string): void { this.byId.delete(id); for (const bc of this.barcodesOf.get(id) ?? []) this.byBarcode.delete(bc); this.barcodesOf.delete(id); this.dirty = true; }
   addBarcode(b: Barcode): void {
-    const bc = normBarcode(b.barcode); this.byBarcode.set(bc, b.product_id);
+    const bc = normBarcode(b.barcode); this.byBarcode.set(bc, b.product_id); this.barcodeRows.set(bc, b);
     if (!this.barcodesOf.has(b.product_id)) this.barcodesOf.set(b.product_id, new Set());
     this.barcodesOf.get(b.product_id)!.add(bc);
   }
-  removeBarcode(b: Pick<Barcode, 'product_id' | 'barcode'>): void { const bc = normBarcode(b.barcode); if (this.byBarcode.get(bc) === b.product_id) this.byBarcode.delete(bc); this.barcodesOf.get(b.product_id)?.delete(bc); }
+  removeBarcode(b: Pick<Barcode, 'product_id' | 'barcode'>): void { const bc = normBarcode(b.barcode); if (this.byBarcode.get(bc) === b.product_id) { this.byBarcode.delete(bc); this.barcodeRows.delete(bc); } this.barcodesOf.get(b.product_id)?.delete(bc); }
   upsertCategory(c: Category): void { this.categories.set(c.id, c); }
   setQuickButtons(q: QuickButton[]): void { this.quickButtons = [...q].sort((a, b) => a.sort_order - b.sort_order); }
   barcodes(productId: string): string[] { return [...(this.barcodesOf.get(productId) ?? [])]; }
@@ -61,6 +64,34 @@ export class CatalogIndex {
     const id = this.byBarcode.get(bc);
     if (id) return this.byId.get(id) ?? null;
     for (const p of this.byId.values()) if (p.sku && normBarcode(p.sku) === bc) return p;
+    return null;
+  }
+
+  /**
+   * Scan with pack and scale support. Pack barcode → qty = pack_qty at the pack price. Scale label (prefix + item code + value + check)
+   * → the item by code (sku or barcode) with the weight as quantity or the embedded price. Falls back to scan().
+   */
+  scanEx(code: string, scale?: ScaleConfig | null): ScanHit | null {
+    const bc = normBarcode(code);
+    const p = this.scan(bc);
+    if (p) {
+      const row = this.barcodeRows.get(bc); const pq = Number(row?.pack_qty ?? 1) || 1;
+      if (row && pq !== 1) {
+        const ppu = row.pack_price_usd != null && row.pack_price_usd !== '' ? Number(row.pack_price_usd) : null; const ppl = row.pack_price_lbp != null && row.pack_price_lbp !== '' ? Number(row.pack_price_lbp) : null;
+        return { product: p, qty: pq, pack: { qty: pq, barcode: bc }, unit_price_cents: ppu != null ? Math.round((ppu * 100) / pq) : undefined, unit_price_lbp: ppl != null ? Math.round(ppl / pq) : undefined };
+      }
+      return { product: p, qty: 1 };
+    }
+    if (scale?.prefix && bc.startsWith(scale.prefix) && /^\d{12,14}$/.test(bc)) {
+      const codeLen = scale.code_len || 5; const start = scale.prefix.length; const item = bc.slice(start, start + codeLen);
+      const value = Number(bc.slice(start + codeLen, bc.length - 1)); const div = scale.value_divisor || 1000;
+      const target = this.scan(item) ?? this.scan(item.replace(/^0+/, '')) ?? [...this.byId.values()].find(x => x.sku && normBarcode(x.sku).padStart(codeLen, '0') === item) ?? null;
+      if (target && Number.isFinite(value)) {
+        if (scale.value_kind === 'weight') return { product: target, qty: Math.round((value / div) * 1000) / 1000, scale: true };
+        if (scale.value_kind === 'price_usd') return { product: target, qty: 1, fixed_total_cents: Math.round((value / div) * 100), scale: true };
+        return { product: target, qty: 1, fixed_total_lbp: Math.round(value / div), scale: true };
+      }
+    }
     return null;
   }
 

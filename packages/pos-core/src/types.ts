@@ -20,7 +20,7 @@ export interface Product {
   category_id?: string | null; section?: string | null; image_url?: string | null; sort_order?: number;
   updated_at: string;
 }
-export interface Barcode { product_id: string; shop_id: string; barcode: string }
+export interface Barcode { product_id: string; shop_id: string; barcode: string; pack_qty?: number | string | null; pack_price_usd?: number | string | null; pack_price_lbp?: number | string | null }
 export interface Category { id: string; tenant_id: string; name: Localized; parent_id?: string | null; sort_order: number; icon?: string | null }
 export interface QuickButton { id: string; shop_id: string; product_id: string | null; label?: string | null; color?: string | null; sort_order: number }
 export interface Rate { id: string; shop_id: string; lbp_per_usd: number; effective_at: string }
@@ -29,7 +29,7 @@ export interface Device { id: string; shop_id: string; name: string; prefix: str
 export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;
   allow_negative_stock: boolean; lbp_rounding_step: number; deduct_stock_at: 'ready' | 'delivered'; hide_online_when_zero: boolean;
-  receipt_footer?: string | null; default_delivery_fee_usd?: number | string; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
+  receipt_footer?: string | null; default_delivery_fee_usd?: number | string; default_margin_pct?: number | string; scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: 'weight' | 'price_lbp' | 'price_usd'; scale_value_divisor?: number; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
 }
 
 export interface Order {
@@ -60,7 +60,7 @@ export interface Purchase { id: string; shop_id: string; supplier_id: string; nu
 export interface PurchaseLine { id: string; purchase_id: string; shop_id: string; product_id: string; name: Localized; qty: number; unit_cost: number; unit_cost_cents: number; line_total_cents: number; new_price_usd?: number | null; new_price_lbp?: number | null; expiry?: string | null; sort: number }
 export interface SupplierPayment { id: string; shop_id: string; supplier_id: string; purchase_id?: string | null; tender: 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'transfer'; currency: Currency; amount: number; amount_cents: number; rate: number; from_drawer: boolean; shift_id?: string | null; note?: string | null; user_id?: string | null; at: string }
 export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number }
-export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; updated_at?: string }
+export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------

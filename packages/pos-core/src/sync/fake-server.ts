@@ -132,9 +132,10 @@ export class FakeServer {
       case 'stock.move': { if (!this.products.has(p.product_id)) throw new Error('product_not_found'); this.move({ id: p.id, shop_id: this.shop.id, product_id: p.product_id, qty: p.qty, kind: p.kind, device_id: d.id, note: p.note, unit_cost_cents: p.unit_cost_cents }, d.id); return { ok: true }; }
       case 'product.patch': {
         let prod = this.products.get(p.id);
-        if (!prod && p.new_id) { prod = this.addProduct({ id: p.new_id, name: {}, price_usd: 0, track_stock: false }, p.barcodes_add ?? []); }
+        const adds: string[] = (p.barcodes_add ?? []).map((b: string | { barcode: string }) => (typeof b === 'string' ? b : b.barcode));   // pack rows (31_pos_m11) carry the barcode in an object
+        if (!prod && p.new_id) { prod = this.addProduct({ id: p.new_id, name: {}, price_usd: 0, track_stock: false }, adds); }
         if (!prod) throw new Error('product_not_found');
-        for (const b of (p.barcodes_add ?? [])) if (!this.barcodes.some(x => x.barcode === b)) { const bc = { product_id: prod.id, shop_id: this.shop.id, barcode: b }; this.barcodes.push(bc); this.log('product_barcodes', bc, d.id, 'upsert', `${prod.id}:${b}`); }
+        for (const b of adds) if (!this.barcodes.some(x => x.barcode === b)) { const bc = { product_id: prod.id, shop_id: this.shop.id, barcode: b }; this.barcodes.push(bc); this.log('product_barcodes', bc, d.id, 'upsert', `${prod.id}:${b}`); }
         for (const b of (p.barcodes_remove ?? [])) { const i = this.barcodes.findIndex(x => x.product_id === prod!.id && x.barcode === b); if (i >= 0) { const [bc] = this.barcodes.splice(i, 1); this.log('product_barcodes', bc as unknown as Record<string, unknown>, d.id, 'delete', `${prod.id}:${b}`); } }
         let conflicts = 0;
         for (const [k, v] of Object.entries(p.fields as Record<string, unknown>)) {

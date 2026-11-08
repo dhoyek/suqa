@@ -9,19 +9,21 @@ export const PATCHABLE = ['name', 'description', 'price_usd', 'price_currency', 
   'visible_online', 'is_available', 'is_active', 'section', 'sort_order', 'image_url'] as const;
 export type Patchable = (typeof PATCHABLE)[number];
 
-export interface ProductEdit { fields: Partial<Pick<Product, Patchable>>; barcodes_add?: string[]; barcodes_remove?: string[]; approved_by?: string | null }
+export type BarcodeInput = string | { barcode: string; pack_qty?: number | null; pack_price_usd?: number | null; pack_price_lbp?: number | null };
+export interface ProductEdit { fields: Partial<Pick<Product, Patchable>>; barcodes_add?: BarcodeInput[]; barcodes_remove?: string[]; approved_by?: string | null }
+const bcRow = (b: BarcodeInput) => (typeof b === 'string' ? { barcode: normBarcode(b), pack_qty: 1, pack_price_usd: null, pack_price_lbp: null } : { barcode: normBarcode(b.barcode), pack_qty: b.pack_qty ?? 1, pack_price_usd: b.pack_price_usd ?? null, pack_price_lbp: b.pack_price_lbp ?? null });
 
 /** Edit an existing product. Returns the updated local row. */
 export async function patchProduct(db: PosDb, product: Product, edit: ProductEdit): Promise<Product> {
   const fields: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(edit.fields)) if (PATCHABLE.includes(k as Patchable) && (product as unknown as Record<string, unknown>)[k] !== v) fields[k] = v;
-  const add = (edit.barcodes_add ?? []).map(normBarcode).filter(Boolean);
+  const add = (edit.barcodes_add ?? []).map(bcRow).filter(b => b.barcode);
   const remove = (edit.barcodes_remove ?? []).map(normBarcode).filter(Boolean);
   if (!Object.keys(fields).length && !add.length && !remove.length) return product;
   const updated: Product = { ...product, ...(fields as Partial<Product>), updated_at: new Date().toISOString() };
   await db.transaction('rw', [db.products, db.barcodes, db.outbox], async () => {
     await db.products.put(updated);
-    for (const b of add) await db.barcodes.put({ product_id: product.id, shop_id: product.shop_id, barcode: b });
+    for (const b of add) await db.barcodes.put({ product_id: product.id, shop_id: product.shop_id, ...b });
     for (const b of remove) await db.barcodes.delete([product.id, b]);
     await enqueue(db, 'product.patch', { id: product.id, fields, base_updated_at: product.updated_at, barcodes_add: add, barcodes_remove: remove, approved_by: edit.approved_by ?? null });
   });
@@ -29,7 +31,7 @@ export async function patchProduct(db: PosDb, product: Product, edit: ProductEdi
 }
 
 /** Create a product offline. The server inserts it on sync (new_id) and the feed echoes the canonical row. */
-export async function createProduct(db: PosDb, fields: Partial<Pick<Product, Patchable>> & { name: Product['name'] }, barcodes: string[] = [], approvedBy?: string | null): Promise<Product> {
+export async function createProduct(db: PosDb, fields: Partial<Pick<Product, Patchable>> & { name: Product['name'] }, barcodes: BarcodeInput[] = [], approvedBy?: string | null): Promise<Product> {
   const shop = (await db.meta.get(META.shop))?.value as { id: string; tenant_id: string };
   const id = newId();
   const row: Product = {
@@ -40,12 +42,12 @@ export async function createProduct(db: PosDb, fields: Partial<Pick<Product, Pat
     on_hand: 0, reserved: 0, needs_review: false, category_id: null, section: fields.section ?? null, image_url: fields.image_url ?? null, sort_order: fields.sort_order ?? 0,
     updated_at: new Date().toISOString(),
   };
-  const bcs = barcodes.map(normBarcode).filter(Boolean);
+  const bcs = barcodes.map(bcRow).filter(b => b.barcode);
   const f: Record<string, unknown> = {};
   for (const k of PATCHABLE) if ((fields as Record<string, unknown>)[k] !== undefined) f[k] = (fields as Record<string, unknown>)[k];
   await db.transaction('rw', [db.products, db.barcodes, db.outbox], async () => {
     await db.products.put(row);
-    for (const b of bcs) await db.barcodes.put({ product_id: id, shop_id: shop.id, barcode: b });
+    for (const b of bcs) await db.barcodes.put({ product_id: id, shop_id: shop.id, ...b });
     await enqueue(db, 'product.patch', { new_id: id, fields: f, barcodes_add: bcs, approved_by: approvedBy ?? null });
   });
   return row;

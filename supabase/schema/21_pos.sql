@@ -59,6 +59,9 @@ create table if not exists suqa.product_barcodes (
   shop_id     uuid not null references suqa.shops(id) on delete cascade,
   tenant_id   uuid not null references suqa.tenants(id) on delete cascade,
   barcode     text not null,
+  pack_qty       numeric(12,3) not null default 1,            -- scanning this barcode adds pack_qty units (31_pos_m11)
+  pack_price_usd numeric(12,2),                               -- pack price; null = unit price × pack_qty
+  pack_price_lbp bigint,
   created_at  timestamptz not null default now(),
   primary key (product_id, barcode),
   unique (shop_id, barcode)

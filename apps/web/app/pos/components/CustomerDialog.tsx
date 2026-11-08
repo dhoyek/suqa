@@ -70,7 +70,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
       boot.engine.poke();
     }
     const noteText = [when.trim() ? `⏰ ${when.trim()}` : '', notes.trim()].filter(Boolean).join(' · ') || null;
-    onDone({ patch: { channel, customer_name: n, customer_phone: phone.trim(), fulfillment: isOrder ? ful : 'pickup', address: isOrder && ful === 'delivery' ? { ...address } as Record<string, unknown> : {}, notes: noteText },
+    onDone({ patch: { channel, customer_name: n, customer_phone: phone.trim(), discount_pct: picked?.discount_pct ? Number(picked.discount_pct) : null, fulfillment: isOrder ? ful : 'pickup', address: isOrder && ful === 'delivery' ? { ...address } as Record<string, unknown> : {}, notes: noteText },
       feeCents: isOrder && ful === 'delivery' ? Math.round((Number(f) || 0) * 100) : 0, repeat });
   };
 
@@ -101,7 +101,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
 
             <label className="label">{pt('customerName', locale)}</label>
             <input className="input" value={name} onChange={e => { setName(e.target.value); if (!phone) setShowList(true); }} />
-            {picked && <small className="muted">{pt('ordersCount', locale)}: {picked.orders_count}{last ? ` · ${pt('lastOrder', locale)} ${fmtUsd(num(last.order.total_cents))}` : ''}</small>}
+            {picked && <small className="muted">{picked.discount_pct && Number(picked.discount_pct) ? `${pt('discount', locale)} ${Number(picked.discount_pct)}% · ` : ''}{pt('ordersCount', locale)}: {picked.orders_count}{last ? ` · ${pt('lastOrder', locale)} ${fmtUsd(num(last.order.total_cents))}` : ''}</small>}
 
             {isOrder && <>
               <label className="label">{pt('fulfillment', locale)}</label>

@@ -23,7 +23,10 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   const [price, setPrice] = useState(product ? (product.price_currency === 'lbp' ? String(product.price_lbp) : String(Number(product.price_usd))) : '');
   const [cost, setCost] = useState(product?.cost_cents != null ? (product.cost_cents / 100).toString() : '');
   const [sku, setSku] = useState(product?.sku ?? '');
-  const [bcs, setBcs] = useState<string[]>(() => (product ? index.barcodes(product.id) : presetBarcode ? [normBarcode(presetBarcode)] : []));
+  type Bc = { barcode: string; pack_qty: number; pack_price_usd: number | null };
+  const [bcs, setBcs] = useState<Bc[]>(() => (product ? index.barcodes(product.id).map(b => { const r = index.barcodeRows.get(b); return { barcode: b, pack_qty: Number(r?.pack_qty ?? 1) || 1, pack_price_usd: r?.pack_price_usd != null && r.pack_price_usd !== '' ? Number(r.pack_price_usd) : null }; }) : presetBarcode ? [{ barcode: normBarcode(presetBarcode), pack_qty: 1, pack_price_usd: null }] : []));
+  const marginPct = Number(boot.shop.default_margin_pct) || 0;
+  const priceFromMargin = () => { const c = Number(cost); if (!c || !marginPct) return; setCur('usd'); setPrice((Math.ceil((c / (1 - marginPct / 100)) * 4) / 4).toFixed(2).replace(/\.00$/, '')); };
   const [bcInput, setBcInput] = useState(''); const [bcErr, setBcErr] = useState<string | null>(null);
   const [unit, setUnit] = useState<string>(product?.unit_kind ?? 'piece'); const [dec, setDec] = useState(!!product?.decimal_qty); const [vat, setVat] = useState(!!product?.vat);
   const [track, setTrack] = useState(!!product?.track_stock); const [min, setMin] = useState(String(Number(product?.min_stock ?? 0)));
@@ -36,7 +39,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
     const b = normBarcode(raw); if (!b) return;
     const other = await barcodeOwner(boot.db, b);
     if (other && other !== product?.id) { setBcErr(`${pt('barcodeExists', locale)}: ${text(index.byId.get(other)?.name, locale)}`); return; }
-    setBcErr(null); setBcs(x => (x.includes(b) ? x : [...x, b])); setBcInput('');
+    setBcErr(null); setBcs(x => (x.some(y => y.barcode === b) ? x : [...x, { barcode: b, pack_qty: 1, pack_price_usd: null }])); setBcInput('');
   };
   useScanner(code => { void addBc(code); });
 
@@ -56,7 +59,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
     try {
       const fields = build();
       const p = product
-        ? await patchProduct(boot.db, product, { fields, barcodes_add: bcs.filter(b => !original.includes(b)), barcodes_remove: original.filter(b => !bcs.includes(b)), approved_by: approvedBy })
+        ? await patchProduct(boot.db, product, { fields, barcodes_add: bcs.filter(b => { const r = index.barcodeRows.get(b.barcode); return !original.includes(b.barcode) || Number(r?.pack_qty ?? 1) !== b.pack_qty || (r?.pack_price_usd != null && r.pack_price_usd !== '' ? Number(r.pack_price_usd) : null) !== b.pack_price_usd; }), barcodes_remove: original.filter(b => !bcs.some(x => x.barcode === b)), approved_by: approvedBy })
         : await createProduct(boot.db, fields as Parameters<typeof createProduct>[1], bcs, approvedBy);
       boot.engine.poke(); onDone(p);
     } catch (e) { setErr((e as Error).message); }
@@ -77,10 +80,16 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
               <div className="seg"><button type="button" className={cur === 'usd' ? 'active' : ''} onClick={() => setCur('usd')}>$</button><button type="button" className={cur === 'lbp' ? 'active' : ''} onClick={() => setCur('lbp')}>ل.ل.</button></div>
               <input className="input" dir="ltr" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} style={{ flex: 1 }} />
             </div></label>
-          {owner && <label className="label">{pt('cost', locale)} ($)<input className="input" dir="ltr" inputMode="decimal" value={cost} onChange={e => setCost(e.target.value)} /></label>}
+          {owner && <label className="label">{pt('cost', locale)} ($)<div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" inputMode="decimal" value={cost} onChange={e => setCost(e.target.value)} style={{ flex: 1 }} />{marginPct > 0 && <button type="button" className="btn" title={`${pt('defaultMargin', locale)} ${marginPct}%`} onClick={priceFromMargin}>{pt('fromMargin', locale)} {marginPct}%</button>}</div>
+            {Number(cost) > 0 && cur === 'usd' && Number(price) > 0 && <small className={`muted ${Number(price) < Number(cost) ? 'bad' : ''}`}>{pt('margin', locale)} {Math.round(((Number(price) - Number(cost)) / Number(price)) * 100)}%</small>}</label>}
           <label className="label">{pt('sku', locale)}<input className="input" dir="ltr" value={sku} onChange={e => setSku(e.target.value)} /></label>
           <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('barcodes', locale)}
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '4px 0' }}>{bcs.map(b => <span key={b} className="chip" dir="ltr">{b} <button type="button" className="btn icon" style={{ minHeight: 0, padding: '0 4px' }} onClick={() => setBcs(x => x.filter(y => y !== b))}>✕</button></span>)}</div>
+            <div className="stack" style={{ gap: 4, margin: '4px 0' }}>{bcs.map((b, i) => <div key={b.barcode} className="row" style={{ gap: 6, alignItems: 'center' }}>
+              <span className="chip" dir="ltr" style={{ minWidth: 120 }}>{b.barcode}</span>
+              <input className="input" dir="ltr" inputMode="decimal" title={pt('packQty', locale)} placeholder={pt('packQty', locale)} value={b.pack_qty === 1 ? '' : b.pack_qty} onChange={e => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_qty: Number(e.target.value) || 1 } : y)))} style={{ width: 90, minHeight: 36 }} />
+              {b.pack_qty !== 1 && <input className="input" dir="ltr" inputMode="decimal" title={pt('packPrice', locale)} placeholder={pt('packPrice', locale)} value={b.pack_price_usd ?? ''} onChange={e => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_price_usd: e.target.value === '' ? null : Number(e.target.value) } : y)))} style={{ width: 110, minHeight: 36 }} />}
+              {b.pack_qty !== 1 && <small className="muted">{pt('pack', locale)} ×{b.pack_qty}</small>}
+              <button type="button" className="btn icon" style={{ minHeight: 0, padding: '0 6px' }} onClick={() => setBcs(x => x.filter((_, j) => j !== i))}>✕</button></div>)}</div>
             <div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" placeholder={pt('addBarcode', locale)} value={bcInput} onChange={e => setBcInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addBc(bcInput); } }} /><button type="button" className="btn" onClick={() => addBc(bcInput)}>＋</button></div>
             {bcErr && <div className="bad" style={{ fontSize: 13 }}>{bcErr}</div>}
           </div>

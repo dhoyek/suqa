@@ -32,17 +32,18 @@ export async function searchCustomers(db: PosDb, q: string, limit = 8): Promise<
 export const findCustomer = async (db: PosDb, phone: string) => db.shopCustomers.where('phone_key').equals(normPhone(phone)).first();
 
 /** Explicit edit from the dialog: saved locally now, pushed as customer.upsert. */
-export async function upsertCustomer(db: PosDb, shopId: string, input: { phone: string; name: string; address?: CustomerAddress; notes?: string | null }): Promise<ShopCustomer> {
+export async function upsertCustomer(db: PosDb, shopId: string, input: { phone: string; name: string; address?: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | null }): Promise<ShopCustomer> {
   const key = normPhone(input.phone); if (key.length < 6) throw new Error('bad_phone');
   const existing = await db.shopCustomers.where('phone_key').equals(key).first();
   const row: ShopCustomer = {
     id: existing?.id ?? newId(), shop_id: shopId, phone: input.phone.trim(), phone_key: key, name: input.name.trim() || existing?.name || '',
     address: input.address ?? existing?.address ?? {}, notes: input.notes === undefined ? existing?.notes ?? null : input.notes, user_id: existing?.user_id ?? null,
+    credit_limit_cents: input.credit_limit_cents === undefined ? existing?.credit_limit_cents ?? null : input.credit_limit_cents, discount_pct: input.discount_pct === undefined ? existing?.discount_pct ?? 0 : input.discount_pct,
     orders_count: existing?.orders_count ?? 0, last_order_at: existing?.last_order_at ?? null, updated_at: new Date().toISOString(),
   };
   await db.transaction('rw', [db.shopCustomers, db.outbox], async () => {
     await db.shopCustomers.put(row);
-    await enqueue(db, 'customer.upsert', { phone: row.phone, name: row.name, ...(input.address !== undefined ? { address: row.address } : {}), ...(input.notes !== undefined ? { notes: row.notes } : {}) });
+    await enqueue(db, 'customer.upsert', { phone: row.phone, name: row.name, ...(input.address !== undefined ? { address: row.address } : {}), ...(input.notes !== undefined ? { notes: row.notes } : {}), ...(input.credit_limit_cents !== undefined ? { credit_limit_cents: row.credit_limit_cents } : {}), ...(input.discount_pct !== undefined ? { discount_pct: row.discount_pct } : {}) });
   });
   return row;
 }

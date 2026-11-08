@@ -14,6 +14,7 @@ export interface Draft {
   id: string; channel: Channel; lines: DraftLine[]; discount_cents: number; discount_reason?: string | null;
   customer_name?: string; customer_phone?: string; notes?: string | null; fulfillment?: 'delivery' | 'pickup'; address?: Record<string, unknown>;
   approved_by?: string | null; started_at: string;
+  discount_pct?: number | null;        // customer discount % — applied on the subtotal at pay time when larger than discount_cents
 }
 
 export const newDraft = (channel: Channel = 'walkin'): Draft => ({ id: newId(), channel, lines: [], discount_cents: 0, started_at: new Date().toISOString() });
@@ -35,7 +36,11 @@ export function addToDraft(d: Draft, p: Product, quantity = 1): Draft {
 }
 export const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 
-export function draftTotals(d: Draft, rate: number, lbpStep: number): Totals { return totals(d.lines, d.discount_cents, rate, lbpStep); }
+export function effectiveDiscount(d: Draft, rate: number): number {
+  if (!d.discount_pct) return d.discount_cents;
+  const sub = totals(d.lines, 0, rate, 1).subtotal_cents; return Math.max(d.discount_cents, Math.round((sub * Number(d.discount_pct)) / 100));
+}
+export function draftTotals(d: Draft, rate: number, lbpStep: number): Totals { return totals(d.lines, effectiveDiscount(d, rate), rate, lbpStep); }
 
 export interface CommitInput {
   draft: Draft; payments: Array<Omit<Payment, 'id' | 'order_id' | 'at'> & { id?: string }>; rate: number; lbpStep: number; changeIn: Currency;
@@ -52,7 +57,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
   const now = (input.now ?? new Date()).toISOString();
   const live = draft.lines.filter(l => !l.voided);
   if (!live.length) throw new Error('empty_sale');
-  const t = totals(draft.lines, draft.discount_cents, rate, lbpStep);
+  const t = totals(draft.lines, effectiveDiscount(draft, rate), rate, lbpStep);
   const pays: Payment[] = input.payments.map(p => ({ ...p, id: p.id ?? newId(), order_id: draft.id, at: now }));
   const s = settle(t.total_cents, pays, rate, lbpStep, changeIn);
   if (s.remaining_cents > 0 && (draft.channel === 'walkin' || pays.length)) throw new Error('not_fully_paid');
@@ -71,7 +76,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
       status, channel: draft.channel, device_id: deviceId ?? null, staff_user_id: input.staff_user_id ?? null, shift_id: input.shift_id ?? null, parked: false,
       customer_id: null, customer_name: draft.customer_name ?? '', customer_phone: draft.customer_phone ?? '', customer_notes: draft.notes ?? null,
       address: draft.address ?? {}, fulfillment: draft.fulfillment ?? 'pickup', notify_customer: draft.channel !== 'walkin',
-      rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: draft.discount_reason ?? null,
+      rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: draft.discount_reason ?? (draft.discount_pct && t.discount_cents ? `${draft.discount_pct}%` : null),
       total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), total_usd: (t.total_cents + (input.delivery_fee_cents ?? 0)) / 100, delivery_fee_usd: (input.delivery_fee_cents ?? 0) / 100,
       paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
       placed_at: now, delivered_at: status === 'delivered' ? now : null, closed_at: status === 'delivered' ? now : null, updated_at: now,

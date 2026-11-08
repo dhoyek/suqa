@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
+import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
@@ -71,9 +71,17 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
 
   const onScan = useCallback((code: string) => {
     if (receipt) return;
-    const p = index.scan(code);
-    if (p) add(p); else if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`);
-  }, [index, add, locale, receipt, boot.role]);
+    const hit = index.scanEx(code, shop.scale_prefix ? { prefix: shop.scale_prefix, code_len: shop.scale_code_len, value_kind: shop.scale_value_kind, value_divisor: shop.scale_value_divisor } : null);
+    if (!hit) { if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`); return; }
+    if (!hit.pack && !hit.scale) { add(hit.product); return; }
+    // pack barcode or scale label → its own line (quantity / price come from the barcode)
+    const base = lineFromProduct(hit.product, hit.qty);
+    const line: DraftLine = { ...base,
+      ...(hit.unit_price_cents != null ? { unit_price_cents: hit.unit_price_cents, price_currency: 'usd' as const } : {}), ...(hit.unit_price_lbp != null && hit.unit_price_cents == null ? { unit_price_lbp: hit.unit_price_lbp, price_currency: 'lbp' as const } : {}),
+      ...(hit.fixed_total_cents != null ? { unit_price_cents: hit.fixed_total_cents, price_currency: 'usd' as const, quantity: 1 } : {}), ...(hit.fixed_total_lbp != null ? { unit_price_lbp: hit.fixed_total_lbp, price_currency: 'lbp' as const, quantity: 1 } : {}),
+      decimal_qty: base.decimal_qty || !!hit.scale, notes: hit.pack ? `${pt('pack', locale)} ${hit.pack.qty}` : hit.scale ? '⚖' : undefined };
+    setDraft(d => ({ ...d, lines: [...d.lines, line] })); setQ('');
+  }, [index, add, locale, receipt, boot.role, shop]);
   useScanner(onScan);
 
   const updateLine = (l: DraftLine) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === l.id ? l : x)) }));
@@ -191,7 +199,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'line' && (() => { const l = draft.lines.find(x => x.id === dialog.id); return l ? (
         <LineEditor line={l} locale={locale} rate={rate} maxDiscountPct={maxDisc} staff={members} me={staff} initialField={dialog.field}
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
-      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}

@@ -21,6 +21,11 @@ create table if not exists suqa.shops (
   -- POS (21_pos)
   pos_enabled          boolean not null default false,         -- tenant switches the POS on per shop
   default_delivery_fee_usd numeric(12,2) not null default 0,     -- pre-filled delivery fee for WhatsApp/phone orders (28_pos_customers)
+  default_margin_pct   numeric(5,2) not null default 0,            -- proposes selling price from cost (31_pos_m11)
+  scale_prefix         text,                                       -- weighed-item barcode prefix, null = off (31_pos_m11)
+  scale_code_len       int not null default 5,
+  scale_value_kind     text not null default 'weight' check (scale_value_kind in ('weight','price_lbp','price_usd')),
+  scale_value_divisor  int not null default 1000,
   offline_days         int     not null default 30 check (offline_days between 1 and 90),   -- PIN unlock allowed this long without internet
   max_discount_pct     numeric(5,2) not null default 10,       -- above this a cashier needs the owner PIN
   allow_negative_stock boolean not null default true,

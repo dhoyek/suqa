@@ -42,13 +42,14 @@ export default function CustomersView({ boot, locale, tick, status, onNewOrder }
 function CustomerCard({ boot, locale, c, online, debtCents, onSaved, onNewOrder }: { boot: Booted; locale: L; c: ShopCustomer; online: boolean; debtCents: number; onSaved: (c: ShopCustomer) => void; onNewOrder: () => void }) {
   const [phone, setPhone] = useState(c.phone); const [name, setName] = useState(c.name); const [line1, setLine1] = useState(c.address?.line1 ?? ''); const [map, setMap] = useState(c.address?.map_url ?? '');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(c.address?.lat != null && c.address?.lng != null ? { lat: c.address.lat, lng: c.address.lng } : null);
-  const [notes, setNotes] = useState(c.notes ?? ''); const [pickMap, setPickMap] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [asking, setAsking] = useState<string | null>(null);
+  const [notes, setNotes] = useState(c.notes ?? ''); const [pickMap, setPickMap] = useState(false);
+  const [limit, setLimit] = useState(c.credit_limit_cents != null ? String(c.credit_limit_cents / 100) : ''); const [disc, setDisc] = useState(String(Number(c.discount_pct) || '')); const [msg, setMsg] = useState<string | null>(null); const [asking, setAsking] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   useEffect(() => { if (!c.phone_key) return; boot.db.orders.toArray().then(os => setOrders(os.filter(o => !o.parked && normPhone(o.customer_phone) === c.phone_key).sort((a, b) => b.placed_at.localeCompare(a.placed_at)).slice(0, 30))); }, [boot, c.phone_key]);
-  const dirty = phone !== c.phone || name !== c.name || line1 !== (c.address?.line1 ?? '') || map !== (c.address?.map_url ?? '') || notes !== (c.notes ?? '') || JSON.stringify(coords) !== JSON.stringify(c.address?.lat != null ? { lat: c.address.lat, lng: c.address.lng } : null);
+  const dirty = limit !== (c.credit_limit_cents != null ? String(c.credit_limit_cents / 100) : '') || disc !== String(Number(c.discount_pct) || '') || phone !== c.phone || name !== c.name || line1 !== (c.address?.line1 ?? '') || map !== (c.address?.map_url ?? '') || notes !== (c.notes ?? '') || JSON.stringify(coords) !== JSON.stringify(c.address?.lat != null ? { lat: c.address.lat, lng: c.address.lng } : null);
   const save = async () => {
     const address: CustomerAddress = { ...(line1.trim() ? { line1: line1.trim() } : {}), ...(map.trim() ? { map_url: map.trim() } : {}), ...(coords ? { lat: coords.lat, lng: coords.lng } : {}) };
-    try { const row = await upsertCustomer(boot.db, boot.shop.id, { phone, name, address, notes: notes.trim() || null }); boot.engine.poke(); setMsg(pt('saved', locale)); onSaved(row); }
+    try { const row = await upsertCustomer(boot.db, boot.shop.id, { phone, name, address, notes: notes.trim() || null, credit_limit_cents: limit.trim() === '' ? null : Math.round(Number(limit) * 100), discount_pct: Number(disc) || 0 }); boot.engine.poke(); setMsg(pt('saved', locale)); onSaved(row); }
     catch (e) { setMsg((e as Error).message === 'bad_phone' ? pt('customerPhone', locale) + ' ?' : (e as Error).message); }
   };
   const askLocation = async () => {
@@ -75,6 +76,10 @@ function CustomerCard({ boot, locale, c, online, debtCents, onSaved, onNewOrder 
           <label className="label">{pt('customerPhone', locale)}</label><input className="input" dir="ltr" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} />
           <label className="label">{pt('customerName', locale)}</label><input className="input" value={name} onChange={e => setName(e.target.value)} />
           <label className="label">{pt('customerNotes', locale)}</label><input className="input" value={notes} onChange={e => setNotes(e.target.value)} />
+          <div className="row" style={{ gap: 8 }}>
+            <div style={{ flex: 1 }}><label className="label">{pt('creditLimit', locale)}</label><input className="input" dir="ltr" inputMode="decimal" value={limit} onChange={e => setLimit(e.target.value)} placeholder="—" /></div>
+            <div style={{ flex: 1 }}><label className="label">{pt('customerDiscount', locale)}</label><input className="input" dir="ltr" inputMode="decimal" value={disc} onChange={e => setDisc(e.target.value)} placeholder="0" /></div>
+          </div>
         </div>
         <div className="stack">
           <label className="label">{pt('address', locale)}</label><input className="input" value={line1} placeholder={pt('addressHint', locale)} onChange={e => setLine1(e.target.value)} />

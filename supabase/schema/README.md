@@ -32,4 +32,5 @@ source of truth.
 | 28_pos_customers.sql | POS M8: `shop_customers` (synced; auto-filled from every order, `_phone_key` matching), op `customer.upsert`, `pos_shop_settings` (owner edits POS switches from the POS), `shops.default_delivery_fee_usd`; dispatcher + snapshot re-created |
 | 29_pos_m9.sql | POS M9: `pos_delivery_fee(shop, lat, lng)` (zone fee for a pin), `wa_attach_location` (WhatsApp location replies pinned on customers + open delivery orders) |
 | 30_pos_m10.sql | POS M10 purchases-lite: `suppliers` (balance by trigger), `purchases` + `purchase_lines`, `supplier_payments`, ops `supplier.upsert` / `purchase.commit` / `purchase.void` / `supplier.pay`, stock kinds `purchase` / `purchase_return`; dispatcher, snapshot, report re-created |
+| 31_pos_m11.sql | POS M11: pack barcodes (`product_barcodes.pack_qty/pack_price_*`, patch handler accepts objects), customer `credit_limit_cents` / `discount_pct`, shop `default_margin_pct` + scale-barcode settings (`scale_prefix/code_len/value_kind/value_divisor`), settings + customer upsert re-created |
 | ../seed/batroun.sql | first tenant |

@@ -96,6 +96,8 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, onNe
     try { await commitPurchase(boot.db, { supplier, kind, lines: rows.filter(r => r.qty > 0), currency, rate, discount: Number(discount) || 0, invoice_no: invNo.trim() || null, invoice_date: invDate, note: note.trim() || null, user_id: staff.user_id, approved_by: approvedBy }); boot.engine.poke(); onDone(); }
     catch (e) { setErr((e as Error).message); setBusy(false); }
   };
+  const marginPct = Number(boot.shop.default_margin_pct) || 0;
+  const applyMargin = () => setRows(rs => rs.map(r => { const costUsd = currency === 'lbp' ? r.unit_cost / rate : r.unit_cost; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - marginPct / 100)) * 4) / 4 } : r; }));
   const sym = currency === 'lbp' ? 'ل.ل.' : '$';
   const fmtC = (v: number) => (currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
   return (
@@ -132,6 +134,7 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, onNe
         <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div><label className="label">{pt('discount', locale)} ({sym})</label><input className="input" dir="ltr" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)} style={{ width: 120 }} /></div>
           <div style={{ flex: 1, minWidth: 160 }}><label className="label">{pt('note', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} /></div>
+          {kind === 'purchase' && marginPct > 0 && <button className="btn ghost" onClick={applyMargin}>{pt('applyMargin', locale)} ({marginPct}%)</button>}
           <div className="muted" style={{ fontSize: 13 }}>{pt('subtotal', locale)} {fmtC(t.subtotal)}</div>
         </div>
         {err && <p className="bad">{err}</p>}

@@ -14,11 +14,14 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
   const [neg, setNeg] = useState(!!s.allow_negative_stock); const [hide, setHide] = useState(!!s.hide_online_when_zero);
   const [deduct, setDeduct] = useState<'ready' | 'delivered'>(s.deduct_stock_at ?? 'ready');
   const [days, setDays] = useState(String(s.offline_days ?? 30)); const [footer, setFooter] = useState(s.receipt_footer ?? '');
+  const [marginPct, setMarginPct] = useState(String(num(s.default_margin_pct) || ''));
+  const [scPrefix, setScPrefix] = useState(s.scale_prefix ?? ''); const [scLen, setScLen] = useState(String(s.scale_code_len ?? 5)); const [scKind, setScKind] = useState<'weight' | 'price_lbp' | 'price_usd'>(s.scale_value_kind ?? 'weight'); const [scDiv, setScDiv] = useState(String(s.scale_value_divisor ?? 1000));
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true); setMsg(null);
     try {
-      const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, receipt_footer: footer.trim() || null };
+      const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, receipt_footer: footer.trim() || null,
+        default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000 };
       const { data, error } = await sb.rpc('pos_shop_settings', { p_shop: s.id, p_patch: patch });
       if (error) { setMsg(error.message); return; }
       Object.assign(boot.shop, data as Shop); await setMeta(boot.db, META.shop, boot.shop); setMsg(pt('saved', locale));
@@ -39,6 +42,17 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
       <div className="row" style={{ gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={neg} onChange={e => setNeg(e.target.checked)} /> {pt('allowNegative', locale)}</label>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={hide} onChange={e => setHide(e.target.checked)} /> {pt('hideWhenZero', locale)}</label>
+      </div>
+      <div className="row" style={{ gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+        <F label={pt('defaultMargin', locale)}><input className="input" dir="ltr" inputMode="decimal" value={marginPct} onChange={e => setMarginPct(e.target.value)} /></F>
+      </div>
+      <h4 style={{ margin: '14px 0 4px' }}>⚖ {pt('scaleBarcodes', locale)}</h4>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 6px' }}>{pt('scaleHint', locale)}</p>
+      <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+        <F label={pt('scalePrefix', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scPrefix} onChange={e => setScPrefix(e.target.value)} placeholder="2" /></F>
+        <F label={pt('scaleCodeLen', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scLen} onChange={e => setScLen(e.target.value)} /></F>
+        <F label={pt('scaleValue', locale)}><select className="input" value={scKind} onChange={e => setScKind(e.target.value as typeof scKind)}><option value="weight">{pt('scaleWeight', locale)}</option><option value="price_lbp">{pt('scalePriceLbp', locale)}</option><option value="price_usd">{pt('scalePriceUsd', locale)}</option></select></F>
+        <F label={pt('scaleDivisor', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scDiv} onChange={e => setScDiv(e.target.value)} /></F>
       </div>
       <label className="label" style={{ marginTop: 8 }}>{pt('receiptFooter', locale)}</label>
       <input className="input" value={footer} onChange={e => setFooter(e.target.value)} />

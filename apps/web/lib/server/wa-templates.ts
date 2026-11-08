@@ -33,7 +33,7 @@ export const TEMPLATES: TemplateDef[] = [
   {
     // Compact order update (replaces order_status): one line of status, tracking button. {{1}} shop, {{2}} order no, {{3}} status line.
     name: 'order_update_v2', language: 'ar', category: 'UTILITY',
-    text: '{{1}} — طلب {{2}}\n{{3}}',
+    text: 'مرحباً، تحديث من {{1}} بخصوص طلبك رقم {{2}}:\n{{3}}\nشكراً لتعاملك معنا.',
     samples: ['سمانة أبو إيلي', 'BAT-000030', '✅ تم قبول طلبك: 2× لبنة، 1× خبز — $8.50 — توصيل خلال 30 دقيقة'],
     button: { text: 'تتبّع الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
   },

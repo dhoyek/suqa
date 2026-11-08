@@ -14,11 +14,12 @@ import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
 import CustomersView from './views/CustomersView';
+import PurchasesView from './views/PurchasesView';
 
-export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
-const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'shift', 'reports', 'settings'];
-const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', stock: '📦', shift: '💵', reports: '📊', settings: '⚙️' };
-const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', stock: 'stock', shift: 'shift', reports: 'reports', settings: 'settings' };
+export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'purchases' | 'shift' | 'reports' | 'settings';
+const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'settings'];
+const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', stock: '📦', purchases: '🚚', shift: '💵', reports: '📊', settings: '⚙️' };
+const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', stock: 'stock', purchases: 'purchasesNav', shift: 'shift', reports: 'reports', settings: 'settings' };
 
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
@@ -63,6 +64,7 @@ export default function Shell(props: {
         {view === 'debts' && <DebtsView {...props} />}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} />}
+        {view === 'purchases' && <PurchasesView {...props} />}
         {view === 'shift' && <ShiftView {...props} />}
         {view === 'reports' && <ReportsView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}

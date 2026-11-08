@@ -31,4 +31,5 @@ source of truth.
 | 27_pos_order_delete.sql | POS: `order.delete` op (`_pos_order_delete`, cancelled/rejected only, audit copy kept), dispatcher re-created, `stock_moves_apply` allows detaching the order reference |
 | 28_pos_customers.sql | POS M8: `shop_customers` (synced; auto-filled from every order, `_phone_key` matching), op `customer.upsert`, `pos_shop_settings` (owner edits POS switches from the POS), `shops.default_delivery_fee_usd`; dispatcher + snapshot re-created |
 | 29_pos_m9.sql | POS M9: `pos_delivery_fee(shop, lat, lng)` (zone fee for a pin), `wa_attach_location` (WhatsApp location replies pinned on customers + open delivery orders) |
+| 30_pos_m10.sql | POS M10 purchases-lite: `suppliers` (balance by trigger), `purchases` + `purchase_lines`, `supplier_payments`, ops `supplier.upsert` / `purchase.commit` / `purchase.void` / `supplier.pay`, stock kinds `purchase` / `purchase_return`; dispatcher, snapshot, report re-created |
 | ../seed/batroun.sql | first tenant |

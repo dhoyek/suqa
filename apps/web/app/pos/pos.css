@@ -267,3 +267,4 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cust-rows { display: flex; flex-direction: column; gap: 4px; max-height: calc(100dvh - 220px); overflow: auto; }
 .cust-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; background: none; text-align: start; min-height: 52px; cursor: pointer; }
 .cust-row:hover { background: #f8fafc; } .cust-row.active { border-color: var(--brand-primary); background: #eef6f8; }
+.pur-lines input.input { min-height: 38px; padding: 4px 8px; }

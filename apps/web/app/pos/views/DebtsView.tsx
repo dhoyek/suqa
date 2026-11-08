@@ -154,6 +154,7 @@ function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDon
             {cents > owed && <div className="bad"><span>{pt('overpaid', locale)}</span><strong>{fmtUsd(cents - owed)}</strong></div>}
           </div>
           <div className="tenders">{TENDERS.map(t => <button key={t} className={`chip ${tender === t ? 'active' : ''}`} onClick={() => setTender(t)}>{pt(t, locale)}</button>)}</div>
+          <div className="pay-amount"><span className="muted">{pt(tender, locale)}</span><strong dir="ltr">{amount || '0'}</strong></div>
           <div className="card" style={{ background: '#fafafa' }}>
             <strong>{pt('allocation', locale)}</strong>
             {plan.map(p => <div className="row spread" key={p.line.order.id}><span>{fmtTime(p.line.at, locale)} · {p.line.number}</span><span>{fmtUsd(p.amount_cents)}{p.amount_cents >= p.line.outstanding_cents ? ' ✓' : ` (${pt('remainsOpen', locale)} ${fmtUsd(p.line.outstanding_cents - p.amount_cents)})`}</span></div>)}

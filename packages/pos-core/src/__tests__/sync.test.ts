@@ -100,7 +100,7 @@ describe('sync engine — the five scenarios from the brief', () => {
 
     // the NEW app opens the same database: Dexie upgrades 1 → 2
     const db2 = new PosDb(name); await db2.open();
-    expect(db2.verno).toBe(6);
+    expect(db2.verno).toBe(7);
     expect(await db2.outbox.count()).toBe(3);                                         // nothing lost
     expect(await db2.orders.count()).toBe(3);
     const { SyncEngine } = await import('../sync/engine');

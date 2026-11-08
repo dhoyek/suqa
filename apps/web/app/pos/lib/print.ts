@@ -1,5 +1,5 @@
 'use client';
-import { fmtLbp, fmtUsd, num, text, usdToLbp, type DebtLine, type DebtSettlement, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, num, text, usdToLbp, type DebtLine, type DebtSettlement, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop, type Supplier } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 
 /**
@@ -110,4 +110,14 @@ export function debtReceiptHtml(s: DebtSettlement, allocs: Array<{ number: strin
     ${allocs.map(a => `<div class="kv"><span>${esc(a.number)}${a.closed ? ' ✓' : ''}</span>${ltr(fmtUsd(a.amount_cents))}</div>`).join('')}<hr>
     <div class="kv tot"><span>${esc(pt('outstanding', L))}</span>${ltr(fmtUsd(remaining_cents))}</div>
     ${shop.receipt_footer ? `<hr><div class="ft">${esc(shop.receipt_footer)}</div>` : ''}${cutBlock(st)}</div>`;
+}
+
+/** Supplier statement: purchases / returns / payments with running balance. */
+export function supplierStatementHtml(s: Supplier, rows: Array<{ at: string; kind: string; ref: string; amount_cents: number; balance_cents: number }>, shop: Shop, L: L, st: PrintSettings): string {
+  const lines = [...rows].reverse().map(r => `<div class="kv"><span>${esc(fmtDT(r.at, L).split(',')[0])} · ${esc(r.kind === 'payment' ? pt('paySupplier', L) : r.ref.replace('~', ''))}${r.kind === 'void' ? ' ✕' : ''}</span>${ltr((r.amount_cents < 0 ? '−' : '') + fmtUsd(Math.abs(r.amount_cents)))}</div>`).join('');
+  return `<div class="vch">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="kiosk">${esc(pt('statementTitle', L))}</div>
+    <div class="no">${esc(s.name)}</div><div class="ev">${ltr(esc(s.phone ?? ''))} · ${esc(fmtDT(new Date().toISOString(), L))}</div><hr>
+    ${lines}<hr>
+    <div class="kv tot"><span>${esc(pt('weOwe', L))}</span>${ltr(fmtUsd(num(s.balance_cents)))}</div>${cutBlock(st)}</div>`;
 }

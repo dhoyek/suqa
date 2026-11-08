@@ -6,7 +6,7 @@ import type { Channel, Localized, Tender } from './types';
 export interface Report {
   from: string; to: string; rate: number;
   partial?: boolean;                       // local fallback: the mirror only holds ~7 days of closed orders
-  totals: { sales_count: number; total_cents: number; items_count: number; discount_cents: number; courier_fees_cents: number; delivery_fees_cents: number; cost_cents: number; returns_count: number; returns_cents: number };
+  totals: { sales_count: number; total_cents: number; items_count: number; discount_cents: number; courier_fees_cents: number; delivery_fees_cents: number; cost_cents: number; purchases_cents?: number; supplier_paid_cents?: number; suppliers_balance_cents?: number; returns_count: number; returns_cents: number };
   by_day: { day: string; count: number; cents: number }[];
   by_channel: Partial<Record<Channel, { count: number; cents: number }>>;
   by_tender: Partial<Record<Tender, { count: number; usd: number; lbp: number }>>;

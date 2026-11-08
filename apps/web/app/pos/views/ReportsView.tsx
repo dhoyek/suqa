@@ -70,7 +70,7 @@ export default function ReportsView({ boot, sb, locale, tick, status }: { boot: 
     s[pt('overview', locale)] = [
       { [pt('period', locale)]: `${rep.from} → ${rep.to}`, [pt('sales', locale)]: usd(rep.totals.total_cents), [pt('salesCount', locale)]: rep.totals.sales_count, [pt('items', locale)]: rep.totals.items_count,
         [pt('discounts', locale)]: usd(rep.totals.discount_cents), [pt('returnsTotal', locale)]: usd(rep.totals.returns_cents), [pt('netSales', locale)]: usd(rep.totals.total_cents - rep.totals.returns_cents),
-        [pt('courierFees', locale)]: usd(rep.totals.courier_fees_cents), [pt('deliveryFees', locale)]: usd(rep.totals.delivery_fees_cents), [pt('cost', locale)]: usd(rep.totals.cost_cents), [pt('grossMargin', locale)]: usd(rep.totals.total_cents - rep.totals.cost_cents), [pt('rate', locale)]: rep.rate },
+        [pt('courierFees', locale)]: usd(rep.totals.courier_fees_cents), [pt('deliveryFees', locale)]: usd(rep.totals.delivery_fees_cents), [pt('purchasesTotal', locale)]: usd(rep.totals.purchases_cents ?? 0), [pt('supplierPaid', locale)]: usd(rep.totals.supplier_paid_cents ?? 0), [pt('suppliersBalance', locale)]: usd(rep.totals.suppliers_balance_cents ?? 0), [pt('cost', locale)]: usd(rep.totals.cost_cents), [pt('grossMargin', locale)]: usd(rep.totals.total_cents - rep.totals.cost_cents), [pt('rate', locale)]: rep.rate },
     ];
     s[pt('byDay', locale)] = rep.by_day.map(d => ({ [pt('when', locale)]: d.day, [pt('salesCount', locale)]: d.count, [pt('sales', locale)]: usd(d.cents) }));
     s[pt('byChannel', locale)] = Object.entries(rep.by_channel).map(([c, v]) => ({ [pt('channelLabel', locale)]: pt(c as 'walkin', locale), [pt('salesCount', locale)]: v.count, [pt('sales', locale)]: usd(v.cents) }));
@@ -136,6 +136,7 @@ export default function ReportsView({ boot, sb, locale, tick, status }: { boot: 
               <div className="kpi"><span>{pt('sales', locale)}</span><strong>{N(rep.totals.total_cents)}</strong><small>{rep.totals.sales_count} · {rep.totals.items_count} {pt('items', locale)}</small></div>
               <div className="kpi"><span>{pt('returnsTotal', locale)}</span><strong>{N(rep.totals.returns_cents)}</strong><small>{rep.totals.returns_count}</small></div>
               <div className="kpi"><span>{pt('netSales', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.returns_cents)}</strong><small>{pt('discounts', locale)} {N(rep.totals.discount_cents)}{rep.totals.courier_fees_cents ? ` · ${pt('courierFees', locale)} ${N(rep.totals.courier_fees_cents)}` : ''}</small></div>
+              {rep.totals.purchases_cents != null && <div className="kpi"><span>{pt('purchasesTotal', locale)}</span><strong>{N(rep.totals.purchases_cents)}</strong><small>{pt('suppliersBalance', locale)} {N(rep.totals.suppliers_balance_cents ?? 0)}</small></div>}
               <div className="kpi"><span>{pt('grossMargin', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.cost_cents)}</strong><small>{pt('cost', locale)} {N(rep.totals.cost_cents)}{rep.totals.total_cents ? ` · ${Math.round(((rep.totals.total_cents - rep.totals.cost_cents) / rep.totals.total_cents) * 100)}%` : ''}</small></div>
             </div>
             <div className="seg" style={{ marginTop: 12, flexWrap: 'wrap' }}>

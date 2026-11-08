@@ -31,6 +31,12 @@ export const TEMPLATES: TemplateDef[] = [
     button: { text: 'عرض الإيصال', url: 'https://suqa-dev.netlify.app/r/{{1}}', example: 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001' },
   },
   {
+    // POS M9: ask a customer for their location pin (delivery orders typed in at the POS).
+    name: 'location_request', language: 'ar', category: 'UTILITY',
+    text: 'مرحباً {{1}}، لتوصيل طلبكم من {{2}} نرجو إرسال موقعكم على واتساب: اضغطوا على 📎 ثم «الموقع» وأرسلوا موقع البيت. شكراً.',
+    samples: ['مريم', 'سمانة أبو إيلي'],
+  },
+  {
     name: 'order_message', language: 'ar', category: 'UTILITY',
     text: '💬 رسالة بخصوص الطلب {{1}} من {{2}}:\n{{3}}\nيمكنك الرد على هذه الرسالة مباشرة.',
     samples: ['BAT-000021', 'سمانة أبو إيلي', 'تمام، الطلب جاهز خلال ربع ساعة'],

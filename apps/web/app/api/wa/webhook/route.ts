@@ -16,7 +16,7 @@ export async function GET(req: Request) {
 }
 
 type Status = { id: string; status: string; recipient_id: string; errors?: { code?: number; title?: string }[] };
-type Msg = { id: string; from: string; type: string; timestamp?: string; text?: { body: string }; context?: { id?: string }; button?: { text?: string } };
+type Msg = { id: string; from: string; type: string; timestamp?: string; text?: { body: string }; context?: { id?: string }; button?: { text?: string }; location?: { latitude: number; longitude: number; name?: string; address?: string } };
 
 // Incoming events: delivery statuses for our sends, and messages from customers / shops.
 // A message that quotes one of our order messages — or comes from a phone with exactly one open order — is attached to
@@ -51,8 +51,20 @@ async function updateStatus(s: Status) {
 
 async function handleInbound(m: Msg, phoneNumberId?: string) {
   const sb = supabaseAdmin(); if (!sb) return;
-  const text = m.text?.body ?? m.button?.text ?? `[${m.type}]`;
+  const text = m.text?.body ?? m.button?.text ?? (m.location ? `📍 ${m.location.latitude},${m.location.longitude}${m.location.name ? ' ' + m.location.name : ''}` : `[${m.type}]`);
   const from = normalizePhone(m.from) ?? m.from;
+
+  // A shared location pins the customer's address (shop_customers) and any open delivery order of that phone (29_pos_m9).
+  if (m.type === 'location' && m.location) {
+    try {
+      const { data } = await sb.rpc('wa_attach_location', { p_phone: from, p_phone_number_id: phoneNumberId ?? null, p_lat: m.location.latitude, p_lng: m.location.longitude, p_label: [m.location.name, m.location.address].filter(Boolean).join(' – ') || null });
+      const r = (data ?? {}) as { customers?: number; orders?: number; shop_name?: Record<string, string> | null };
+      console.log('[wa location]', from, r);
+      if ((r.customers ?? 0) + (r.orders ?? 0) > 0) {
+        try { await waSendText(from, `📍 شكراً، وصلنا موقعكم${r.shop_name ? ' — ' + (r.shop_name.ar ?? r.shop_name.en ?? '') : ''}.`, phoneNumberId ?? null); } catch {}
+      }
+    } catch (e) { console.error('[wa location]', e); }
+  }
 
   const { data: match } = await sb.rpc('wa_match_order', { p_phone: from, p_context_wamid: m.context?.id ?? null, p_phone_number_id: phoneNumberId ?? null });
   const hit = (Array.isArray(match) ? match[0] : match) as { order_id: string; party: Party } | undefined;

@@ -1,7 +1,8 @@
 'use client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { addToDraft, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
-  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff } from '@suqa/pos-core';
+  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -22,7 +23,7 @@ type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; f
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, reindex, newOrderRequest }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; reindex: () => void; newOrderRequest?: number }) {
+export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cat, setCat] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
   // restore an unfinished cart (crash / tab close), rate, parked list, staff (for owner PIN)
   useEffect(() => { loadCurrentDraft(boot.db).then(d => { if (d) setDraft(d); }); }, [boot]);
   // "＋ new order" from the inbox: start a WhatsApp order and open the customer dialog
-  useEffect(() => { if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'pickup' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
+  useEffect(() => { if (newOrderRequest && presetCustomer) { setReceipt(null); setDraft(d => ({ ...(d.lines.length ? d : newDraft('whatsapp')), channel: 'whatsapp', customer_phone: presetCustomer.phone, customer_name: presetCustomer.name })); setDialog({ k: 'customer' }); return; } if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'pickup' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
   useEffect(() => { busyRef.current = draft.lines.length > 0 || !!dialog; const t = setTimeout(() => { if (draft.lines.length) void saveDraft(boot.db, draft); }, 400); return () => clearTimeout(t); }, [draft, dialog, boot.db, busyRef]);
@@ -197,7 +198,7 @@ export default function Sell({ boot, locale, index, tick, staff, busyRef, onGo, 
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'customer' && <CustomerDialog boot={boot} locale={locale} draft={draft} fee={fee} onDone={r => {
+      {dialog?.k === 'customer' && <CustomerDialog boot={boot} sb={sb} locale={locale} draft={draft} fee={fee} online={status?.online ?? true} onDone={r => {
         setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = addToDraft(n, p, num(l.quantity)); } return n; });
         setFee(r.feeCents); setDialog(null); }} onClose={() => setDialog(null)} />}
     </div>

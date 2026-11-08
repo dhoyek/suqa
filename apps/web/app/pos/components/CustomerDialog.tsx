@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type OrderLine, type ShopCustomer } from '@suqa/pos-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import Modal from './Modal';
@@ -9,7 +10,7 @@ import MapPicker from './MapPicker';
 export type CustomerResult = { patch: Partial<Draft>; feeCents: number; repeat?: OrderLine[] };
 
 /** Who is this sale/order for. Picks from the shop's customers (name or number), fills name / address / map pin, and saves edits back to the customer. */
-export default function CustomerDialog({ boot, locale, draft, fee, onDone, onClose }: { boot: Booted; locale: L; draft: Draft; fee: number; onDone: (r: CustomerResult) => void; onClose: () => void }) {
+export default function CustomerDialog({ boot, sb, locale, draft, fee, online, onDone, onClose }: { boot: Booted; sb: SupabaseClient; locale: L; draft: Draft; fee: number; online: boolean; onDone: (r: CustomerResult) => void; onClose: () => void }) {
   const [channel, setChannel] = useState<Draft['channel']>(draft.channel);
   const [phone, setPhone] = useState(draft.customer_phone ?? ''); const [name, setName] = useState(draft.customer_name ?? '');
   const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.fulfillment ?? 'pickup');
@@ -21,6 +22,26 @@ export default function CustomerDialog({ boot, locale, draft, fee, onDone, onClo
   const [matches, setMatches] = useState<ShopCustomer[]>([]); const [picked, setPicked] = useState<ShopCustomer | null>(null); const [showList, setShowList] = useState(false);
   const [openOrders, setOpenOrders] = useState(0); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
+  const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
+  // delivery-zone fee from the pin (online only; outside the zones → keep the default/typed fee)
+  useEffect(() => {
+    if (!coords || !online || ful !== 'delivery') { setZone(null); return; }
+    let on = true;
+    sb.rpc('pos_delivery_fee', { p_shop: boot.shop.id, p_lat: coords.lat, p_lng: coords.lng }).then(({ data }) => {
+      if (!on) return; const z = data as typeof zone; setZone(z);
+      if (z?.zone_id && z.fee_usd != null && !feeTouched.current) setF(String(Number(z.fee_usd)));
+    });
+    return () => { on = false; };
+  }, [coords, online, ful, sb, boot.shop.id]);
+  const feeTouched = useRef(false);
+  const askLocation = async () => {
+    if (!online || key.length < 6) return; setAsking('…');
+    try {
+      const r = await fetch('/api/pos/ask-location', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shop_id: boot.shop.id, phone: phone.trim(), name: name.trim() }) });
+      setAsking(r.ok ? pt('locationAsked', locale) : pt('sendFailed', locale));
+    } catch { setAsking(pt('sendFailed', locale)); }
+  };
   const isOrder = channel !== 'walkin';
   const key = normPhone(phone);
 
@@ -97,9 +118,11 @@ export default function CustomerDialog({ boot, locale, draft, fee, onDone, onClo
                 <input className="input" dir="ltr" placeholder="https://maps.google.com/?q=…" value={map} onChange={e => onMapText(e.target.value)} style={{ flex: 1 }} />
                 <button className="btn" onClick={() => setPickMap(true)}>🗺 {pt('pickOnMap', locale)}</button>
               </div>
+              {channel === 'whatsapp' && <div className="row" style={{ gap: 8, alignItems: 'center' }}><button className="btn ghost" disabled={!online || key.length < 6 || asking === '…'} onClick={askLocation}>💬 {pt('askLocation', locale)}</button>{asking && asking !== '…' && <small className="muted">{asking}</small>}</div>}
               {coords && <small className="muted" dir="ltr">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} · <a href={mapUrlFor(coords.lat, coords.lng)} target="_blank" rel="noreferrer">{pt('openMap', locale)}</a></small>}
               <label className="label">{pt('deliveryFee', locale)} ($)</label>
-              <input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => setF(e.target.value)} />
+              <input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />
+              {zone && (zone.zone_id ? <small className="muted">🗺 {text(zone.name ?? {}, locale)} · ${Number(zone.fee_usd ?? 0)}{zone.eta_minutes ? ` · ~${zone.eta_minutes} ${pt('min', locale)}` : ''}</small> : <small className="pill warn">{pt('outsideZones', locale)}</small>)}
             </>}
             {isOrder && <>
               <label className="label">{pt('orderNotes', locale)}</label>

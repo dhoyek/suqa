@@ -13,11 +13,12 @@ import ItemsView from './views/ItemsView';
 import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
+import CustomersView from './views/CustomersView';
 
-export type View = 'sell' | 'orders' | 'debts' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
-const VIEWS: View[] = ['sell', 'orders', 'debts', 'items', 'stock', 'shift', 'reports', 'settings'];
-const ICON: Record<View, string> = { sell: '🧾', orders: '📥', debts: '📒', items: '🏷️', stock: '📦', shift: '💵', reports: '📊', settings: '⚙️' };
-const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', debts: 'debtsNav', items: 'items', stock: 'stock', shift: 'shift', reports: 'reports', settings: 'settings' };
+export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'shift' | 'reports' | 'settings';
+const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'shift', 'reports', 'settings'];
+const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', stock: '📦', shift: '💵', reports: '📊', settings: '⚙️' };
+const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', stock: 'stock', shift: 'shift', reports: 'reports', settings: 'settings' };
 
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
@@ -32,7 +33,8 @@ export default function Shell(props: {
   useEffect(() => { boot.db.orders.where('status').equals('pending').count().then(setPendingCount); }, [boot, props.tick]);
   const online = status?.online ?? true;
   const [manual, setManual] = useState(false);
-  const [newOrderReq, setNewOrderReq] = useState(0);                      // user pressed sync → show the icon turning briefly
+  const [newOrderReq, setNewOrderReq] = useState(0);
+  const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
@@ -55,8 +57,9 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} />}
-        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setNewOrderReq(n => n + 1); setView('sell'); }} />}
+        {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} presetCustomer={preset} />}
+        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} />}
+        {view === 'customers' && <CustomersView {...props} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'debts' && <DebtsView {...props} />}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} />}

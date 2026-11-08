@@ -258,3 +258,12 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cust-list button:hover, .cust-list button:focus { background: #eef6f8; }
 .cust-list button small { font-size: 12px; }
 .leaflet-container { font: inherit; }
+
+/* customers tab (M9) */
+.cust-page { display: grid; grid-template-columns: 340px 1fr; gap: 12px; padding: 12px; min-height: 100%; }
+@media (max-width: 800px) { .cust-page { grid-template-columns: 1fr; } }
+.cust-side { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.cust-main { background: #fff; border: 1px solid var(--line); border-radius: 12px; min-height: 300px; }
+.cust-rows { display: flex; flex-direction: column; gap: 4px; max-height: calc(100dvh - 220px); overflow: auto; }
+.cust-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; background: none; text-align: start; min-height: 52px; cursor: pointer; }
+.cust-row:hover { background: #f8fafc; } .cust-row.active { border-color: var(--brand-primary); background: #eef6f8; }

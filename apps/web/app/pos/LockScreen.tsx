@@ -22,7 +22,8 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
     (async () => {
       const rows = (await boot.db.staff.toArray()).filter(s => s.active !== false);
       setStaff(rows);
-      setWho(rows.find(s => s.user_id === boot.userId) ?? rows[0] ?? null);
+      // pre-select the signed-in account only once; later status ticks must not undo a tap on another tile
+      setWho(w => (w && rows.some(s => s.user_id === w.user_id) ? w : rows.find(s => s.user_id === boot.userId) ?? rows[0] ?? null));
       setLastOnline((await getMeta<string>(boot.db, META.lastOnlineAt)) ?? null);
     })();
   }, [boot, status?.lastOnlineAt]);

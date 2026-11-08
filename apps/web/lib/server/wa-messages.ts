@@ -41,7 +41,7 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
     o.fulfillment === 'pickup' ? null : `${ar ? 'العنوان' : 'Address'}: ${[addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ') || '-'}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
     '',
-    ar ? `للقبول أو الرفض: ${origin}/shop` : `Accept or reject: ${origin}/shop`,
+    ar ? `للقبول أو الرفض: ${origin}/pos#orders` : `Accept or reject: ${origin}/pos#orders`,
   ].filter(x => x !== null).join('\n');
 }
 
@@ -103,7 +103,7 @@ const itemsOneLine = (e: OrderEvent, L: Locale) => e.items.map(i => `${i.quantit
 
 export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
-  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/shop`)] };
+  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/pos#orders`)] };
 }
 export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const text = customerStatus(e, origin); if (!text) return null;

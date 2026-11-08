@@ -15,11 +15,11 @@ type Draft = { id?: string; label: string; line1: string; line2: string; notes: 
 type Labels = Record<'checkout' | 'deliveryAddress' | 'newAddress' | 'addressLabel' | 'addressLine1' | 'addressLine2' | 'addressNotes' | 'phone' | 'pinLocation' | 'useMyLocation'
   | 'outsideZone' | 'orderNotes' | 'payCash' | 'placeOrder' | 'subtotal' | 'deliveryFee' | 'total' | 'minOrder' | 'save' | 'cancel' | 'emptyCart' | 'browseShops' | 'eta'
   | 'oneFeeCourier' | 'feePerShop' | 'deliveredTogether' | 'contactPhone' | 'phoneRequired' | 'editAddress' | 'deleteAddress' | 'pinHint' | 'confirm'
-  | 'fulfillment' | 'deliveryOption' | 'pickup' | 'pickupNotOffered', string>;
+  | 'fulfillment' | 'deliveryOption' | 'pickup' | 'pickupNotOffered' | 'changePhone' | 'suggestedFromShop', string>;
 
 const addrText = (a: Addr) => [a.line1, a.line2].filter(Boolean).join(', ');
 
-export default function Checkout(props: { tenantId: string; locale: Locale; fx: number; displayCurrency: DisplayCurrency; addresses: Addr[]; defaultPhone: string; center: { lat: number; lng: number }; deliveryMode: 'per_shop' | 'courier'; courierFee: number | null; labels: Labels }) {
+export default function Checkout(props: { tenantId: string; locale: Locale; fx: number; displayCurrency: DisplayCurrency; addresses: Addr[]; defaultPhone: string; center: { lat: number; lng: number }; deliveryMode: 'per_shop' | 'courier'; courierFee: number | null; labels: Labels; suggested?: { line1?: string; lat?: number; lng?: number; label?: string } | null }) {
   const { tenantId, locale: L, fx, displayCurrency, deliveryMode, courierFee, labels } = props;
   const router = useRouter();
   const ask = useConfirm();
@@ -38,7 +38,10 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
   const [addresses, setAddresses] = useState<Addr[]>(props.addresses);
   const [selected, setSelected] = useState<string | null>(props.addresses.find(a => a.is_default)?.id ?? props.addresses[0]?.id ?? null);
   const blank = (): Draft => ({ label: '', line1: '', line2: '', notes: '', lat: props.center.lat, lng: props.center.lng });
-  const [draft, setDraft] = useState<Draft | null>(props.addresses.length === 0 ? blank() : null);   // null = form closed; id set = editing
+  // first web checkout of a customer the shop already knows (phone/WhatsApp orders) → start from that address
+  const fromShop = (): Draft => ({ ...blank(), label: props.suggested?.label ?? '', line1: props.suggested?.line1 ?? '', lat: props.suggested?.lat ?? props.center.lat, lng: props.suggested?.lng ?? props.center.lng });
+  const [draft, setDraft] = useState<Draft | null>(props.addresses.length === 0 ? (props.suggested ? fromShop() : blank()) : null);   // null = form closed; id set = editing
+  const [editPhone, setEditPhone] = useState(!normalizePhone(props.defaultPhone || props.addresses.find(a => a.is_default)?.phone || props.addresses[0]?.phone || ''));
   // per shop: zone fee + ETA, or 'outside' when the address is not served by that shop
   const [fees, setFees] = useState<Record<string, { fee_usd: number; eta_minutes: number | null } | 'outside'>>({});
   const [notes, setNotes] = useState('');
@@ -98,11 +101,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
     try {
       if (shops.length === 1) {
         const s = shops[0];
-        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
+        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
         removeShops(ids);
         router.replace(`/orders/${order.id}?placed=1`);
       } else {
-        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
+        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
         removeShops(ids);
         router.replace(`/orders/b/${basket.id}?placed=1`);
       }
@@ -125,10 +128,12 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
       <h1 style={{ margin: 0, fontSize: 20 }}>{labels.checkout}</h1>
 
       <section className="card stack">
-        <label className="label" htmlFor="phone">{labels.phone}</label>
-        <input id="phone" className="input" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="+961 70 000 000" value={phone} onChange={e => setPhone(e.target.value)}
-          style={{ fontSize: 18, letterSpacing: 1 }} aria-invalid={!phoneOk} />
-        <div className="muted" style={{ fontSize: 13 }}>{labels.contactPhone}</div>
+        {editPhone ? <>
+          <label className="label" htmlFor="phone">{labels.phone}</label>
+          <input id="phone" className="input" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="+961 70 000 000" value={phone} onChange={e => setPhone(e.target.value)}
+            style={{ fontSize: 18, letterSpacing: 1 }} aria-invalid={!phoneOk} autoFocus={!phoneOk} />
+          <div className="muted" style={{ fontSize: 13 }}>{labels.contactPhone}</div>
+        </> : <div className="row spread" style={{ alignItems: 'center' }}><span>📞 <strong dir="ltr">{phone}</strong></span><button className="btn" style={{ padding: '4px 10px', fontSize: 13 }} onClick={() => setEditPhone(true)}>{labels.changePhone}</button></div>}
       </section>
 
       {pickupOk && (
@@ -158,6 +163,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         {!draft && <button className="btn" onClick={() => setDraft(blank())}>+ {labels.newAddress}</button>}
         {draft && (
           <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            {!draft.id && props.suggested && addresses.length === 0 && <div className="pill warn" style={{ alignSelf: 'start' }}>💡 {labels.suggestedFromShop}</div>}
             <div className="muted" style={{ fontSize: 13 }}>{labels.pinLocation}</div>
             <MapPicker value={{ lat: draft.lat, lng: draft.lng }} onChange={p => setDraft(d => d && ({ ...d, ...p }))} useMyLocationLabel={labels.useMyLocation} />
             <div className="muted" style={{ fontSize: 12 }}>{labels.pinHint}</div>
@@ -178,7 +184,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         return (
           <section className="card stack" key={s.id}>
             <div className="row spread"><strong>{tr(s.name, L)}</strong><span>{money(shopSub(s.lines))}</span></div>
-            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {tr(l.name, L)}</span><span>{money(l.price_usd * l.qty)}</span></div>)}
+            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {tr(l.name, L)}{l.notes && <span className="muted"> · 📝 {l.notes}</span>}</span><span>{money(l.price_usd * l.qty)}</span></div>)}
             {f === 'outside' && <div className="error">{labels.outsideZone}</div>}
             {f && f !== 'outside' && !courier && !pickup && (
               <div className="row spread muted" style={{ fontSize: 13 }}>
@@ -198,8 +204,9 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{money(subtotal + feeUsd)}</strong></div>
         <div className="muted" style={{ fontSize: 13 }}>💵 {labels.payCash}</div>
         {error && <div className="error" role="alert">{error}</div>}
-        <button className="btn primary wide" disabled={!canOrder} onClick={submit}>{labels.placeOrder}</button>
+        <button className="btn primary wide checkout-inline" disabled={!canOrder} onClick={submit}>{labels.placeOrder}</button>
       </section>
+      <div className="cart-bar checkout-bar"><button className="btn primary wide row spread" disabled={!canOrder} onClick={submit}><span>{labels.placeOrder}</span><span>{money(subtotal + feeUsd)}</span></button></div>
     </div>
   );
 }

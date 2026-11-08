@@ -29,6 +29,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         })()}
         <SocialSignIn next={next} labels={{ or: ui('orContinueWith', L), google: ui('continueGoogle', L), facebook: ui('continueFacebook', L), apple: ui('continueApple', L) }} />
         <Link href={`/signup?next=${encodeURIComponent(next)}`} className="muted" style={{ fontSize: 14, textAlign: 'center' }}>{ui('noAccount', L)}</Link>
+        <Link href="/" className="muted" style={{ fontSize: 14, textAlign: 'center' }}>{ui('backHome', L)}</Link>
       </div>
     </main>
   );

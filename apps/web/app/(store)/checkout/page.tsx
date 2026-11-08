@@ -11,19 +11,21 @@ export default async function CheckoutPage() {
   const user = await requireUser('/checkout');
   const tenant = await getTenant();
   const sb = await supabaseServer();
-  const [{ data: addresses }, { data: profile }] = await Promise.all([
+  const [{ data: addresses }, { data: profile }, { data: known }] = await Promise.all([
     sb.from('addresses').select('id,label,line1,line2,notes,phone,is_default,location').eq('user_id', user.id).order('is_default', { ascending: false }),
     sb.from('profiles').select('phone').eq('id', user.id).maybeSingle(),
+    sb.rpc('my_known_address', { p_tenant: tenant.id }),
   ]);
+  const suggested = known && typeof known === 'object' ? (known as { line1?: string; lat?: number; lng?: number; label?: string }) : null;
   const L = tenant.default_locale;
   const center = pointFromEwkb((tenant as any).center) ?? { lat: 34.2553, lng: 35.6581 };
   const addrs = ((addresses as any[]) ?? []).map(a => { const p = pointFromEwkb(a.location) ?? center; const { location, ...rest } = a; return { ...rest, lat: p.lat, lng: p.lng }; });
   const keys = ['checkout', 'deliveryAddress', 'newAddress', 'addressLabel', 'addressLine1', 'addressLine2', 'addressNotes', 'phone', 'pinLocation', 'useMyLocation',
     'outsideZone', 'orderNotes', 'payCash', 'placeOrder', 'subtotal', 'deliveryFee', 'total', 'minOrder', 'save', 'cancel', 'emptyCart', 'browseShops', 'eta',
-    'oneFeeCourier', 'feePerShop', 'deliveredTogether', 'contactPhone', 'phoneRequired', 'editAddress', 'deleteAddress', 'pinHint', 'confirm', 'fulfillment', 'deliveryOption', 'pickup', 'pickupNotOffered'] as const;
+    'oneFeeCourier', 'feePerShop', 'deliveredTogether', 'contactPhone', 'phoneRequired', 'editAddress', 'deleteAddress', 'pinHint', 'confirm', 'fulfillment', 'deliveryOption', 'pickup', 'pickupNotOffered', 'changePhone', 'suggestedFromShop'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
 
   return <Checkout tenantId={tenant.id} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
-    addresses={addrs} defaultPhone={(profile as any)?.phone ?? ''} center={center} labels={labels}
+    addresses={addrs} defaultPhone={(profile as any)?.phone ?? ''} center={center} labels={labels} suggested={suggested}
     deliveryMode={tenant.settings.delivery_mode ?? 'per_shop'} courierFee={tenant.settings.courier_fee_usd != null ? Number(tenant.settings.courier_fee_usd) : null} />;
 }

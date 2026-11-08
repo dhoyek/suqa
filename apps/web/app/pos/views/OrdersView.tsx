@@ -91,7 +91,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, onNewOrde
                     <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}</strong>
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <a dir="ltr" href={`https://wa.me/${o.customer_phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{o.customer_phone}</a>}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <span className="row" style={{ gap: 6, display: 'inline-flex', alignItems: 'center' }}><span dir="ltr">{o.customer_phone}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(o.customer_phone)}`} title={pt('call', locale)} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(o.customer_phone)}`} target="_blank" rel="noreferrer" title="WhatsApp" onClick={e => e.stopPropagation()}>💬</a></span>}</div>
                   <div className="order-items">{ls.map(l => <div key={l.id}>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''}</div>)}</div>
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {String((o.address as Record<string, unknown>).line1 ?? (o.address as Record<string, unknown>).area ?? '')}{(o.address as Record<string, unknown>).map_url ? <> · <a href={String((o.address as Record<string, unknown>).map_url)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>map</a></> : null}</div>}
@@ -190,3 +190,6 @@ function neededLabel(iso: string, locale: L): string {
   const rel = Math.abs(diff) >= 120 ? `${Math.round(Math.abs(diff) / 60)} ${pt('hour', locale)}` : `${Math.abs(diff)} ${pt('min', locale)}`;
   return diff < 0 ? `${t} · ${pt('late', locale)} ${rel}` : `${t} · ${pt('inTime', locale)} ${rel}`;
 }
+
+/** wa.me / tel want the international number without '+': 70 483 148 → 96170483148. */
+const waDigits = (p: string) => { const k = p.replace(/\D/g, '').replace(/^00/, ''); return k.startsWith('961') ? k : '961' + k.replace(/^0/, ''); };

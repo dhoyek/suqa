@@ -21,13 +21,13 @@ export default async function ShopLayout({ children }: { children: ReactNode }) 
         <div className="container">
           <Link href="/shop" className="brand">{tenant.brand_name}</Link>
           <ShopNav
-            shops={shops.map(s => ({ id: s.id, name: tr(s.name, L) }))}
-            labels={{ orders: ui('orders', L), products: ui('products', L), myShop: ui('myShop', L), signOut: ui('signOut', L), pos: shops.some(s => (s as any).pos_enabled) ? ui('pos', L) : undefined }}
+            shops={shops.map(s => ({ id: s.id, name: tr(s.name, L), slug: s.slug }))}
+            labels={{ orders: ui('orders', L), products: ui('products', L), myShop: ui('myShop', L), signOut: ui('signOut', L), pos: shops.some(s => (s as any).pos_enabled) ? ui('pos', L) : undefined, home: ui('home', L), viewAsCustomer: ui('viewAsCustomer', L) }}
           />
         </div>
       </header>
       <main className="container">
-        {shops.length === 0 ? <div className="card muted">{ui('noShop', L)}</div> : children}
+        {shops.length === 0 ? <div className="card stack"><p className="muted" style={{ margin: 0 }}>{ui('noShop', L)}</p><Link href="/" className="btn primary" style={{ alignSelf: 'start' }}>{ui('backHome', L)}</Link></div> : children}
       </main>
     </>
   );

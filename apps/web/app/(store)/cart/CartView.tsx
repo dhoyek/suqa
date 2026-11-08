@@ -6,12 +6,12 @@ import { waLink } from '@/lib/whatsapp';
 
 type Labels = Record<'cart' | 'emptyCart' | 'browseShops' | 'subtotal' | 'deliveryFee' | 'checkout' | 'from' | 'remove'
   | 'sendCartWhatsapp' | 'waHello' | 'waOrderIntro' | 'total' | 'notes' | 'minOrder' | 'belowMin' | 'checkoutSelected' | 'shopsSelected'
-  | 'oneFeeCourier' | 'feePerShop' | 'includeInOrder' | 'keepForLater', string>;
+  | 'oneFeeCourier' | 'feePerShop' | 'includeInOrder' | 'keepForLater' | 'continueShopping' | 'home' | 'lineNote', string>;
 
 export default function CartView({ locale: L, fx, displayCurrency, signedIn, deliveryMode, labels }: {
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; signedIn: boolean; deliveryMode: 'per_shop' | 'courier'; labels: Labels;
 }) {
-  const { cart, multiShop, setQty, setSelected, removeShop, count, selectedShops, selectedSubtotal } = useCart();
+  const { cart, multiShop, setQty, setNote, setSelected, removeShop, count, selectedShops, selectedSubtotal } = useCart();
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
   if (!count) return <div className="card stack" style={{ textAlign: 'center' }}><p className="muted">{labels.emptyCart}</p><Link className="btn primary" href="/">{labels.browseShops}</Link></div>;
 
@@ -26,7 +26,10 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
 
   return (
     <div className="stack">
-      <h1 style={{ margin: 0, fontSize: 20 }}>{labels.cart}</h1>
+      <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <h1 style={{ margin: 0, fontSize: 20 }}>{labels.cart}</h1>
+        <span className="row" style={{ gap: 6 }}>{cart.shops[0] && <Link className="btn" href={`/s/${cart.shops[0].slug}`}>← {labels.continueShopping}</Link>}<Link className="btn ghost" href="/">🏠 {labels.home}</Link></span>
+      </div>
 
       {cart.shops.map(s => {
         const sub = shopSub(s.lines); const min = s.min_order_usd ?? 0; const short = min > sub;
@@ -55,6 +58,7 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
                   <button className="btn" onClick={() => setQty(s.id, l.product_id, l.qty + 1)}>+</button>
                 </div>
                 <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(l.price_usd * l.qty)}</strong>
+                <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />
               </div>
             ))}
             {short && s.selected && <div className="error" style={{ fontSize: 13 }}>{labels.belowMin} {money(min)}</div>}

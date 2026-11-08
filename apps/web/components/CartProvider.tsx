@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LocalizedText } from '@suqa/shared';
 
-export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number };
+export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string };
 export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number; pickup_enabled?: boolean };
 export type CartShop = ShopRef & { lines: CartLine[]; selected: boolean };
 /** v2: one cart, grouped by shop. `selected` = included in the next checkout (AliExpress-style). */
@@ -18,6 +18,7 @@ type Ctx = {
   /** Adds one unit. When multi-shop is off and another shop is in the cart, asks replaceConfirm() first. */
   add: (shop: ShopRef, line: Omit<CartLine, 'qty'>, replaceConfirm: () => Promise<boolean> | boolean) => Promise<void>;
   setQty: (shopId: string, productId: string, qty: number) => void;
+  setNote: (shopId: string, productId: string, notes: string) => void;
   setSelected: (shopId: string, selected: boolean) => void;
   removeShop: (shopId: string) => void;
   /** After a successful checkout: drop the shops that were ordered, keep the rest. */
@@ -78,6 +79,7 @@ export function CartProvider({ tenantSlug, multiShop, children }: { tenantSlug: 
           .map(s => s.id !== shopId ? s : { ...s, lines: s.lines.map(l => l.product_id === productId ? { ...l, qty } : l).filter(l => l.qty > 0) })
           .filter(s => s.lines.length) }));
       },
+      setNote(shopId, productId, notes) { setCart(prev => ({ v: 2, shops: prev.shops.map(s => s.id !== shopId ? s : { ...s, lines: s.lines.map(l => l.product_id === productId ? { ...l, notes: notes.trim() || undefined } : l) }) })); },
       setSelected(shopId, selected) { setCart(prev => ({ v: 2, shops: prev.shops.map(s => s.id === shopId ? { ...s, selected } : s) })); },
       removeShop(shopId) { setCart(prev => ({ v: 2, shops: prev.shops.filter(s => s.id !== shopId) })); },
       removeShops(ids) { setCart(prev => ({ v: 2, shops: prev.shops.filter(s => !ids.includes(s.id)) })); },

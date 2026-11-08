@@ -14,5 +14,5 @@ export default async function CartPage() {
       deliveryFee: ui('deliveryFee', L), checkout: ui('checkout', L), from: ui('from', L), remove: ui('remove', L),
       sendCartWhatsapp: ui('sendCartWhatsapp', L), waHello: ui('waHello', L), waOrderIntro: ui('waOrderIntro', L), total: ui('total', L), notes: ui('notes', L),
       minOrder: ui('minOrder', L), belowMin: ui('belowMin', L), checkoutSelected: ui('checkoutSelected', L), shopsSelected: ui('shopsSelected', L),
-      oneFeeCourier: ui('oneFeeCourier', L), feePerShop: ui('feePerShop', L), includeInOrder: ui('includeInOrder', L), keepForLater: ui('keepForLater', L) }} />;
+      oneFeeCourier: ui('oneFeeCourier', L), feePerShop: ui('feePerShop', L), includeInOrder: ui('includeInOrder', L), keepForLater: ui('keepForLater', L), continueShopping: ui('continueShopping', L), home: ui('home', L), lineNote: ui('lineNote', L) }} />;
 }

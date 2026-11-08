@@ -82,6 +82,15 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
       </section>
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">
+        <h3 style={{ marginTop: 0 }}>🏬 {pt('onlineShop', locale)}</h3>
+        <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>{pt('onlineShopHint', locale)}</p>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <a className="btn" href={`/s/${boot.shop.slug}`} target="_blank" rel="noreferrer">👁 {pt('viewAsCustomer', locale)}</a>
+          {owner && <a className="btn" href="/shop/settings" target="_blank" rel="noreferrer">⚙ {pt('shopDashboard', locale)}</a>}
+          <a className="btn ghost" href="/" target="_blank" rel="noreferrer">🏠 {pt('homePage', locale)}</a>
+        </div>
+      </section>
+      <section className="card">
         <h3 style={{ marginTop: 0 }}>🌐 {pt('language', locale)}</h3>
         <div className="row" style={{ gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="seg"><button className={locale === 'ar' ? 'active' : ''} onClick={() => setLocale('ar')}>العربية</button><button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')}>English</button></div>

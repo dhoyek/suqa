@@ -227,4 +227,5 @@ const T = {
   a_staff_add: { ar: 'إضافة موظف', en: 'Staff added' }, a_staff_invite: { ar: 'دعوة موظف', en: 'Staff invited' }, a_staff_set: { ar: 'تعديل موظف', en: 'Staff changed' }, a_import: { ar: 'استيراد أصناف', en: 'Items imported' }, a_bulk: { ar: 'تعديل جماعي', en: 'Bulk change' },
 } as const;
 export type Key = keyof typeof T;
-export const pt = (k: Key, l: L): string => T[k][l] ?? T[k].ar;
+// never throws: an unknown key (new audit action, status…) renders as the key itself
+export const pt = (k: Key, l: L): string => T[k]?.[l] ?? T[k]?.ar ?? String(k);

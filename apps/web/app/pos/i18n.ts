@@ -173,6 +173,7 @@ const T = {
   repeatLast: { ar: 'نفس آخر طلب', en: 'Repeat last order' }, lastOrder: { ar: 'آخر طلب', en: 'Last order' }, ordersCount: { ar: 'عدد الطلبات', en: 'Orders' }, hasOpenOrder: { ar: 'لهذا الزبون {n} طلب مفتوح', en: 'This customer has {n} open order(s)' },
   customersNav: { ar: 'الزبائن', en: 'Customers' }, defaultDeliveryFee: { ar: 'رسوم التوصيل الافتراضية ($)', en: 'Default delivery fee ($)' },
   shopSettings: { ar: 'إعدادات المحل (POS)', en: 'Shop settings (POS)' },
+  pickCustomer: { ar: 'اختيار زبون', en: 'Pick customer' }, newCustomerWillSave: { ar: 'رقم جديد — سيُحفظ كزبون عند التأكيد', en: 'New number — will be saved as a customer on confirm' },
   notifyStages: { ar: 'إشعارات الزبون عبر واتساب', en: 'Customer WhatsApp notifications' },
   notifyHint: { ar: 'يصل الزبون رسالة قصيرة عند كل مرحلة مختارة. الطلبات المسجّلة من الكاشير تُرسل تأكيد القبول مباشرة.', en: 'The customer gets a short message at each selected stage. Orders typed in at the POS send the acceptance confirmation right away.' }, maxDiscount: { ar: 'أقصى حسم للكاشير (%)', en: 'Max cashier discount (%)' }, lbpStep: { ar: 'تقريب الليرة إلى', en: 'Round LBP to' },
   allowNegative: { ar: 'السماح بالبيع عند نفاد المخزون', en: 'Allow selling below zero stock' }, hideWhenZero: { ar: 'إخفاء الصنف من المتجر عند نفاده', en: 'Hide item online when out of stock' },

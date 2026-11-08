@@ -23,7 +23,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const [openOrders, setOpenOrders] = useState(0); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
   const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
-  const [asking, setAsking] = useState<string | null>(null);
+  const [asking, setAsking] = useState<string | null>(null); const [picker, setPicker] = useState(false);
   // delivery-zone fee from the pin (online only; outside the zones → keep the default/typed fee)
   useEffect(() => {
     if (!coords || !online || ful !== 'delivery') { setZone(null); return; }
@@ -51,10 +51,12 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   // exact number typed → auto-fill from the customer record
   useEffect(() => { if (picked && picked.phone_key === key) return; const c = matches.find(m => m.phone_key === key); if (c && key.length >= 7) pick(c, false); }, [key, matches]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pick = (c: ShopCustomer, closeList = true) => {
-    setPicked(c); setPhone(c.phone); if (!name || c.name) setName(c.name || name);
-    const a = c.address ?? {}; if (a.line1 && !line1) setLine1(a.line1); if (a.map_url && !map) setMap(a.map_url); if (a.lat != null && a.lng != null && !coords) setCoords({ lat: a.lat, lng: a.lng });
-    if (closeList) setShowList(false);
+  const pick = (c: ShopCustomer, closeList = true, replace = false) => {
+    setPicked(c); setPhone(c.phone); if (replace || !name || c.name) setName(c.name || (replace ? '' : name));
+    const a = c.address ?? {};
+    if (a.line1 && (replace || !line1)) setLine1(a.line1); if (a.map_url && (replace || !map)) setMap(a.map_url); if (a.lat != null && a.lng != null && (replace || !coords)) setCoords({ lat: a.lat, lng: a.lng });
+    if (replace && isOrder && (a.line1 || a.lat != null)) setFul('delivery');
+    if (closeList) setShowList(false); setPicker(false);
   };
   const onMapText = (v: string) => { setMap(v); const c = coordsFrom(v); if (c) setCoords(c); };
   const onPin = (p: { lat: number; lng: number }) => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); };
@@ -86,8 +88,9 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
             <div className="seg">{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div>
 
             <label className="label">{pt('customerPhone', locale)}{isOrder ? ' *' : ''}</label>
-            <div style={{ position: 'relative' }}>
-              <input ref={phoneRef} className="input" inputMode="tel" dir="ltr" value={phone} autoFocus placeholder="70 123 456" onChange={e => { setPhone(e.target.value); setPicked(null); setShowList(true); }} onFocus={() => setShowList(true)} onBlur={() => setTimeout(() => setShowList(false), 150)} />
+            <div className="row" style={{ gap: 6 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <input ref={phoneRef} className="input" inputMode="tel" dir="ltr" value={phone} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches} placeholder="70 123 456" onChange={e => { setPhone(e.target.value); setPicked(null); setShowList(true); }} onFocus={() => setShowList(true)} onBlur={() => setTimeout(() => setShowList(false), 150)} />
               {showList && matches.length > 0 && (
                 <div className="cust-list">
                   {matches.map(c => <button key={c.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => pick(c)}>
@@ -96,11 +99,14 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
                 </div>
               )}
             </div>
+            <button className="btn" type="button" onClick={() => setPicker(true)} title={pt('pickCustomer', locale)}>👥 {pt('pickCustomer', locale)}</button>
+            </div>
             {!phone && !name && matches.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>{matches.slice(0, 5).map(c => <button key={c.id} className="chip" onClick={() => pick(c)}>{c.name || fmtPhone(c.phone)}</button>)}</div>}
             {openOrders > 0 && <p className="pill warn" style={{ margin: 0 }}>⚠ {pt('hasOpenOrder', locale).replace('{n}', String(openOrders))}</p>}
 
             <label className="label">{pt('customerName', locale)}</label>
             <input className="input" value={name} onChange={e => { setName(e.target.value); if (!phone) setShowList(true); }} />
+            {!picked && key.length >= 6 && <small className="muted">🆕 {pt('newCustomerWillSave', locale)}</small>}
             {picked && <small className="muted">{picked.discount_pct && Number(picked.discount_pct) ? `${pt('discount', locale)} ${Number(picked.discount_pct)}% · ` : ''}{pt('ordersCount', locale)}: {picked.orders_count}{last ? ` · ${pt('lastOrder', locale)} ${fmtUsd(num(last.order.total_cents))}` : ''}</small>}
 
             {isOrder && <>
@@ -138,6 +144,25 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
         </div>
       </Modal>
       {pickMap && <MapPicker locale={locale} initial={coords} onDone={onPin} onClose={() => setPickMap(false)} />}
+      {picker && <CustomerPicker boot={boot} locale={locale} onPick={c => pick(c, true, true)} onNew={() => { setPicker(false); setPhone(''); setName(''); setPicked(null); setTimeout(() => phoneRef.current?.focus(), 50); }} onClose={() => setPicker(false)} />}
     </>
+  );
+}
+
+/** Full-screen customer list (search by name or number) — the explicit way to choose on a phone, where the dropdown is easy to miss. */
+function CustomerPicker({ boot, locale, onPick, onNew, onClose }: { boot: Booted; locale: L; onPick: (c: ShopCustomer) => void; onNew: () => void; onClose: () => void }) {
+  const [q, setQ] = useState(''); const [rows, setRows] = useState<ShopCustomer[]>([]);
+  useEffect(() => { let on = true; (q.trim() ? searchCustomers(boot.db, q, 40) : boot.db.shopCustomers.toArray().then(cs => cs.sort((a, b) => (b.last_order_at ?? '').localeCompare(a.last_order_at ?? '')).slice(0, 40))).then(r => { if (on) setRows(r); }); return () => { on = false; }; }, [boot, q]);
+  return (
+    <Modal open onClose={onClose} title={pt('pickCustomer', locale)} footer={<><button className="btn" onClick={onNew}>＋ {pt('newCustomer', locale)}</button><span style={{ flex: 1 }} /><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button></>}>
+      <input className="input" autoFocus placeholder={pt('searchPerson', locale)} value={q} onChange={e => setQ(e.target.value)} />
+      <div className="cust-rows" style={{ marginTop: 8, maxHeight: '55dvh', overflow: 'auto' }}>
+        {rows.map(c => <button key={c.id} className="cust-row" onClick={() => onPick(c)}>
+          <div><strong>{c.name || '—'}</strong><div className="muted" dir="ltr" style={{ fontSize: 12 }}>{fmtPhone(c.phone)}</div>{c.address?.line1 && <small className="muted">📍 {c.address.line1}</small>}</div>
+          <div className="muted" style={{ fontSize: 12, textAlign: 'end' }}>{c.orders_count} {pt('ordersNav', locale)}</div>
+        </button>)}
+        {!rows.length && <p className="muted">{pt('noCustomers', locale)}</p>}
+      </div>
+    </Modal>
   );
 }

@@ -35,7 +35,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [parked, setParked] = useState<Awaited<ReturnType<typeof listParked>>>([]);
   const [members, setMembers] = useState<Staff[]>([]);
   const [shift, setShift] = useState<Shift | null | undefined>(undefined);
-  const [fee, setFee] = useState(0);                                         // delivery fee (cents) for whatsapp/phone delivery orders
+  const [fee, setFee] = useState(0);
+  const [cartOpen, setCartOpen] = useState(false);                          // phones: the cart is a bottom sheet                                         // delivery fee (cents) for whatsapp/phone delivery orders
   const searchRef = useRef<HTMLInputElement>(null);
   const lbpStep = shop.lbp_rounding_step ?? 5000;
   const maxDisc = num(shop.max_discount_pct);
@@ -128,7 +129,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     <div className="pos-sell">
       <div className="pos-pane">
         <div className="row" style={{ gap: 8 }}>
-          <input ref={searchRef} className="input big" style={{ flex: 1 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} autoFocus
+          <input ref={searchRef} className="input big" style={{ flex: 1 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
             onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (results.length === 1 ? results[0] : null); if (p) add(p); } }} />
           <button className="btn big" style={{ width: 'auto' }} title={pt('cameraScan', locale)} onClick={() => setDialog({ k: 'camera' })}>📷</button>
           <button className="btn big" style={{ width: 'auto' }} title={pt('openItem', locale)} onClick={() => setDialog({ k: 'open' })}>＋</button>
@@ -153,7 +154,13 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>
       </div>
 
-      <aside className="pos-pane cart">
+      <aside className={`pos-pane cart ${cartOpen ? 'open' : ''}`}>
+        <div className="cart-bar" onClick={() => setCartOpen(o => !o)}>
+          <span className="cart-bar-count">🛒 {live.length}</span>
+          <strong>{fmtUsd(grand)}</strong>
+          <span className="muted">{cartOpen ? '▼' : '▲'}</span>
+          <button className="btn primary" disabled={!live.length} onClick={e => { e.stopPropagation(); setDialog({ k: 'pay' }); }}>{pt('pay', locale)}</button>
+        </div>
         <div className="row spread" style={{ alignItems: 'center' }}>
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>

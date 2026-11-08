@@ -35,15 +35,19 @@ export default function Shell(props: {
   const online = status?.online ?? true;
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
-  const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);                      // user pressed sync → show the icon turning briefly
+  const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);
+  const [menu, setMenu] = useState(false);
+  const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
   return (
     <div className="pos" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       <header className="pos-bar">
-        <nav className="pos-nav">
-          {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
+        <button className="btn icon pos-menu-btn" aria-label="menu" onClick={() => setMenu(m => !m)}>☰{pendingCount > 0 && view !== 'orders' && <span className="nav-badge">{pendingCount}</span>}</button>
+        <span className="pos-menu-current">{ICON[view]} {pt(LABEL[view], locale)}</span>
+        <nav className={`pos-nav ${menu ? 'open' : ''}`} onClick={e => { if (e.target === e.currentTarget) setMenu(false); }}>
+          {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
           <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>

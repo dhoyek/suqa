@@ -20,6 +20,7 @@ create table if not exists suqa.shop_customers (
   user_id       uuid,                          -- online account when known
   orders_count  int not null default 0,
   last_order_at timestamptz,
+  active        boolean not null default true,     -- 33: hidden from pickers when false
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (shop_id, phone_key)

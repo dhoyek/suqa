@@ -19,31 +19,31 @@ const norm = (s: string) => s.toLowerCase().replace(/[ً-ْ]/g, '').replace(/[أ
 export async function searchCustomers(db: PosDb, q: string, limit = 8): Promise<ShopCustomer[]> {
   const all = await db.shopCustomers.toArray();
   const digits = normPhone(q); const text = norm(q);
-  if (!digits && !text) return all.filter(c => c.last_order_at).sort((a, b) => (b.last_order_at ?? '').localeCompare(a.last_order_at ?? '')).slice(0, limit);
+  if (!digits && !text) return all.filter(c => c.last_order_at && c.active !== false).sort((a, b) => (b.last_order_at ?? '').localeCompare(a.last_order_at ?? '')).slice(0, limit);
   const score = (c: ShopCustomer) => {
     let s = 0;
     if (digits) { if (c.phone_key.startsWith(digits)) s += 3; else if (c.phone_key.includes(digits)) s += 1; }
     if (text) { const n = norm(c.name); if (n.startsWith(text)) s += 3; else if (n.split(/\s+/).some(w => w.startsWith(text))) s += 2; else if (n.includes(text)) s += 1; }
     return s;
   };
-  return all.map(c => ({ c, s: score(c) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s || (b.c.last_order_at ?? '').localeCompare(a.c.last_order_at ?? '')).slice(0, limit).map(x => x.c);
+  return all.filter(c => c.active !== false).map(c => ({ c, s: score(c) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s || (b.c.last_order_at ?? '').localeCompare(a.c.last_order_at ?? '')).slice(0, limit).map(x => x.c);
 }
 
 export const findCustomer = async (db: PosDb, phone: string) => db.shopCustomers.where('phone_key').equals(normPhone(phone)).first();
 
 /** Explicit edit from the dialog: saved locally now, pushed as customer.upsert. */
-export async function upsertCustomer(db: PosDb, shopId: string, input: { phone: string; name: string; address?: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | null }): Promise<ShopCustomer> {
+export async function upsertCustomer(db: PosDb, shopId: string, input: { phone: string; name: string; address?: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | null; active?: boolean }): Promise<ShopCustomer> {
   const key = normPhone(input.phone); if (key.length < 6) throw new Error('bad_phone');
   const existing = await db.shopCustomers.where('phone_key').equals(key).first();
   const row: ShopCustomer = {
     id: existing?.id ?? newId(), shop_id: shopId, phone: input.phone.trim(), phone_key: key, name: input.name.trim() || existing?.name || '',
     address: input.address ?? existing?.address ?? {}, notes: input.notes === undefined ? existing?.notes ?? null : input.notes, user_id: existing?.user_id ?? null,
     credit_limit_cents: input.credit_limit_cents === undefined ? existing?.credit_limit_cents ?? null : input.credit_limit_cents, discount_pct: input.discount_pct === undefined ? existing?.discount_pct ?? 0 : input.discount_pct,
-    orders_count: existing?.orders_count ?? 0, last_order_at: existing?.last_order_at ?? null, updated_at: new Date().toISOString(),
+    active: input.active ?? existing?.active ?? true, orders_count: existing?.orders_count ?? 0, last_order_at: existing?.last_order_at ?? null, updated_at: new Date().toISOString(),
   };
   await db.transaction('rw', [db.shopCustomers, db.outbox], async () => {
     await db.shopCustomers.put(row);
-    await enqueue(db, 'customer.upsert', { phone: row.phone, name: row.name, ...(input.address !== undefined ? { address: row.address } : {}), ...(input.notes !== undefined ? { notes: row.notes } : {}), ...(input.credit_limit_cents !== undefined ? { credit_limit_cents: row.credit_limit_cents } : {}), ...(input.discount_pct !== undefined ? { discount_pct: row.discount_pct } : {}) });
+    await enqueue(db, 'customer.upsert', { phone: row.phone, name: row.name, ...(input.address !== undefined ? { address: row.address } : {}), ...(input.notes !== undefined ? { notes: row.notes } : {}), ...(input.credit_limit_cents !== undefined ? { credit_limit_cents: row.credit_limit_cents } : {}), ...(input.discount_pct !== undefined ? { discount_pct: row.discount_pct } : {}), ...(input.active !== undefined ? { active: row.active } : {}) });
   });
   return row;
 }
@@ -69,4 +69,33 @@ export function coordsFrom(url: string): { lat: number; lng: number } | null {
   const m = url.match(/(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/) ?? url.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
   if (!m) return null; const lat = Number(m[1]), lng = Number(m[2]);
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+/** Merge a duplicate into the kept record: local orders re-pointed to the kept number, the dropped row removed; the server does the same (customer.merge). */
+export async function mergeCustomers(db: PosDb, keep: ShopCustomer, drop: ShopCustomer, approved_by?: string | null): Promise<void> {
+  if (keep.id === drop.id) throw new Error('same_customer');
+  await db.transaction('rw', [db.shopCustomers, db.orders, db.outbox], async () => {
+    const moved = (await db.orders.toArray()).filter(o => normPhone(o.customer_phone) === drop.phone_key);
+    for (const o of moved) await db.orders.update(o.id, { customer_phone: keep.phone, customer_name: o.customer_name?.trim() ? o.customer_name : keep.name });
+    const all = (await db.orders.toArray()).filter(o => !o.parked && normPhone(o.customer_phone) === keep.phone_key);
+    await db.shopCustomers.put({ ...keep, name: keep.name || drop.name, address: Object.keys(keep.address ?? {}).length ? keep.address : drop.address, notes: [keep.notes, drop.notes].filter(Boolean).join(' · ') || null,
+      credit_limit_cents: keep.credit_limit_cents ?? drop.credit_limit_cents ?? null, discount_pct: Math.max(Number(keep.discount_pct) || 0, Number(drop.discount_pct) || 0), active: true,
+      orders_count: all.length, last_order_at: all.reduce<string | null>((m, o) => (!m || o.placed_at > m ? o.placed_at : m), null), updated_at: new Date().toISOString() });
+    await db.shopCustomers.delete(drop.id);
+    await enqueue(db, 'customer.merge', { keep_id: keep.id, drop_id: drop.id, ...(approved_by ? { approved_by } : {}) });
+  });
+}
+
+/** True when the customer has orders in the mirror — then deleting is refused (server says has_history too) and "inactive" is the way. */
+export async function customerHasHistory(db: PosDb, c: ShopCustomer): Promise<boolean> {
+  if (c.orders_count > 0) return true;
+  const o = await db.orders.toArray(); return o.some(x => normPhone(x.customer_phone) === c.phone_key);
+}
+
+export async function deleteCustomer(db: PosDb, c: ShopCustomer, approved_by?: string | null): Promise<void> {
+  if (await customerHasHistory(db, c)) throw new Error('has_history');
+  await db.transaction('rw', [db.shopCustomers, db.outbox], async () => {
+    await db.shopCustomers.delete(c.id);
+    await enqueue(db, 'customer.delete', { id: c.id, ...(approved_by ? { approved_by } : {}) });
+  });
 }

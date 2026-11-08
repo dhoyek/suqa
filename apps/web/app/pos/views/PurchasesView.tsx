@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
+import { commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
+import { MergeDialog } from './CustomersView';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -160,9 +161,12 @@ function PurchaseDetail({ boot, locale, purchase, lines, supplier, staff, canEdi
 function SupplierCard({ boot, locale, supplier, staff, rate, canEdit, onEdit, onClose, onChanged }: { boot: Booted; locale: L; supplier: Supplier; staff: Staff; rate: number; canEdit: boolean; onEdit: () => void; onClose: () => void; onChanged: () => void }) {
   const [st, setSt] = useState<Awaited<ReturnType<typeof supplierStatement>>>([]); const [pay, setPay] = useState(false);
   useEffect(() => { supplierStatement(boot.db, supplier).then(setSt); }, [boot, supplier]);
+  const [merge, setMerge] = useState(false); const [hasHistory, setHasHistory] = useState(true); const [all, setAll] = useState<Supplier[]>([]); const confirmD = useConfirm();
+  useEffect(() => { supplierHasHistory(boot.db, supplier).then(setHasHistory); boot.db.suppliers.toArray().then(setAll); }, [boot, supplier]);
+  const owner = staff.role === 'owner';
   const step = boot.shop.lbp_rounding_step ?? 5000;
   return <>
-    <Modal open onClose={onClose} title={supplier.name} wide footer={<><button className="btn" onClick={() => doPrint(supplierStatementHtml(supplier, st, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('statementTitle', locale)}</button>{canEdit && <button className="btn ghost" onClick={onEdit}>✎</button>}<span style={{ flex: 1 }} />{canEdit && <button className="btn primary" onClick={() => setPay(true)}>💵 {pt('paySupplier', locale)}</button>}</>}>
+    <Modal open onClose={onClose} title={supplier.name} wide footer={<><button className="btn" onClick={() => doPrint(supplierStatementHtml(supplier, st, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('statementTitle', locale)}</button>{canEdit && <button className="btn ghost" onClick={onEdit}>✎</button>}{owner && <button className="btn" onClick={() => setMerge(true)}>⇄ {pt('mergeSupplier', locale)}</button>}{owner && <button className="btn danger" disabled={hasHistory} title={hasHistory ? pt('hasHistoryHintS', locale) : ''} onClick={async () => { if (!(await confirmD(`${pt('deleteSupplier', locale)}: ${supplier.name}?`, { danger: true }))) return; await deleteSupplier(boot.db, supplier); boot.engine.poke(); onChanged(); onClose(); }}>🗑</button>}<span style={{ flex: 1 }} />{canEdit && <button className="btn primary" onClick={() => setPay(true)}>💵 {pt('paySupplier', locale)}</button>}</>}>
       <div className="kpis">
         <div className="kpi"><span>{pt('weOwe', locale)}</span><strong className={num(supplier.balance_cents) > 0 ? 'bad' : ''}>{fmtUsd(num(supplier.balance_cents))}</strong><small>{fmtLbp(roundLbp(usdToLbp(num(supplier.balance_cents), rate), step), locale)}</small></div>
         <div className="kpi"><span>{pt('customerPhone', locale)}</span><strong dir="ltr" style={{ fontSize: 15 }}>{supplier.phone ? fmtPhone(supplier.phone) : '—'}</strong><small>{supplier.contact ?? ''}</small></div>
@@ -173,6 +177,7 @@ function SupplierCard({ boot, locale, supplier, staff, rate, canEdit, onEdit, on
       </tbody></table>
     </Modal>
     {pay && <PayDialogS boot={boot} locale={locale} supplier={supplier} rate={rate} staff={staff} onClose={() => setPay(false)} onDone={() => { setPay(false); onChanged(); supplierStatement(boot.db, supplier).then(setSt); }} />}
+    {merge && <MergeDialog locale={locale} keep={supplier} candidates={all.filter(x => x.id !== supplier.id)} label={x => `${x.name}${x.phone ? ' · ' + fmtPhone(x.phone) : ''} · ${fmtUsd(num(x.balance_cents))}`} onClose={() => setMerge(false)} onPick={async drop => { if (!(await confirmD(pt('mergeConfirm', locale).replace('{drop}', drop.name).replace('{keep}', supplier.name), { danger: true }))) return; await mergeSuppliers(boot.db, supplier, drop); boot.engine.poke(); setMerge(false); onChanged(); onClose(); }} />}
   </>;
 }
 

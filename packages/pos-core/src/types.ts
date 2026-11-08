@@ -61,11 +61,11 @@ export interface Purchase { id: string; shop_id: string; supplier_id: string; nu
 export interface PurchaseLine { id: string; purchase_id: string; shop_id: string; product_id: string; name: Localized; qty: number; unit_cost: number; unit_cost_cents: number; line_total_cents: number; new_price_usd?: number | null; new_price_lbp?: number | null; expiry?: string | null; sort: number }
 export interface SupplierPayment { id: string; shop_id: string; supplier_id: string; purchase_id?: string | null; tender: 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'transfer'; currency: Currency; amount: number; amount_cents: number; rate: number; from_drawer: boolean; shift_id?: string | null; note?: string | null; user_id?: string | null; at: string }
 export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number }
-export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; updated_at?: string }
+export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7

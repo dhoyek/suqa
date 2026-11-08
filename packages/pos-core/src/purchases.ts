@@ -100,3 +100,28 @@ export async function supplierStatement(db: PosDb, supplier: Supplier): Promise<
   const out = items.map(i => { bal += i.amount_cents; return { ...i, balance_cents: bal }; });
   return out.reverse();
 }
+
+/** Merge a duplicate supplier: local purchases/payments re-pointed, balance summed, dropped row removed; server mirrors it (supplier.merge). */
+export async function mergeSuppliers(db: PosDb, keep: Supplier, drop: Supplier, approved_by?: string | null): Promise<void> {
+  if (keep.id === drop.id) throw new Error('same_supplier');
+  await db.transaction('rw', [db.suppliers, db.purchases, db.supplierPayments, db.outbox], async () => {
+    await db.purchases.where('supplier_id').equals(drop.id).modify({ supplier_id: keep.id });
+    await db.supplierPayments.where('supplier_id').equals(drop.id).modify({ supplier_id: keep.id });
+    await db.suppliers.put({ ...keep, phone: keep.phone || drop.phone, phone_key: keep.phone_key || drop.phone_key, contact: keep.contact || drop.contact, notes: [keep.notes, drop.notes].filter(Boolean).join(' · ') || null,
+      balance_cents: (keep.balance_cents ?? 0) + (drop.balance_cents ?? 0), active: true, updated_at: new Date().toISOString() });
+    await db.suppliers.delete(drop.id);
+    await enqueue(db, 'supplier.merge', { keep_id: keep.id, drop_id: drop.id, ...(approved_by ? { approved_by } : {}) });
+  });
+}
+
+export async function supplierHasHistory(db: PosDb, s: Supplier): Promise<boolean> {
+  return (await db.purchases.where('supplier_id').equals(s.id).count()) > 0 || (await db.supplierPayments.where('supplier_id').equals(s.id).count()) > 0;
+}
+
+export async function deleteSupplier(db: PosDb, s: Supplier, approved_by?: string | null): Promise<void> {
+  if (await supplierHasHistory(db, s)) throw new Error('has_history');
+  await db.transaction('rw', [db.suppliers, db.outbox], async () => {
+    await db.suppliers.delete(s.id);
+    await enqueue(db, 'supplier.delete', { id: s.id, ...(approved_by ? { approved_by } : {}) });
+  });
+}

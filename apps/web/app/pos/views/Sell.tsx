@@ -35,8 +35,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [parked, setParked] = useState<Awaited<ReturnType<typeof listParked>>>([]);
   const [members, setMembers] = useState<Staff[]>([]);
   const [shift, setShift] = useState<Shift | null | undefined>(undefined);
-  const [fee, setFee] = useState(0);
-  const [cartOpen, setCartOpen] = useState(false);                          // phones: the cart is a bottom sheet                                         // delivery fee (cents) for whatsapp/phone delivery orders
+  const [fee, setFee] = useState(0);                                         // delivery fee (cents) for whatsapp/phone delivery orders
   const searchRef = useRef<HTMLInputElement>(null);
   const lbpStep = shop.lbp_rounding_step ?? 5000;
   const maxDisc = num(shop.max_discount_pct);
@@ -154,13 +153,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>
       </div>
 
-      <aside className={`pos-pane cart ${cartOpen ? 'open' : ''}`}>
-        <div className="cart-bar" onClick={() => setCartOpen(o => !o)}>
-          <span className="cart-bar-count">🛒 {live.length}</span>
-          <strong>{fmtUsd(grand)}</strong>
-          <span className="muted">{cartOpen ? '▼' : '▲'}</span>
-          <button className="btn primary" disabled={!live.length} onClick={e => { e.stopPropagation(); setDialog({ k: 'pay' }); }}>{pt('pay', locale)}</button>
-        </div>
+      <aside className="pos-pane cart">
         <div className="row spread" style={{ alignItems: 'center' }}>
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>

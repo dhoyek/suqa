@@ -290,18 +290,17 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
   .pos-status .pill.status { padding: 4px 8px; font-size: 12px; }
   .pos-status .muted { display: none; }                               /* staff name — shown on the lock/settings screens */
 
-  /* sell: catalog fills the screen, the cart is a bottom sheet with an always-visible bar (count · total · pay) */
-  .pos-sell { display: block; height: 100%; }
-  .pos-sell > .pos-pane:first-child { height: 100%; padding-bottom: 72px; overflow: auto; }
-  .pos-pane.cart { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; max-height: 85dvh; height: auto; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,.12); background: #fff; transform: translateY(calc(100% - 64px)); transition: transform .2s ease; display: flex; flex-direction: column; }
-  .pos-pane.cart.open { transform: none; }
-  .cart-bar { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  .cart-bar strong { font-size: 20px; flex: 1; text-align: center; }
-  .cart-bar .btn { min-height: 44px; }
-  .cart-lines { min-height: 80px; max-height: 40dvh; }
-  .cart-actions .pay { min-height: 52px; font-size: 18px; }
+  /* sell: catalog on top (scrolls), cart below — lines, total and the pay button all visible in one view */
+  .pos-sell { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
+  .pos-sell > .pos-pane:first-child { min-height: 0; overflow: auto; }
+  .pos-pane.cart { border-inline-start: 0; border-top: 1px solid var(--line); max-height: 52dvh; display: flex; flex-direction: column; padding: 8px 10px; }
+  .cart-lines { min-height: 56px; max-height: 24dvh; }
+  .cart-totals .big { font-size: 19px; } .cart-totals .big.lbp { font-size: 14px; } .cart-totals .muted { display: none; }
+  .cart-actions { grid-template-columns: 1fr 1fr auto; gap: 4px; }
+  .cart-actions .btn { min-height: 40px; font-size: 14px; }
+  .cart-actions .pay { min-height: 50px; font-size: 18px; }
   .cart-actions kbd { display: none; }
-  .item-tile { min-height: 84px; }
+  .item-tile { min-height: 72px; }
 
   /* modals become full-height sheets: no horizontal scroll, sticky footer with the action button */
   .pos-modal-backdrop { padding: 0; align-items: flex-end; }
@@ -325,7 +324,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .pos-main { overflow-x: hidden; }
 .pos .card { max-width: 100%; overflow-x: auto; }
 .pos-pane.cart .cart-bar { display: none; }
-@media (max-width: 760px) { .pos-pane.cart .cart-bar { display: flex; } }
 /* foldables & tablets (Fold unfolded ≈ 900px, iPad ≈ 820–1024px): two-column boards, roomy cart */
 @media (min-width: 761px) and (max-width: 1100px) {
   .pos-nav button { min-width: 60px; padding: 6px 8px; }

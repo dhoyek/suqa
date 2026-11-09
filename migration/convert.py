@@ -113,9 +113,9 @@ def convert(exp, two_years=True):
             bal = conv(num(p['DEBIT']) - num(p['CREDIT']))
             customers.append({'key': p['ID'], 'phone': phone_clean(p['PHONE']), 'name': p['TITLE'].strip(), 'discount_pct': num(p['DISCOUNT']) or None,
                               'credit_limit_cents': cents(conv(num(p['CREDIT_LIMIT']))) or None, 'notes': (p['REMARKS'] or '').strip() or None, 'balance_cents': cents(bal)})
-        elif p['TYPE'] == 'S' and p['ID'] != '0':
+        elif p['TYPE'] == 'S':   # includes the old 'Default Supplier' (id 0): some purchases point at it
             bal = conv(num(p['CREDIT']) - num(p['DEBIT']))
-            suppliers.append({'key': p['ID'], 'name': p['TITLE'].strip(), 'phone': phone_clean(p['PHONE']), 'contact': (p['Contact'] or '').strip() or None,
+            suppliers.append({'key': p['ID'], 'name': ('مورّد غير محدد' if p['ID'] == '0' else p['TITLE'].strip()), 'phone': phone_clean(p['PHONE']), 'contact': (p['Contact'] or '').strip() or None,
                               'notes': (p['REMARKS'] or '').strip() or None, 'balance_cents': cents(bal)})
     S['customers'] = len(customers); S['customers_with_phone'] = sum(1 for c in customers if c['phone']); S['customers_owing'] = sum(1 for c in customers if c['balance_cents'] > 0)
     S['suppliers'] = len(suppliers); S['suppliers_owed'] = sum(1 for s in suppliers if s['balance_cents'] != 0)

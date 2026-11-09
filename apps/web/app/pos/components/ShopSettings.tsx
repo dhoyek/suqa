@@ -19,12 +19,14 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
   const STAGES = ['accepted', 'ready', 'out_for_delivery', 'delivered', 'rejected'] as const;
   const DEF_STAGES: string[] = ['accepted', 'ready', 'out_for_delivery', 'rejected'];
   const [stages, setStages] = useState<string[]>(s.notify_stages ?? DEF_STAGES);
+  type SF = { prefix: string; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number };
+  const [extra, setExtra] = useState<SF[]>((s.scale_formats ?? []).map(f => ({ ...f })));
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true); setMsg(null);
     try {
       const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, receipt_footer: footer.trim() || null,
-        default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000, notify_stages: stages };
+        default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000, notify_stages: stages, scale_formats: extra.filter(f => f.prefix.replace(/\D/g, '')).map(f => ({ prefix: f.prefix.replace(/\D/g, ''), code_len: Number(f.code_len) || 5, value_kind: f.value_kind ?? 'weight', value_divisor: Number(f.value_divisor) || 1000 })) };
       const { data, error } = await sb.rpc('pos_shop_settings', { p_shop: s.id, p_patch: patch });
       if (error) { setMsg(error.message); return; }
       Object.assign(boot.shop, data as Shop); await setMeta(boot.db, META.shop, boot.shop); setMsg(pt('saved', locale));
@@ -57,6 +59,13 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
         <F label={pt('scaleValue', locale)}><select className="input" value={scKind} onChange={e => setScKind(e.target.value as typeof scKind)}><option value="weight">{pt('scaleWeight', locale)}</option><option value="price_lbp">{pt('scalePriceLbp', locale)}</option><option value="price_usd">{pt('scalePriceUsd', locale)}</option></select></F>
         <F label={pt('scaleDivisor', locale)}><input className="input" dir="ltr" inputMode="numeric" value={scDiv} onChange={e => setScDiv(e.target.value)} /></F>
       </div>
+      {extra.map((f, i) => <div key={i} className="grid2" style={{ marginTop: 6 }}>
+        <F label={`${pt('scalePrefix', locale)} ${i + 2}`}><input className="input" dir="ltr" inputMode="numeric" value={f.prefix} onChange={e => setExtra(x => x.map((y, j) => j === i ? { ...y, prefix: e.target.value } : y))} /></F>
+        <F label={pt('scaleCodeLen', locale)}><input className="input" dir="ltr" inputMode="numeric" value={f.code_len ?? ''} onChange={e => setExtra(x => x.map((y, j) => j === i ? { ...y, code_len: Number(e.target.value) || undefined } : y))} /></F>
+        <F label={pt('scaleValue', locale)}><select className="input" value={f.value_kind ?? 'weight'} onChange={e => setExtra(x => x.map((y, j) => j === i ? { ...y, value_kind: e.target.value as SF['value_kind'] } : y))}><option value="weight">{pt('scaleWeight', locale)}</option><option value="price_lbp">{pt('scalePriceLbp', locale)}</option><option value="price_usd">{pt('scalePriceUsd', locale)}</option></select></F>
+        <F label={pt('scaleDivisor', locale)}><div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" inputMode="numeric" value={f.value_divisor ?? ''} onChange={e => setExtra(x => x.map((y, j) => j === i ? { ...y, value_divisor: Number(e.target.value) || undefined } : y))} /><button className="btn ghost" onClick={() => setExtra(x => x.filter((_, j) => j !== i))}>✕</button></div></F>
+      </div>)}
+      <button className="btn" style={{ marginTop: 6 }} onClick={() => setExtra(x => [...x, { prefix: '', code_len: 4, value_kind: 'price_lbp', value_divisor: 1 }])}>＋ {pt('addScaleFormat', locale)}</button>
       <h4 style={{ margin: '14px 0 4px' }}>💬 {pt('notifyStages', locale)}</h4>
       <p className="muted" style={{ fontSize: 12, margin: '0 0 6px' }}>{pt('notifyHint', locale)}</p>
       <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>

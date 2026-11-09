@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff } from '@suqa/pos-core';
+import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff, type Supplier } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
@@ -33,6 +33,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   const [bcInput, setBcInput] = useState(''); const [bcErr, setBcErr] = useState<string | null>(null);
   const [unit, setUnit] = useState<string>(product?.unit_kind ?? 'piece'); const [dec, setDec] = useState(!!product?.decimal_qty); const [vat, setVat] = useState(!!product?.vat);
   const [track, setTrack] = useState(!!product?.track_stock); const [min, setMin] = useState(String(Number(product?.min_stock ?? 0)));
+  const [supplierId, setSupplierId] = useState(product?.supplier_id ?? ''); const [margin, setMargin] = useState(product?.margin_pct != null ? String(Number(product.margin_pct)) : ''); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  useEffect(() => { boot.db.suppliers.toArray().then(ss => setSuppliers(ss.filter(x => x.active).sort((a, b) => a.name.localeCompare(b.name)))); }, [boot]);
   const [vis, setVis] = useState(product?.visible_online ?? true); const [avail, setAvail] = useState(product?.is_available ?? true); const [active, setActive] = useState(product?.is_active ?? true);
   const [gate, setGate] = useState(false); const [err, setErr] = useState<string | null>(null);
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index]);
@@ -52,7 +54,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
     const fields: Partial<Product> = {
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
       price_usd: cur === 'usd' ? priceNum : Number(product?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(product?.price_lbp ?? 0),
-      sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0,
+      sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
       visible_online: vis, is_available: avail, is_active: active, image_url: img,
       description: { ar: dAr.trim(), en: dEn.trim() },
     };
@@ -105,6 +107,9 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
           </div>
           <label className="label">{pt('unit', locale)}<select className="input" value={unit} onChange={e => setUnit(e.target.value)}>{UNITS.map(u => <option key={u} value={u}>{pt(u, locale)}</option>)}</select></label>
           <label className="label">{pt('minStock', locale)}<input className="input" dir="ltr" inputMode="decimal" value={min} onChange={e => setMin(e.target.value)} disabled={!track} /></label>
+          <label className="label">{pt('defaultSupplier', locale)}<select className="input" value={supplierId} onChange={e => setSupplierId(e.target.value)}><option value="">—</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+          <label className="label">{pt('itemMargin', locale)}<input className="input" dir="ltr" inputMode="decimal" value={margin} onChange={e => setMargin(e.target.value)} placeholder={`${pt('shopDefault', locale)} ${Number(boot.shop.default_margin_pct) || 0}%`} /></label>
+          {product?.next_expiry && <div className="label">{pt('nextExpiry', locale)}<div className={new Date(product.next_expiry) < new Date() ? 'bad' : ''} dir="ltr">{product.next_expiry}</div></div>}
           <div className="checks" style={{ gridColumn: '1 / -1' }}>
             <label><input type="checkbox" checked={track} onChange={e => setTrack(e.target.checked)} /> {pt('trackStock', locale)}</label>
             <label><input type="checkbox" checked={dec || unit === 'kg' || unit === 'g'} disabled={unit === 'kg' || unit === 'g'} onChange={e => setDec(e.target.checked)} /> {pt('decimalQty', locale)}</label>

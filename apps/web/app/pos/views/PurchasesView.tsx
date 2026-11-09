@@ -101,7 +101,8 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
     catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const marginPct = Number(boot.shop.default_margin_pct) || 0;
-  const applyMargin = () => setRows(rs => rs.map(r => { const costUsd = currency === 'lbp' ? r.unit_cost / rate : r.unit_cost; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - marginPct / 100)) * 4) / 4 } : r; }));
+  const applyMargin = () => setRows(rs => rs.map(r => { const costUsd = currency === 'lbp' ? r.unit_cost / rate : r.unit_cost; const m = r.product.margin_pct != null && r.product.margin_pct !== '' ? Number(r.product.margin_pct) : marginPct; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - m / 100)) * 4) / 4 } : r; }));
+  const supplierItems = useMemo(() => supplier ? index.byCategory(null, 100000).filter(p => p.supplier_id === supplier.id && !rows.some(r => r.product.id === p.id)).slice(0, 40) : [], [supplier, rows, index]);
   const sym = currency === 'lbp' ? 'ل.ل.' : '$';
   const fmtC = (v: number) => (currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
   return (
@@ -120,6 +121,7 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
           <input className="input" placeholder={pt('scanOrSearchItem', locale)} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? results[0]; if (p) add(p); } }} autoFocus />
           {results.length > 0 && <div className="cust-list">{results.map(p => <button key={p.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => add(p)}><strong>{text(p.name, locale)}</strong><small className="muted">{pt('lastCost', locale)} {fmtUsd(num(p.cost_cents))} · {pt('currentPrice', locale)} {fmtUsd(Math.round(num(p.price_usd) * 100))} · {pt('onHand', locale)} {num(p.on_hand)}</small></button>)}</div>}
         </div>
+        {supplierItems.length > 0 && <div className="chips" style={{ marginTop: 8 }}><span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>{pt('supplierItems', locale)}:</span>{supplierItems.map(p => <button key={p.id} className="chip" onClick={() => add(p)}>＋ {text(p.name, locale)}</button>)}</div>}
         <table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
           <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
           {rows.map((r, i) => {
@@ -129,6 +131,7 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 80 }} /></td>
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 110 }} /></td>
               <td className="num">{fmtC(r.qty * r.unit_cost)}</td>
+              {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 140 }} title={pt('expiry', locale)} /></td>}
               {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 100 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}</td>}
               <td><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></td>
             </tr>;

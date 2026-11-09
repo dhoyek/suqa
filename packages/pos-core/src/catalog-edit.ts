@@ -5,7 +5,7 @@ import type { Product } from './types';
 
 // Catalog edits from the POS: optimistic local write + a 'product.patch' op (field patch, server-wins LWW with conflict log).
 // Allowed fields mirror suqa._pos_product_patch's allow-list.
-export const PATCHABLE = ['name', 'description', 'price_usd', 'price_currency', 'price_lbp', 'cost_cents', 'sku', 'unit', 'unit_kind', 'decimal_qty', 'vat', 'track_stock', 'min_stock',
+export const PATCHABLE = ['name', 'description', 'price_usd', 'price_currency', 'price_lbp', 'cost_cents', 'sku', 'unit', 'unit_kind', 'decimal_qty', 'vat', 'track_stock', 'min_stock', 'supplier_id', 'margin_pct', 'next_expiry',
   'visible_online', 'is_available', 'is_active', 'section', 'sort_order', 'image_url'] as const;
 export type Patchable = (typeof PATCHABLE)[number];
 

@@ -27,6 +27,7 @@ export default function StockView({ boot, locale, index, tick, staff, reindex }:
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
   useScanner(code => { if (sel || newFromBc) return; const p = index.scan(code); if (p) setSel(p); else setNewFromBc(code); });
   const tracked = useMemo(() => [...index.byId.values()].filter(p => p.track_stock), [index, tick]);
+  const soon = useMemo(() => { const lim = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10); return [...index.byId.values()].filter(p => p.next_expiry && p.next_expiry <= lim && num(p.on_hand) > 0).sort((a, b) => (a.next_expiry ?? '').localeCompare(b.next_expiry ?? '')); }, [index, tick]);
   const low = useMemo(() => tracked.filter(p => num(p.on_hand) - num(p.reserved) <= num(p.min_stock)).sort((a, b) => (num(a.on_hand) - num(a.reserved)) - (num(b.on_hand) - num(b.reserved))), [tracked]);
   const negative = useMemo(() => tracked.filter(p => p.needs_review || num(p.on_hand) < 0), [tracked]);
   const results = q.trim() ? index.search(q, 30) : [];
@@ -52,6 +53,12 @@ export default function StockView({ boot, locale, index, tick, staff, reindex }:
           <table className="table"><tbody>{negative.map(p => <tr key={p.id}><td>{text(p.name, locale)}</td><td className="num bad">{num(p.on_hand)}</td><td><button className="btn" onClick={() => { setMode('count'); setSel(p); }}>{pt('count', locale)}</button></td></tr>)}</tbody></table>
         </section>
       )}
+      {soon.length > 0 && <section className="card">
+        <strong>⏳ {pt('expiringSoon', locale)} ({soon.length})</strong>
+        <table className="table"><tbody>
+          {soon.map(p => { const past = (p.next_expiry ?? '') < new Date().toISOString().slice(0, 10); return <tr key={p.id}><td>{text(p.name, locale)}</td><td className={`num ${past ? 'bad' : ''}`} dir="ltr">{p.next_expiry}{past ? ` · ${pt('expired', locale)}` : ''}</td><td className="muted num">{num(p.on_hand)}{p.unit ? ' ' + p.unit : ''}</td></tr>; })}
+        </tbody></table>
+      </section>}
       <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><strong>{pt('lowStockList', locale)} ({low.length})</strong>{!!low.length && <button className="btn" onClick={shareReorder}>💬 {pt('shareReorder', locale)}</button>}</div>
         <table className="table"><tbody>

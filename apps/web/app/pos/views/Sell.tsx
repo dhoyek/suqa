@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
-  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
+  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -77,7 +77,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
 
   const onScan = useCallback((code: string) => {
     if (receipt) return;
-    const hit = index.scanEx(code, shop.scale_prefix ? { prefix: shop.scale_prefix, code_len: shop.scale_code_len, value_kind: shop.scale_value_kind, value_divisor: shop.scale_value_divisor } : null);
+    const hit = index.scanEx(code, scaleConfigs(shop));
     if (!hit) { if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`); return; }
     if (!hit.pack && !hit.scale) { add(hit.product); return; }
     // pack barcode or scale label → its own line (quantity / price come from the barcode)

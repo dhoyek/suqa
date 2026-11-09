@@ -40,4 +40,5 @@ source of truth.
 | 36_known_address.sql | `my_known_address(tenant)` — the signed-in customer's most recent address from the shops' address books, to prefill their first web checkout |
 | 37_pos_drivers.sql | Shop drivers (drivers-lite): `shop_drivers` (synced, linked to an account by number), `orders.driver_id`, op `driver.upsert`, `order.status` carries `driver_id`, event payload `driver`; snapshot + dispatcher re-created |
 | 38_migration.sql | Repeatable import from the old SQL Server POS: `migration_map` (old key → new id), `migrate_apply(shop, kind, rows, dry)` for product / customer / supplier / driver / order / purchase / settings, `migrate_status` — used by `/api/admin/migrate` + `migration/convert.py` |
+| 39_pos_m14.sql | Pilot gaps: `products.supplier_id / margin_pct / next_expiry`, `shops.scale_formats` (extra scale-label formats); product.patch, shop settings and purchase.commit re-created (expiry + default supplier set on receiving). Apply before re-running 38. |
 | ../seed/batroun.sql | first tenant |

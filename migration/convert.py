@@ -68,7 +68,7 @@ def convert(exp, two_years=True):
         for b in csv.DictReader(h):
             bc = (b['ITM_BARCODE'] or '').strip()
             if not bc or bc.startswith('-'): continue          # internal negative codes are not scannable
-            bcs[b['ITM_CODE']].append({'barcode': bc, 'pack': num(b['ITM_PACKAGE'], 1) or 1, 'price': num(b['ITM_PRICE'])})
+            bcs[b['ITM_CODE']].append({'barcode': bc, 'pack': num(b['ITM_PACKAGE'], 1) or 1, 'price': num(b['ITM_PRICE']), 'markup': num(b['ITM_FIXEDPROFIT'])})
     # ---------------------------------------------------------------- items (streamed: 460k rows)
     stock = {}
     for w in wh: stock[w['ITM_CODE']] = stock.get(w['ITM_CODE'], 0) + num(w['OPENING_QTY']) + num(w['STOCK_IN']) - num(w['STOCK_OUT'])
@@ -96,11 +96,14 @@ def convert(exp, two_years=True):
                 else:
                     pp = b['price']
                     barcodes.append({'barcode': b['barcode'], 'pack_qty': b['pack'], **({'pack_price_usd': round(pp, 2)} if scur == USD else {'pack_price_lbp': int(round(pp))})})
+            markup = num((next((b for b in rows if b['pack'] == 1), None) or {}).get('markup', 0))
+            margin = round(100 * markup / (100 + markup), 2) if 0 < markup <= 100 else None    # old system: fixed profit % over cost → our margin on selling price
             pname[code] = name(it['ITM_TITLE'])
             products.append({'key': code, 'name': pname[code], 'section': sub.get(it['ITM_SUBGROUP'], '') or None, 'price_currency': pcur,
                              'price_usd': round(price_usd, 4), 'price_lbp': price_lbp, 'cost_cents': cost_cents, 'sku': code,
                              'unit_kind': 'kg' if scale else 'piece', 'decimal_qty': scale, 'vat': num(it['ITM_VAT']) > 0, 'active': it['ITM_ACTIVE'].strip() in ('1', 'True'),
-                             'on_hand': round(stock.get(code, 0.0), 3), 'barcodes': barcodes})
+                             'on_hand': round(stock.get(code, 0.0), 3), 'barcodes': barcodes,
+                             'supplier_key': it['ITM_SUPPLIER'] if it['ITM_SUPPLIER'] not in ('', None) else None, 'margin_pct': margin})
     S['items_in_old_system'] = n_all; S['products'] = len(products); S['products_only_because_recent'] = n_recent
     S['barcodes'] = sum(len(p['barcodes']) for p in products)
     # ---------------------------------------------------------------- parties
@@ -172,9 +175,16 @@ def convert(exp, two_years=True):
     S['purchases'] = len(purchases); S['purchases_total_usd'] = round(sum(p['total_cents'] for p in purchases) / 100); S['transactions_skipped_S_R_SR'] = sum(1 for t in trs if t['TRS_TYPE'] != 'P')
     # ---------------------------------------------------------------- settings
     sc = {r['Number']: r for r in rd(f'{exp}/ScaleSettings.csv')}
-    settings = [{'scale_prefix': (sc.get('1', {}).get('Value') or '27').strip(), 'scale_code_len': int(num(sc.get('2', {}).get('Length'), 3)),
-                 'scale_value_kind': 'price_lbp', 'scale_value_divisor': 1}]
-    S['scale_formats_in_old_system'] = sorted(set((r['Value'] or '').strip() for r in sc.values() if r['Description'] == 'Flag'))
+    # ScaleSettings rows 1-5 = first format, 11-15 = second (Flag/Code/Price/Weight/Checksum with Length / Value)
+    def fmt(base):
+        flag, code, price, weight = sc.get(str(base)), sc.get(str(base + 1)), sc.get(str(base + 2)), sc.get(str(base + 3))
+        if not flag or not (flag.get('Value') or '').strip(): return None
+        by_weight = weight and int(num(weight.get('Length'))) > 0
+        return {'prefix': flag['Value'].strip(), 'code_len': int(num((code or {}).get('Length'), 4)), 'value_kind': 'weight' if by_weight else 'price_lbp', 'value_divisor': 1000 if by_weight else 1}
+    f1, f2 = fmt(1), fmt(11)
+    settings = [{'scale_prefix': (f1 or {}).get('prefix', '27'), 'scale_code_len': (f1 or {}).get('code_len', 3), 'scale_value_kind': (f1 or {}).get('value_kind', 'price_lbp'), 'scale_value_divisor': (f1 or {}).get('value_divisor', 1),
+                 'scale_formats': [f2] if f2 else []}]
+    S['scale_formats'] = [f for f in (f1, f2) if f]; S['products_with_margin'] = sum(1 for p in products if p['margin_pct']); S['products_with_supplier'] = sum(1 for p in products if p['supplier_key'])
     return {'product': products, 'customer': customers, 'supplier': suppliers, 'order': orders, 'purchase': purchases, 'settings': settings}, S
 
 ORDER = ['settings', 'product', 'customer', 'supplier', 'order', 'purchase']   # products before history (lines link by key), suppliers before purchases

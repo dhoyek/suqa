@@ -46,7 +46,8 @@ export async function commitPurchase(db: PosDb, input: {
       const p = await db.products.get(l.product_id); if (!p) continue;
       const delta = kind === 'return' ? -Math.abs(l.qty) : l.qty;
       await db.stockMoves.put({ id: newId(), shop_id: p.shop_id, product_id: p.id, qty: delta, kind: kind === 'return' ? 'purchase_return' : 'purchase', ref_id: id, unit_cost_cents: l.unit_cost_cents, note: purchase.number, device_id: deviceId ?? null, user_id: input.user_id, at: now });
-      await db.products.put({ ...p, on_hand: p.track_stock ? Math.round((num(p.on_hand) + delta) * 1000) / 1000 : p.on_hand, ...(kind === 'purchase' ? { cost_cents: l.unit_cost_cents, ...(l.new_price_usd != null ? { price_usd: l.new_price_usd } : {}), ...(l.new_price_lbp != null ? { price_lbp: l.new_price_lbp } : {}) } : {}) });
+      await db.products.put({ ...p, on_hand: p.track_stock ? Math.round((num(p.on_hand) + delta) * 1000) / 1000 : p.on_hand, ...(kind === 'purchase' ? { cost_cents: l.unit_cost_cents, ...(l.new_price_usd != null ? { price_usd: l.new_price_usd } : {}), ...(l.new_price_lbp != null ? { price_lbp: l.new_price_lbp } : {}),
+        supplier_id: p.supplier_id ?? purchase.supplier_id, next_expiry: l.expiry ? (p.next_expiry && p.next_expiry < l.expiry ? p.next_expiry : l.expiry) : p.next_expiry ?? null } : {}) });
     }
     const s = await db.suppliers.get(input.supplier.id); if (s) await db.suppliers.put({ ...s, balance_cents: num(s.balance_cents) + (kind === 'return' ? -t.total_cents : t.total_cents) });
     await enqueue(db, 'purchase.commit', { id, supplier_id: input.supplier.id, kind, invoice_no: purchase.invoice_no, invoice_date: purchase.invoice_date, currency: purchase.currency, rate: purchase.rate, subtotal: purchase.subtotal, discount: purchase.discount, total: purchase.total, total_cents: purchase.total_cents, note: purchase.note, approved_by: purchase.approved_by, at: now,

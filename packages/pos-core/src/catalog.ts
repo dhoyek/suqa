@@ -71,9 +71,10 @@ export class CatalogIndex {
    * Scan with pack and scale support. Pack barcode → qty = pack_qty at the pack price. Scale label (prefix + item code + value + check)
    * → the item by code (sku or barcode) with the weight as quantity or the embedded price. Falls back to scan().
    */
-  scanEx(code: string, scale?: ScaleConfig | null): ScanHit | null {
+  scanEx(code: string, scales?: ScaleConfig | ScaleConfig[] | null): ScanHit | null {
     const bc = normBarcode(code);
     const p = this.scan(bc);
+    const list = Array.isArray(scales) ? scales : scales ? [scales] : [];
     if (p) {
       const row = this.barcodeRows.get(bc); const pq = Number(row?.pack_qty ?? 1) || 1;
       if (row && pq !== 1) {
@@ -82,6 +83,7 @@ export class CatalogIndex {
       }
       return { product: p, qty: 1 };
     }
+    for (const scale of list) {
     if (scale?.prefix && bc.startsWith(scale.prefix) && /^\d{12,14}$/.test(bc)) {
       const codeLen = scale.code_len || 5; const start = scale.prefix.length; const item = bc.slice(start, start + codeLen);
       const value = Number(bc.slice(start + codeLen, bc.length - 1)); const div = scale.value_divisor || 1000;
@@ -91,6 +93,7 @@ export class CatalogIndex {
         if (scale.value_kind === 'price_usd') return { product: target, qty: 1, fixed_total_cents: Math.round((value / div) * 100), scale: true };
         return { product: target, qty: 1, fixed_total_lbp: Math.round(value / div), scale: true };
       }
+    }
     }
     return null;
   }
@@ -136,4 +139,12 @@ function catSet(c: string | null | undefined | Iterable<string>): Set<string> | 
   if (c == null || c === '') return null;
   const s = typeof c === 'string' ? new Set([c]) : new Set(c);
   return s.size ? s : null;
+}
+
+/** All scale-label formats of a shop: the primary scale_* columns plus scale_formats. */
+export function scaleConfigs(shop: { scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: ScaleConfig['value_kind']; scale_value_divisor?: number; scale_formats?: { prefix: string; code_len?: number; value_kind?: ScaleConfig['value_kind']; value_divisor?: number }[] }): ScaleConfig[] {
+  const out: ScaleConfig[] = [];
+  if (shop.scale_prefix) out.push({ prefix: shop.scale_prefix, code_len: shop.scale_code_len, value_kind: shop.scale_value_kind, value_divisor: shop.scale_value_divisor });
+  for (const f of shop.scale_formats ?? []) if (f?.prefix) out.push({ prefix: String(f.prefix), code_len: f.code_len, value_kind: f.value_kind, value_divisor: f.value_divisor });
+  return out;
 }

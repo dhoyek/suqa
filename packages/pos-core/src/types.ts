@@ -13,7 +13,7 @@ export interface Product {
   id: string; tenant_id: string; shop_id: string;
   name: Localized; description?: Localized;
   price_usd: number | string;            // legacy decimal column (string from Postgres numeric)
-  price_currency: Currency; price_lbp: number; cost_cents?: number | null;
+  price_currency: Currency; price_lbp: number; cost_cents?: number | null; supplier_id?: string | null; margin_pct?: number | string | null; next_expiry?: string | null;
   sku?: string | null; unit?: string | null; unit_kind: string; decimal_qty: boolean; vat: boolean;
   track_stock: boolean; min_stock: number | string; visible_online: boolean; is_available: boolean; is_active: boolean;
   on_hand: number | string; reserved: number | string; needs_review: boolean;
@@ -29,7 +29,7 @@ export interface Device { id: string; shop_id: string; name: string; prefix: str
 export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;
   allow_negative_stock: boolean; lbp_rounding_step: number; deduct_stock_at: 'ready' | 'delivered'; hide_online_when_zero: boolean;
-  receipt_footer?: string | null; default_delivery_fee_usd?: number | string; default_margin_pct?: number | string; scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: 'weight' | 'price_lbp' | 'price_usd'; scale_value_divisor?: number; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
+  receipt_footer?: string | null; default_delivery_fee_usd?: number | string; default_margin_pct?: number | string; scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: 'weight' | 'price_lbp' | 'price_usd'; scale_value_divisor?: number; scale_formats?: { prefix: string; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number }[]; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
   notify_stages?: string[] | null;             // customer WhatsApp stages (null = tenant default)
 }
 

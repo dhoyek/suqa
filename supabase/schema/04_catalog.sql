@@ -26,6 +26,7 @@ create table if not exists suqa.shops (
   scale_code_len       int not null default 5,
   scale_value_kind     text not null default 'weight' check (scale_value_kind in ('weight','price_lbp','price_usd')),
   scale_value_divisor  int not null default 1000,
+  scale_formats     jsonb not null default '[]'::jsonb, -- 39: extra scale-label formats
   notify_stages        text[],                                     -- customer WhatsApp steps; null = tenant default (32_pos_notify)
   offline_days         int     not null default 30 check (offline_days between 1 and 90),   -- PIN unlock allowed this long without internet
   max_discount_pct     numeric(5,2) not null default 10,       -- above this a cashier needs the owner PIN
@@ -102,6 +103,9 @@ create table if not exists suqa.products (
   min_stock      numeric(12,3) not null default 0,
   visible_online boolean not null default true,                  -- listed in the public catalog (is_available = sellable right now)
   on_hand        numeric(12,3) not null default 0,               -- Σ stock_moves (trigger-maintained)
+  supplier_id       uuid,                                -- 39: default supplier (fk added in 39)
+  margin_pct        numeric(6,2),                        -- 39: per-item margin on selling price (null = shop default)
+  next_expiry       date,                                -- 39: earliest expiry from purchase lines
   reserved       numeric(12,3) not null default 0,               -- open online orders (trigger-maintained)
   needs_review   boolean not null default false,                 -- on_hand went negative
   created_at     timestamptz not null default now(),

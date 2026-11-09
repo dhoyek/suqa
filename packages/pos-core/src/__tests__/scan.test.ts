@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CatalogIndex } from '../catalog';
+import { CatalogIndex, scaleConfigs } from '../catalog';
 import { draftTotals, lineFromProduct, newDraft } from '../sale';
 import type { Product } from '../types';
 
@@ -32,5 +32,14 @@ describe('customer discount %', () => {
     const d = { ...newDraft('walkin'), lines: [lineFromProduct(P('a', { price_usd: 10 }), 2)], discount_cents: 100, discount_pct: 15 };
     expect(draftTotals(d, 89500, 5000)).toMatchObject({ subtotal_cents: 2000, discount_cents: 300, total_cents: 1700 });
     expect(draftTotals({ ...d, discount_pct: 2 }, 89500, 5000).discount_cents).toBe(100);
+  });
+  it('several scale formats: 27 + 3-digit code + 7-digit LL price, and 26 + 4-digit code + 6-digit price', () => {
+    const idx = new CatalogIndex();
+    idx.load([{ id: 'a', shop_id: 's', name: { ar: 'لحمة' }, sku: '123', price_usd: 1, price_currency: 'usd', price_lbp: 0, is_active: true, is_available: true, track_stock: true, on_hand: 0, decimal_qty: true } as any,
+              { id: 'b', shop_id: 's', name: { ar: 'جبنة' }, sku: '4567', price_usd: 1, price_currency: 'usd', price_lbp: 0, is_active: true, is_available: true, track_stock: true, on_hand: 0, decimal_qty: true } as any], [], [], []);
+    const cfg = scaleConfigs({ scale_prefix: '27', scale_code_len: 3, scale_value_kind: 'price_lbp', scale_value_divisor: 1, scale_formats: [{ prefix: '26', code_len: 4, value_kind: 'price_lbp', value_divisor: 1 }] });
+    expect(cfg.length).toBe(2);
+    const h1 = idx.scanEx('2712301850000' + '7', cfg); expect(h1?.product.id).toBe('a'); expect(h1?.fixed_total_lbp).toBe(1850000);
+    const h2 = idx.scanEx('26' + '4567' + '095000' + '3', cfg); expect(h2?.product.id).toBe('b'); expect(h2?.fixed_total_lbp).toBe(95000);
   });
 });

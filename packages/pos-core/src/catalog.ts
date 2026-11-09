@@ -58,14 +58,15 @@ export class CatalogIndex {
   setQuickButtons(q: QuickButton[]): void { this.quickButtons = [...q].sort((a, b) => a.sort_order - b.sort_order); }
   barcodes(productId: string): string[] { return [...(this.barcodesOf.get(productId) ?? [])]; }
 
-  /** Resolve a scan: exact barcode, else SKU, else null. */
+  /** Resolve a scan: exact barcode, else a GTIN variant of it (see barcodeVariants), else SKU, else null. */
   scan(code: string): Product | null {
     const bc = normBarcode(code);
-    const id = this.byBarcode.get(bc);
-    if (id) return this.byId.get(id) ?? null;
+    for (const v of barcodeVariants(bc)) { const id = this.byBarcode.get(v); if (id) return this.byId.get(id) ?? null; }
     for (const p of this.byId.values()) if (p.sku && normBarcode(p.sku) === bc) return p;
     return null;
   }
+  /** The stored barcode a scan resolved to (needed to read pack info off the right row). */
+  private storedBarcode(bc: string): string | null { for (const v of barcodeVariants(bc)) if (this.byBarcode.has(v)) return v; return null; }
 
   /**
    * Scan with pack and scale support. Pack barcode → qty = pack_qty at the pack price. Scale label (prefix + item code + value + check)
@@ -76,7 +77,7 @@ export class CatalogIndex {
     const p = this.scan(bc);
     const list = Array.isArray(scales) ? scales : scales ? [scales] : [];
     if (p) {
-      const row = this.barcodeRows.get(bc); const pq = Number(row?.pack_qty ?? 1) || 1;
+      const row = this.barcodeRows.get(this.storedBarcode(bc) ?? bc); const pq = Number(row?.pack_qty ?? 1) || 1;
       if (row && pq !== 1) {
         const ppu = row.pack_price_usd != null && row.pack_price_usd !== '' ? Number(row.pack_price_usd) : null; const ppl = row.pack_price_lbp != null && row.pack_price_lbp !== '' ? Number(row.pack_price_lbp) : null;
         return { product: p, qty: pq, pack: { qty: pq, barcode: bc }, unit_price_cents: ppu != null ? Math.round((ppu * 100) / pq) : undefined, unit_price_lbp: ppl != null ? Math.round(ppl / pq) : undefined };
@@ -132,6 +133,31 @@ export class CatalogIndex {
   get size(): number { return this.byId.size; }
 }
 
+/** GTIN check digit (EAN-8/UPC-A/EAN-13/GTIN-14) for the digits before the last position. */
+export function gtinCheckDigit(body: string): number {
+  let sum = 0;
+  for (let i = 0; i < body.length; i++) sum += Number(body[body.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  return (10 - (sum % 10)) % 10;
+}
+/**
+ * Equivalent spellings of one barcode, most exact first. Many legacy POS databases (and scanners configured that way)
+ * store EAN/UPC codes WITHOUT the check digit, and some add or drop the leading zero (UPC-A ⇄ EAN-13). A camera or a
+ * fresh scanner reads the full symbol, so the lookup must accept all of these as the same code.
+ */
+export function barcodeVariants(code: string): string[] {
+  const out = [code];
+  if (!/^\d{7,14}$/.test(code)) return out;
+  const push = (v: string) => { if (v && !out.includes(v)) out.push(v); };
+  const n = code.length;
+  if ((n === 8 || n === 12 || n === 13 || n === 14) && gtinCheckDigit(code.slice(0, -1)) === Number(code[n - 1])) {
+    push(code.slice(0, -1));                                   // stored without the check digit
+    if (n === 13 && code.startsWith('0')) { push(code.slice(1)); push(code.slice(1, -1)); }   // EAN-13 that is really a UPC-A
+  }
+  if (n === 12) { push('0' + code); push(code + gtinCheckDigit(code)); }   // UPC-A read as EAN-13 / stored with check digit
+  if (n === 7 || n === 11 || n === 13) push(code + gtinCheckDigit(code));   // stored stripped, scanner delivers full
+  if (code.startsWith('0')) push(code.replace(/^0+/, ''));
+  return out;
+}
 export const normBarcode = (s: string): string => (s ?? '').trim().toLowerCase().replace(AR_DIGITS, d => String(d.charCodeAt(0) - 0x660));
 
 /** null / '' / empty set → no category filter; a string → that one; an iterable → any of them. */

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { gtinCheckDigit, normBarcode } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
 
@@ -37,6 +38,13 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
         // once it has left the frame (so holding the camera on a barcode adds exactly one; lift and re-aim to add another).
         // Detection flickers frame to frame even on a steady barcode, so "left the frame" is time-based: the same code
         // is accepted again only when it has not been seen for 1.5 s straight.
+        // The detector may report one physical symbol under different spellings between frames (UPC-A "012…" vs EAN-13
+        // "0012…", with or without the check digit), so compare canonical keys, not raw strings.
+        const key = (raw: string) => {
+          const c = normBarcode(raw); if (!/^\d{7,14}$/.test(c)) return c;
+          const body = [8, 12, 13, 14].includes(c.length) && gtinCheckDigit(c.slice(0, -1)) === Number(c[c.length - 1]) ? c.slice(0, -1) : c;
+          return body.replace(/^0+/, '');
+        };
         let last = ''; let hitAt = 0; let lastSeenAt = 0;
         const tick = async () => {
           if (stop) return;
@@ -44,11 +52,11 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
             const codes = await det.detect(video.current!);
             const c = codes.find(x => x.rawValue);
             const now = Date.now();
-            const same = !!c && c.rawValue === last;
+            const same = !!c && key(c.rawValue) === last;
             const away = now - lastSeenAt;              // how long since the previous code was last in view
             if (same) lastSeenAt = now;
             if (c && now - hitAt > 700 && (!same || away > 1500)) {
-              last = c.rawValue; hitAt = now; lastSeenAt = now; onScan(c.rawValue);
+              last = key(c.rawValue); hitAt = now; lastSeenAt = now; onScan(c.rawValue);
               setFlash(true); setTimeout(() => setFlash(false), 350);
               try { navigator.vibrate?.(40); } catch { /* not supported */ }
               beep();

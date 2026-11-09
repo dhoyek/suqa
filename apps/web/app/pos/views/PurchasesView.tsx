@@ -15,7 +15,8 @@ type Tab = 'invoices' | 'suppliers';
 
 /** المشتريات — suppliers with balances, purchase invoices (stock in at cost), returns, payments, statements. */
 export default function PurchasesView({ boot, locale, index, tick, staff, reindex }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
-  const [tab, setTab] = useState<Tab>('invoices');
+  const [tab, setTab] = useState<Tab>('invoices'); const [supQ, setSupQ] = useState('');
+  const supMatch = (s: Supplier) => { const n = supQ.trim().toLowerCase(); const d = supQ.replace(/\D/g, ''); return !n || s.name.toLowerCase().includes(n) || (s.contact ?? '').toLowerCase().includes(n) || (!!d && (s.phone_key ?? '').includes(d)); };
   const [suppliers, setSuppliers] = useState<Supplier[]>([]); const [purchases, setPurchases] = useState<Purchase[]>([]); const [rate, setRate] = useState(89500);
   const [entry, setEntry] = useState<{ kind: 'purchase' | 'return' } | null>(null); const [selSup, setSelSup] = useState<Supplier | null>(null); const [editSup, setEditSup] = useState<Supplier | 'new' | null>(null); const [lastSup, setLastSup] = useState<string | null>(null);
   const [openPur, setOpenPur] = useState<Purchase | null>(null); const [lines, setLines] = useState<PurchaseLine[]>([]);
@@ -49,9 +50,10 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
       </section>}
 
       {tab === 'suppliers' && <section className="card">
+        <input className="input" placeholder={pt('searchSupplier', locale)} value={supQ} onChange={e => setSupQ(e.target.value)} style={{ marginBottom: 8 }} />
         {!suppliers.length && <p className="muted">—</p>}
         <table className="table"><tbody>
-          {suppliers.map(s => <tr key={s.id} className={s.active ? '' : 'muted'} style={{ cursor: 'pointer' }} onClick={() => setSelSup(s)}>
+          {suppliers.filter(supMatch).map(s => <tr key={s.id} className={s.active ? '' : 'muted'} style={{ cursor: 'pointer' }} onClick={() => setSelSup(s)}>
             <td><strong>{s.name}</strong>{s.contact ? <span className="muted"> · {s.contact}</span> : ''}</td><td className="muted" dir="ltr">{s.phone ? fmtPhone(s.phone) : ''}</td>
             <td className="num"><strong className={num(s.balance_cents) > 0 ? 'bad' : num(s.balance_cents) < 0 ? 'ok' : ''}>{fmtUsd(num(s.balance_cents))}</strong></td>
           </tr>)}

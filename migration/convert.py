@@ -118,7 +118,7 @@ def convert(exp, two_years=True):
             suppliers.append({'key': p['ID'], 'name': ('مورّد غير محدد' if p['ID'] == '0' else p['TITLE'].strip()), 'phone': phone_clean(p['PHONE']), 'contact': (p['Contact'] or '').strip() or None,
                               'notes': (p['REMARKS'] or '').strip() or None, 'balance_cents': cents(bal)})
     S['customers'] = len(customers); S['customers_with_phone'] = sum(1 for c in customers if c['phone']); S['customers_owing'] = sum(1 for c in customers if c['balance_cents'] > 0)
-    S['suppliers'] = len(suppliers); S['suppliers_owed'] = sum(1 for s in suppliers if s['balance_cents'] != 0)
+    S['suppliers'] = len(suppliers); S['suppliers_owed'] = sum(1 for s in suppliers if s['balance_cents'] != 0); S['suppliers_balance_usd'] = round(sum(s['balance_cents'] for s in suppliers) / 100)
     # ---------------------------------------------------------------- receipts → orders
     lines_by = collections.defaultdict(list)
     for c in rlines: lines_by[c['RCPT_ID']].append(c)
@@ -159,12 +159,17 @@ def convert(exp, two_years=True):
         rate = num(t['CURR_US']) or default_rate; ll = (t['TRS_CURRENCY'].strip() or LL) == LL
         to_usd = (lambda v: v / rate) if ll else (lambda v: v)
         ls = []
+        fixed = 0
         for c in tl_by.get(t['TRS_NUMBER'], []):
             q = num(c['ITM_QUANTITY'], 1) or 1; lt = to_usd(num(c['ITM_TOTAL']))
+            if not ll and num(c['ITM_PRICE']) >= 20000:   # an LL price typed on a USD invoice (seen once: 150,000 "USD"): treat the line as LL
+                lt = num(c['ITM_TOTAL']) / rate; fixed += 1
             ls.append({'key': c['ITM_CODE'], 'name': pname.get(c['ITM_CODE'], name(c['DETAILS'] or 'صنف')), 'qty': q, 'unit_cost_cents': cents(lt / q)})
+        total_usd = to_usd(num(t['TRS_AMOUNT']))
+        if fixed: total_usd = sum(l['unit_cost_cents'] * l['qty'] for l in ls) / 100.0; n_fixed_purchases = S.get('purchases_currency_fixed', 0) + 1; S['purchases_currency_fixed'] = n_fixed_purchases
         purchases.append({'key': t['TRS_NUMBER'], 'number': 'M-P' + t['TRS_NUMBER'], 'at': iso(t['TRS_DATE']), 'supplier_key': t['TRS_PartyID'], 'invoice_no': (t['TRS_ORDER'] or '').strip() or None,
-                          'rate': int(rate), 'note': (t['TRS_Remarks'] or '').strip() or None, 'total_cents': cents(to_usd(num(t['TRS_AMOUNT']))), 'lines': ls})
-    S['purchases'] = len(purchases); S['transactions_skipped_S_R_SR'] = sum(1 for t in trs if t['TRS_TYPE'] != 'P')
+                          'rate': int(rate), 'note': ((t['TRS_Remarks'] or '').strip() + (' · عملة مصحّحة' if fixed else '')).strip(' ·') or None, 'total_cents': cents(total_usd), 'lines': ls})
+    S['purchases'] = len(purchases); S['purchases_total_usd'] = round(sum(p['total_cents'] for p in purchases) / 100); S['transactions_skipped_S_R_SR'] = sum(1 for t in trs if t['TRS_TYPE'] != 'P')
     # ---------------------------------------------------------------- settings
     sc = {r['Number']: r for r in rd(f'{exp}/ScaleSettings.csv')}
     settings = [{'scale_prefix': (sc.get('1', {}).get('Value') or '27').strip(), 'scale_code_len': int(num(sc.get('2', {}).get('Length'), 3)),
@@ -175,9 +180,10 @@ def convert(exp, two_years=True):
 ORDER = ['settings', 'product', 'customer', 'supplier', 'order', 'purchase']   # products before history (lines link by key), suppliers before purchases
 BATCH = {'product': 500, 'order': 300, 'purchase': 300}
 
-def upload(data, base, shop, secret, dry):
+def upload(data, base, shop, secret, dry, only=None):
     totals = {}
     for kind in ORDER:
+        if only and kind not in only: continue
         rows = data[kind]; n = BATCH.get(kind, 500); agg = collections.Counter(); samples = []
         for i in range(0, len(rows), n):
             body = json.dumps({'shop': shop, 'kind': kind, 'rows': rows[i:i + n], 'dry_run': dry}).encode()
@@ -201,7 +207,7 @@ def upload(data, base, shop, secret, dry):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--export', default='export'); ap.add_argument('--out', default='out')
     ap.add_argument('--upload', help='site origin, e.g. https://suqa-dev.netlify.app'); ap.add_argument('--shop', help='shop slug'); ap.add_argument('--secret', default=os.environ.get('SUQA_SECRET'))
-    ap.add_argument('--dry-run', action='store_true'); ap.add_argument('--used-only', action='store_true', help='only items with stock or sales/purchase history (skip the "modified in 2 years" rule)')
+    ap.add_argument('--dry-run', action='store_true'); ap.add_argument('--only', help='comma-separated kinds to upload (e.g. order,purchase)'); ap.add_argument('--used-only', action='store_true', help='only items with stock or sales/purchase history (skip the "modified in 2 years" rule)')
     a = ap.parse_args()
     t0 = time.time(); data, summary = convert(a.export, two_years=not a.used_only)
     os.makedirs(a.out, exist_ok=True)
@@ -213,7 +219,7 @@ def main():
     if a.upload:
         if not (a.shop and a.secret): sys.exit('--upload needs --shop and --secret (or SUQA_SECRET)')
         print(('DRY RUN -> ' if a.dry_run else 'UPLOAD -> ') + a.upload)
-        res = upload(data, a.upload.rstrip('/'), a.shop, a.secret, a.dry_run)
+        res = upload(data, a.upload.rstrip('/'), a.shop, a.secret, a.dry_run, set(a.only.split(',')) if a.only else None)
         print(json.dumps(res, ensure_ascii=True, indent=1))
         with open(f'{a.out}/upload-result.json', 'w', encoding='utf-8') as h: json.dump({'summary': summary, 'result': res}, h, ensure_ascii=False, indent=1)
 

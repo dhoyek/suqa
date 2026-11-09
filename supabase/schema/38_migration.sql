@@ -149,7 +149,7 @@ begin
         end loop;
         insert into suqa.orders (tenant_id, shop_id, number, status, channel, fulfillment, customer_name, customer_phone, customer_notes, notify_customer, rate_lbp_per_usd,
                                  subtotal_cents, discount_cents, total_cents, total_lbp, paid_usd_cents, paid_lbp, subtotal_usd, total_usd, fx_lbp_rate, delivery_fee_usd, placed_at, delivered_at, closed_at)
-        values (v_shop.tenant_id, p_shop, coalesce(nullif(r->>'number', ''), 'M-' || v_key), 'delivered', 'walkin', 'pickup', coalesce(nullif(r->>'customer_name', ''), ''), nullif(r->>'customer_phone', ''), nullif(r->>'note', ''), false, v_rate,
+        values (v_shop.tenant_id, p_shop, coalesce(nullif(r->>'number', ''), 'M-' || v_key), 'delivered', 'walkin', 'pickup', coalesce(nullif(r->>'customer_name', ''), ''), coalesce(nullif(r->>'customer_phone', ''), ''), nullif(r->>'note', ''), false, v_rate,
                 v_cents + coalesce((r->>'discount_cents')::bigint, 0), coalesce((r->>'discount_cents')::bigint, 0), v_cents, round(v_cents * v_rate / 100.0), v_paid_usd, v_paid_lbp,
                 (v_cents + coalesce((r->>'discount_cents')::bigint, 0)) / 100.0, v_cents / 100.0, v_rate, 0, (r->>'at')::timestamptz, (r->>'at')::timestamptz, (r->>'at')::timestamptz)
         returning id into v_id;

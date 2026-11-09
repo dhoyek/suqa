@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { hashPin, isValidPin, type Conflict, type Device, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { hashPin, isValidPin, type Conflict, type Device, type OutboxOp, type Staff, type SyncStatus } from '@suqa/pos-core';
 import StaffPanel from '../components/StaffPanel';
 import ShopSettings from '../components/ShopSettings';
-import { pt, type L } from '../i18n';
+import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type PrintSettings } from '../lib/print';
@@ -21,10 +21,12 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
   const confirm = useConfirm();
   const owner = boot.role === 'owner';
   const online = status?.online ?? true;
-  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]); const [rejected, setRejected] = useState<OutboxOp[]>([]);
+  const loadRejected = () => boot.db.outbox.where('state').equals('rejected').toArray().then(r => setRejected(r.sort((a, b) => b.created_at.localeCompare(a.created_at))));
+  const dropRejected = async (seq?: number) => { if (seq == null) await boot.db.outbox.where('state').equals('rejected').delete(); else await boot.db.outbox.delete(seq); await loadRejected(); boot.engine.poke(); };
   type Audit = { id: number; at: string; user_id: string | null; action: string; ref_tbl: string | null; ref_id: string | null; after: Record<string, unknown> | null };
   const [audit, setAudit] = useState<Audit[] | null>(null); const [auditN, setAuditN] = useState(50);
-  useEffect(() => { boot.db.conflicts.orderBy('at').reverse().limit(100).toArray().then(setConflicts); }, [boot, tick]);
+  useEffect(() => { boot.db.conflicts.orderBy('at').reverse().limit(100).toArray().then(setConflicts); loadRejected(); }, [boot, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!owner || !online) return;
     sb.from('audit_log').select('id, at, user_id, action, ref_tbl, ref_id, after').eq('shop_id', boot.shop.id).order('at', { ascending: false }).limit(auditN).then(({ data }) => setAudit((data as Audit[]) ?? []));
@@ -111,6 +113,13 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           <div><button className="btn" onClick={() => doPrint(testPrintHtml(boot.shop, locale, ps), ps)}>🖨 {pt('testPrint', locale)}</button></div>
           <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('printerHint', locale)}</p>
         </div>
+      </section>
+      <section className="card" id="rejected-ops">
+        <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('rejectedOps', locale)}{rejected.length ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{rejected.length}</span> : null}</h3>{rejected.length > 0 && <button className="btn ghost" onClick={() => dropRejected()}>{pt('clearAll', locale)}</button>}</div>
+        <p className="muted" style={{ fontSize: 13 }}>{pt('rejectedOpsHint', locale)}</p>
+        {rejected.length ? <table className="table"><tbody>
+          {rejected.map(op => <tr key={op.seq}><td className="muted">{fmtTime(op.created_at, locale)}</td><td>{pt(`a_${op.kind.replace('.', '_')}` as Key, locale)}</td><td className="muted" style={{ whiteSpace: 'normal' }}>{op.last_error}</td><td><button className="btn ghost" onClick={() => dropRejected(op.seq)}>✕</button></td></tr>)}
+        </tbody></table> : <p className="muted">—</p>}
       </section>
       {owner && <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('conflicts', locale)}{conflicts.some(c => !c.seen) ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{conflicts.filter(c => !c.seen).length}</span> : null}</h3>{conflicts.some(c => !c.seen) && <button className="btn ghost" onClick={markSeen}>{pt('markSeen', locale)}</button>}</div>

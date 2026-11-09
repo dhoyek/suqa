@@ -54,7 +54,7 @@ export default function Shell(props: {
             <span className={`dot ${online ? 'on' : ''}`} />{online ? pt('online', locale) : pt('offline', locale)}
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
-          {!!status?.rejected && <span className="pill bad">{status.rejected} {pt('rejected', locale)}</span>}
+          {!!status?.rejected && <button className="pill bad" style={{ cursor: 'pointer', border: 0 }} title={pt('rejectedOps', locale)} onClick={() => { go('settings'); setTimeout(() => document.getElementById('rejected-ops')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }}>{status.rejected} {pt('rejected', locale)} ›</button>}
           <button className={`btn icon sync ${spinning ? 'spin' : ''}`} title={pt('syncNow', locale)} onClick={syncNow}>🔄</button>
           <span className="muted" style={{ fontSize: 13 }}>{staff.display_name || staff.full_name || ''}</span>
           <button className="btn icon" title={pt('lock', locale)} onClick={onLock}>🔒</button>

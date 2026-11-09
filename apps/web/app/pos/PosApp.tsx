@@ -31,7 +31,12 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
   const swReg = useRef<ServiceWorkerRegistration | null>(null);
 
   const onEvent = useCallback((e: SyncEvent) => {
-    if (e.type === 'status') setStatus(e.status);
+    if (e.type === 'status') {
+      setStatus(e.status);
+      // the device has local data but the signed-in account is not a member of this shop (someone signed in with
+      // another number on this browser): stop showing stale data as if it were fine
+      if (e.status.error && /not_a_member/.test(e.status.error)) setPhase(p => p.k === 'noAccess' ? p : { k: 'noAccess' });
+    }
     else if (e.type === 'applied') setTick(t => t + 1);
     else if (e.type === 'order.new') { setTick(t => t + 1); void playDing(); }
     else if (e.type === 'revoked') { downloadJson(`suqa-pos-unsynced-${new Date().toISOString().slice(0, 19)}.json`, e.outbox); setPhase({ k: 'revoked' }); }

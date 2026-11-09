@@ -11,11 +11,13 @@ export default function AccessRequest({ sb, locale, brand, tenantId, onRetry }: 
   const [targets, setTargets] = useState<Target[] | null>(null); const [shop, setShop] = useState<string>('');
   const [name, setName] = useState(''); const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
+  const [me, setMe] = useState<string>('');
   const load = useCallback(async () => {
     const { data, error } = await sb.rpc('pos_request_targets', { p_tenant: tenantId });
     if (error) { setErr(error.message); setTargets([]); return; }
     const t = (data as Target[]) ?? []; setTargets(t); if (t.length === 1) setShop(t[0].id);
     const { data: u } = await sb.auth.getUser(); setName(n => n || (u.user?.user_metadata?.full_name as string) || '');
+    setMe(u.user?.phone ? `+${u.user.phone.replace(/^\+/, '')}` : (u.user?.email ?? ''));
   }, [sb, tenantId]);
   useEffect(() => { void load(); }, [load]);
 
@@ -36,6 +38,7 @@ export default function AccessRequest({ sb, locale, brand, tenantId, onRetry }: 
       <div className="brand" style={{ textAlign: 'center' }}>{brand}</div>
       <h2 style={{ margin: 0, textAlign: 'center' }}>{pt('noAccessTitle', locale)}</h2>
       <p className="muted" style={{ margin: 0, textAlign: 'center' }}>{pt('noAccessBody', locale)}</p>
+      {me && <p className="muted" style={{ margin: 0, textAlign: 'center', fontSize: 13 }}>{pt('signedInAs', locale)} <strong dir="ltr">{me}</strong> — {pt('wrongAccountHint', locale)}</p>}
       {pending.length > 0 && <div className="card" style={{ background: '#fff8e6' }}>⏳ {pt('accessPending', locale)}: <strong>{pending.map(t => text(t.name, locale)).join('، ')}</strong></div>}
       {targets === null ? <p className="muted">{pt('loading', locale)}</p> : targets.length === 0 ? <p className="bad">{pt('noShop', locale)}</p> : (
         <>

@@ -160,6 +160,7 @@ const T = {
   accessAsk: { ar: 'إرسال طلب الوصول', en: 'Send access request' }, accessResend: { ar: 'إعادة إرسال الطلب', en: 'Send again' },
   accessSent: { ar: 'أُرسل الطلب. عند موافقة صاحب المحل اضغط «إعادة المحاولة».', en: 'Request sent. Once the owner approves, press Retry.' },
   accessPending: { ar: 'طلبك قيد الانتظار لدى', en: 'Your request is pending at' }, accessAlready: { ar: 'أنت عضو بالفعل — اضغط إعادة المحاولة', en: 'You are already a member — press Retry' },
+  signedInAs: { ar: 'أنت مسجّل الدخول برقم', en: 'Signed in as' }, wrongAccountHint: { ar: 'إذا كان هذا ليس حساب العمل، سجّل الخروج وادخل برقم الموظف.', en: 'if this is not your staff account, sign out and sign in with it.' },
   accessRequests: { ar: 'طلبات الوصول', en: 'Access requests' }, approve: { ar: 'موافقة', en: 'Approve' }, decline: { ar: 'رفض', en: 'Decline' },
   accessRequestOf: { ar: 'يطلب الانضمام', en: 'asks to join' },
   // M6: reports, staff, audit

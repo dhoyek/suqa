@@ -35,16 +35,20 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
         video.current!.srcObject = stream; await video.current!.play();
         // Like a handheld scanner: one read per "aim". After a hit, pause briefly, then the SAME code counts again only
         // once it has left the frame (so holding the camera on a barcode adds exactly one; lift and re-aim to add another).
-        let last = ''; let hitAt = 0; let gone = 0;
+        // Detection flickers frame to frame even on a steady barcode, so "left the frame" is time-based: the same code
+        // is accepted again only when it has not been seen for 1.5 s straight.
+        let last = ''; let hitAt = 0; let lastSeenAt = 0;
         const tick = async () => {
           if (stop) return;
           try {
             const codes = await det.detect(video.current!);
             const c = codes.find(x => x.rawValue);
             const now = Date.now();
-            if (!c || c.rawValue !== last) gone++; else gone = 0;
-            if (c && now - hitAt > 700 && (c.rawValue !== last || gone >= 4)) {
-              last = c.rawValue; hitAt = now; gone = 0; onScan(c.rawValue);
+            const same = !!c && c.rawValue === last;
+            const away = now - lastSeenAt;              // how long since the previous code was last in view
+            if (same) lastSeenAt = now;
+            if (c && now - hitAt > 700 && (!same || away > 1500)) {
+              last = c.rawValue; hitAt = now; lastSeenAt = now; onScan(c.rawValue);
               setFlash(true); setTimeout(() => setFlash(false), 350);
               try { navigator.vibrate?.(40); } catch { /* not supported */ }
               beep();

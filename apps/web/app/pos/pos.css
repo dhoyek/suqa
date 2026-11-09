@@ -337,7 +337,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cat-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; }
 .cat-row.active { background: #eef6f8; border-color: var(--brand, #1f6f8b); }
 .cat-row input { width: 20px; height: 20px; }
-@media (max-width: 760px) { .cat-chips { display: none; } }
 /* phones: order actions as big tappable tiles, tables scroll inside the card without wrapping cells */
 @media (max-width: 760px) {
   .order-actions { display: flex; flex-wrap: wrap; gap: 6px; }

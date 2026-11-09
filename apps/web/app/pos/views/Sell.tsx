@@ -28,7 +28,6 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
-  const toggleCat = (id: string) => setCats(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
@@ -141,10 +140,6 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>
         <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />
         {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p)}>{b.label || text(p.name, locale)}</button> : null)}</div>}
-        <div className="chips cat-chips">
-          <button className={`chip ${cats.size === 0 ? 'active' : ''}`} onClick={() => setCats(new Set())}>{pt('all', locale)}</button>
-          {catList.map(c => <button key={c.id} className={`chip ${cats.has(c.id) ? 'active' : ''}`} onClick={() => toggleCat(c.id)}>{text(c.name, locale)}</button>)}
-        </div>
         <div className="grid-items">
           {results.map(p => {
             const avail = num(p.on_hand) - num(p.reserved);

@@ -157,7 +157,7 @@ def convert(exp, two_years=True):
     tl_by = collections.defaultdict(list)
     for c in tlines:
         if c['TRS_TYPE'] == 'P': tl_by[c['TRS_NUMBER']].append(c)
-    purchases = []
+    purchases = []; sup_fix = {}
     for t in trs:
         if t['TRS_TYPE'] != 'P': continue
         rate = num(t['CURR_US']) or default_rate; ll = (t['TRS_CURRENCY'].strip() or LL) == LL
@@ -170,9 +170,16 @@ def convert(exp, two_years=True):
                 lt = num(c['ITM_TOTAL']) / rate; fixed += 1
             ls.append({'key': c['ITM_CODE'], 'name': pname.get(c['ITM_CODE'], name(c['DETAILS'] or 'صنف')), 'qty': q, 'unit_cost_cents': cents(lt / q)})
         total_usd = to_usd(num(t['TRS_AMOUNT']))
-        if fixed: total_usd = sum(l['unit_cost_cents'] * l['qty'] for l in ls) / 100.0; n_fixed_purchases = S.get('purchases_currency_fixed', 0) + 1; S['purchases_currency_fixed'] = n_fixed_purchases
+        if fixed:
+            raw_usd = total_usd
+            total_usd = sum(l['unit_cost_cents'] * l['qty'] for l in ls) / 100.0; n_fixed_purchases = S.get('purchases_currency_fixed', 0) + 1; S['purchases_currency_fixed'] = n_fixed_purchases
+            sup_fix[t['TRS_PartyID']] = sup_fix.get(t['TRS_PartyID'], 0.0) + (raw_usd - total_usd)   # the party ledger carries the wrong figure too
         purchases.append({'key': t['TRS_NUMBER'], 'number': 'M-P' + t['TRS_NUMBER'], 'at': iso(t['TRS_DATE']), 'supplier_key': t['TRS_PartyID'], 'invoice_no': (t['TRS_ORDER'] or '').strip() or None,
                           'rate': int(rate), 'note': ((t['TRS_Remarks'] or '').strip() + (' · عملة مصحّحة' if fixed else '')).strip(' ·') or None, 'total_cents': cents(total_usd), 'lines': ls})
+    # supplier opening balances come from the old party ledger, which includes the mis-currency invoices at face value → correct them the same way
+    for sp in suppliers:
+        if sp['key'] in sup_fix: sp['balance_cents'] -= cents(sup_fix[sp['key']]); S['suppliers_balance_fixed'] = S.get('suppliers_balance_fixed', 0) + 1
+    S['suppliers_balance_usd'] = round(sum(x['balance_cents'] for x in suppliers) / 100)
     S['purchases'] = len(purchases); S['purchases_total_usd'] = round(sum(p['total_cents'] for p in purchases) / 100); S['transactions_skipped_S_R_SR'] = sum(1 for t in trs if t['TRS_TYPE'] != 'P')
     # ---------------------------------------------------------------- settings
     sc = {r['Number']: r for r in rd(f'{exp}/ScaleSettings.csv')}

@@ -104,13 +104,15 @@ export class CatalogIndex {
   }
 
   /** Substring search over normalised AR/EN names + SKU, every word must match. Capped. */
-  search(q: string, limit = 50, categoryId?: string | null): Product[] {
+  /** `categoryId` may be one category, a set of several (any of them), or null/empty = all. */
+  search(q: string, limit = 50, categoryId?: string | null | Iterable<string>): Product[] {
     if (this.dirty) this.rebuild();
     const words = normalize(q).split(' ').filter(Boolean);
+    const cats = catSet(categoryId);
     const out: Product[] = [];
     for (const r of this.rows) {
       const p = this.byId.get(r.id)!;
-      if (categoryId && (p.section ?? '') !== categoryId) continue;
+      if (cats && !cats.has(p.section ?? '')) continue;
       if (words.length && !words.every(w => r.norm.includes(w))) continue;
       out.push(p);
       if (out.length >= limit) break;
@@ -118,12 +120,20 @@ export class CatalogIndex {
     return out;
   }
 
-  byCategory(categoryId: string | null, limit = 200): Product[] {
+  byCategory(categoryId: string | null | Iterable<string>, limit = 200): Product[] {
+    const cats = catSet(categoryId);
     const out: Product[] = [];
-    for (const p of this.byId.values()) { if (categoryId === null || (p.section ?? '') === categoryId) { out.push(p); if (out.length >= limit) break; } }
+    for (const p of this.byId.values()) { if (!cats || cats.has(p.section ?? '')) { out.push(p); if (out.length >= limit) break; } }
     return out.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }
   get size(): number { return this.byId.size; }
 }
 
 export const normBarcode = (s: string): string => (s ?? '').trim().toLowerCase().replace(AR_DIGITS, d => String(d.charCodeAt(0) - 0x660));
+
+/** null / '' / empty set → no category filter; a string → that one; an iterable → any of them. */
+function catSet(c: string | null | undefined | Iterable<string>): Set<string> | null {
+  if (c == null || c === '') return null;
+  const s = typeof c === 'string' ? new Set([c]) : new Set(c);
+  return s.size ? s : null;
+}

@@ -333,8 +333,10 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 }
 
 /* categories: chips on wide screens, the 🗂 button + sheet everywhere (the only way on phones) */
-.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-.cat-grid .item-tile.active { outline: 2px solid var(--brand, #1f6f8b); }
+.cat-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; max-height: 55dvh; overflow: auto; }
+.cat-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; }
+.cat-row.active { background: #eef6f8; border-color: var(--brand, #1f6f8b); }
+.cat-row input { width: 20px; height: 20px; }
 @media (max-width: 760px) { .cat-chips { display: none; } }
 /* phones: order actions as big tappable tiles, tables scroll inside the card without wrapping cells */
 @media (max-width: 760px) {

@@ -216,3 +216,9 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .profile-menu .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .profile-menu .seg button { border: 0; background: #fff; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
 .profile-menu .seg button.on { background: var(--brand-primary); color: #fff; }
+
+/* POS account button */
+.avatar-btn { display: inline-flex; align-items: center; gap: 6px; padding-inline: 6px; }
+.avatar-sm { width: 26px; height: 26px; border-radius: 50%; background: var(--brand-primary, #0f766e); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.avatar-name { font-size: 13px; color: var(--muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .avatar-name { display: none; } }

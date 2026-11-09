@@ -5,6 +5,7 @@ import type { CatalogIndex, Staff, SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
+import AccountMenu from './components/AccountMenu';
 import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 import ShiftView from './views/ShiftView';
@@ -55,8 +56,7 @@ export default function Shell(props: {
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
           <button className={`btn icon sync ${spinning ? 'spin' : ''}`} title={pt('syncNow', locale)} onClick={syncNow}>🔄</button>
-          <span className="muted" style={{ fontSize: 13 }}>{staff.display_name || staff.full_name || ''}</span>
-          <button className="btn icon" title={pt('lock', locale)} onClick={onLock}>🔒</button>
+          <AccountMenu sb={props.sb} boot={boot} staff={staff} locale={locale} setLocale={props.setLocale} onLock={onLock} />
         </div>
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}

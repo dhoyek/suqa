@@ -37,6 +37,8 @@ export default function Shell(props: {
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
   const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);
+  const [custFocus, setCustFocus] = useState<{ phone: string; name: string; n: number } | null>(null);
+  const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
   const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
@@ -63,8 +65,8 @@ export default function Shell(props: {
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} presetCustomer={preset} />}
         {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} />}
-        {view === 'customers' && <CustomersView {...props} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
-        {view === 'debts' && <DebtsView {...props} />}
+        {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
+        {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} />}
         {view === 'purchases' && <PurchasesView {...props} />}

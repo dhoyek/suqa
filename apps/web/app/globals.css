@@ -222,3 +222,15 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .avatar-sm { width: 26px; height: 26px; border-radius: 50%; background: var(--brand-primary, #0f766e); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
 .avatar-name { font-size: 13px; color: var(--muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .avatar-name { display: none; } }
+
+/* admin: module quick links under the tab bar */
+.module-links { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding-top: 0; padding-bottom: 8px; }
+.module-links .chip { text-decoration: none; }
+
+/* storefront: bottom sheet (category picker) */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; gap: 10px; border-radius: 16px 16px 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+@media (min-width: 640px) { .sheet-backdrop { align-items: center; } .sheet { border-radius: 14px; } }
+.sheet .cat-list { overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.sheet .cat-row { display: flex; gap: 10px; align-items: center; padding: 10px 8px; border-radius: 8px; cursor: pointer; }
+.sheet .cat-row.active { background: #eef6f5; }

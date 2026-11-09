@@ -90,6 +90,8 @@ const T = {
   signupFailed: { en: 'Could not create the account', ar: 'تعذّر إنشاء الحساب' },
   account: { en: 'Account', ar: 'حسابي' },
   language: { en: 'Language', ar: 'اللغة' },
+  categories: { en: 'Categories', ar: 'الفئات' }, clearFilter: { en: 'Clear filter', ar: 'مسح الفلتر' }, typeToFilter: { en: 'Type to filter…', ar: 'اكتب للبحث…' }, showMore: { en: 'Show more', ar: 'عرض المزيد' },
+  goTo: { en: 'Go to', ar: 'انتقل إلى' }, okBtn: { en: 'OK', ar: 'حسناً' },
   purchaseHistory: { en: 'Purchase history', ar: 'سجلّ مشترياتي' },
   guest: { en: 'Not signed in', ar: 'غير مسجّل الدخول' },
   merchantPortal: { en: 'Merchant portal', ar: 'بوابة التاجر' },

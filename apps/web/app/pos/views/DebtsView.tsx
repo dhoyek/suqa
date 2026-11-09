@@ -6,12 +6,15 @@ import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { debtReceiptHtml, debtStatementHtml, doPrint, loadPrintSettings } from '../lib/print';
 import Modal, { NumPad } from '../components/Modal';
+import OrderDetail from '../components/OrderDetail';
+import { PickChips, PickFilter, type PickItem } from '../components/CategoryFilter';
 
 type Mode = 'date' | 'person';
 const TENDERS: Array<Exclude<Tender, 'unpaid'>> = ['cash_usd', 'cash_lbp', 'card', 'wallet'];
 
 /** الدين — who owes what. List by date or grouped by person; filter by period and person(s); print a statement; collect (oldest-first). */
-export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted; locale: L; tick: number; staff: Staff }) {
+export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { boot: Booted; locale: L; tick: number; staff: Staff; onCustomer?: (phone: string, name: string) => void }) {
+  const [detail, setDetail] = useState<DebtLine | null>(null);
   const [all, setAll] = useState<DebtLine[]>([]);
   const [history, setHistory] = useState<DebtSettlement[]>([]);
   const [mode, setMode] = useState<Mode>('person');
@@ -42,7 +45,11 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
   const grouped = useMemo(() => groupByPerson(lines), [lines]);
   const total = lines.reduce((s, l) => s + l.outstanding_cents, 0);
   const keyOf = (p: DebtPerson) => p.phone || `~${p.name}`;
-  const toggle = (k: string) => setSel(s => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const peopleItems: PickItem[] = useMemo(() => people.filter(p => !openOnly || p.outstanding_cents > 0).map(p => ({ id: keyOf(p), label: `${p.name || p.phone} · ${fmtUsd(p.outstanding_cents)}`, extra: p.phone || undefined })), [people, openOnly]);
+  const Who = ({ name, phone }: { name: string; phone: string }) => onCustomer && phone
+    ? <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', font: 'inherit', fontWeight: 700 }} title={pt('customersNav', locale)} onClick={() => onCustomer(phone, name)}>{name || '—'}</button>
+    : <strong>{name || '—'}</strong>;
+  const No = ({ l }: { l: DebtLine }) => <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', font: 'inherit' }} title={pt('orderDetails', locale)} onClick={() => setDetail(l)}>{l.number}</button>;
   const printList = (person?: DebtPerson) => {
     const st = loadPrintSettings();
     doPrint(debtStatementHtml(person ? person.lines.filter(l => openOnly ? !l.closed : true) : lines, boot.shop, locale, st, { person: person ? { name: person.name, phone: person.phone } : undefined, rate, lbpStep: step }), st);
@@ -58,13 +65,10 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
           <input className="input" type="date" dir="ltr" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 150 }} title={pt('from', locale)} />
           <input className="input" type="date" dir="ltr" value={to} onChange={e => setTo(e.target.value)} style={{ width: 150 }} title={pt('to', locale)} />
           <input className="input" placeholder={pt('searchPerson', locale)} value={q} onChange={e => { setQ(e.target.value); setSel(new Set()); }} style={{ flex: 1, minWidth: 160 }} />
+          <PickFilter items={peopleItems} selected={sel} onChange={setSel} locale={locale} icon="👥" title={pt('person', locale)} />
           <button className="btn" onClick={() => printList()} disabled={!lines.length}>🖨 {pt('printStatement', locale)}</button>
         </div>
-        {/* person chips (multi-select) */}
-        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          <button className={`chip ${sel.size === 0 ? 'active' : ''}`} onClick={() => setSel(new Set())}>{pt('allPeople', locale)}</button>
-          {people.filter(p => !openOnly || p.outstanding_cents > 0).map(p => <button key={keyOf(p)} className={`chip ${sel.has(keyOf(p)) ? 'active' : ''}`} onClick={() => toggle(keyOf(p))}>{p.name || p.phone} <span className="muted">{fmtUsd(p.outstanding_cents)}</span></button>)}
-        </div>
+        <div style={{ marginTop: sel.size ? 10 : 0 }}><PickChips items={peopleItems} selected={sel} onChange={setSel} locale={locale} /></div>
         <div className="kpis" style={{ marginTop: 10 }}>
           <div className="kpi"><span>{pt('totalOutstanding', locale)}</span><strong>{fmtUsd(total)}</strong><small>{fmtLbp(roundLbp(usdToLbp(total, rate), step), locale)}</small></div>
           <div className="kpi"><span>{pt('person', locale)}</span><strong>{grouped.filter(p => p.outstanding_cents > 0).length}</strong><small>{lines.length} {pt('ordersNav', locale)}</small></div>
@@ -76,7 +80,7 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
       {mode === 'person' && grouped.map(p => (
         <section className="card" key={keyOf(p)}>
           <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <div><strong style={{ fontSize: 17 }}>{p.name || '—'}</strong> <span className="muted" dir="ltr">{p.phone}</span></div>
+            <div style={{ fontSize: 17 }}><Who name={p.name} phone={p.phone} /> <span className="muted" dir="ltr" style={{ fontSize: 13 }}>{p.phone}</span></div>
             <div className="row" style={{ gap: 8, alignItems: 'center' }}>
               <strong className={p.outstanding_cents ? 'bad' : 'ok'} style={{ fontSize: 18 }}>{fmtUsd(p.outstanding_cents)}</strong>
               <button className="btn icon" title={pt('printStatement', locale)} onClick={() => printList(p)}>🖨</button>
@@ -84,7 +88,7 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
             </div>
           </div>
           <table className="table" style={{ marginTop: 6 }}><tbody>
-            {p.lines.map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td>{l.number}</td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? '− ' + fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
+            {p.lines.map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td><No l={l} /></td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? '− ' + fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
           </tbody></table>
         </section>
       ))}
@@ -93,7 +97,7 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
         <section className="card">
           <table className="table"><tbody>
             <tr><th style={{ textAlign: 'start' }}>{pt('when', locale)}</th><th style={{ textAlign: 'start' }}>{pt('orderNo', locale)}</th><th style={{ textAlign: 'start' }}>{pt('person', locale)}</th><th>{pt('original', locale)}</th><th>{pt('paidSoFar', locale)}</th><th>{pt('outstanding', locale)}</th></tr>
-            {[...lines].sort((a, b) => b.at.localeCompare(a.at)).map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td>{l.number}</td><td>{l.name} <span className="muted" dir="ltr">{l.phone}</span></td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
+            {[...lines].sort((a, b) => b.at.localeCompare(a.at)).map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td><No l={l} /></td><td><Who name={l.name} phone={l.phone} /> <span className="muted" dir="ltr">{l.phone}</span></td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
           </tbody></table>
         </section>
       )}
@@ -107,6 +111,7 @@ export default function DebtsView({ boot, locale, tick, staff }: { boot: Booted;
         </section>
       )}
 
+      {detail && <OrderDetail boot={boot} locale={locale} order={detail.order} onClose={() => setDetail(null)} onCustomer={onCustomer ? (ph, nm) => { setDetail(null); onCustomer(ph, nm); } : undefined} />}
       {collect && <CollectDialog boot={boot} locale={locale} person={collect} rate={rate} step={step} staff={staff} onClose={() => setCollect(null)}
         onDone={d => { setCollect(null); setDone(d); }} />}
       {done && <Modal open onClose={() => setDone(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(done.s, done.allocs, done.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDone(null)}>{pt('ok', locale)}</button></>}>

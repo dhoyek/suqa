@@ -47,7 +47,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
       <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone, pickup_enabled: s.pickup_enabled !== false }}
         products={products} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
         labels={{ add: ui('add', L), soldOut: ui('soldOut', L), replaceCart: ui('replaceCart', L), cart: ui('cart', L), checkout: ui('checkout', L), items: ui('items', L),
-          askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L), searchItems: ui('searchItems', L), noMatches: ui('noMatches', L), all: ui('all', L) }} />
+          askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L), searchItems: ui('searchItems', L), noMatches: ui('noMatches', L), all: ui('all', L), categories: ui('categories', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), showMore: ui('showMore', L), ok: ui('okBtn', L) }} />
     </>
   );
 }

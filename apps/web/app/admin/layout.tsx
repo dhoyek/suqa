@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
 import { getTenantRole } from '@/lib/admin';
+import { getMyShops } from '@/lib/auth';
+import { getLocale } from '@/lib/locale';
 import { ui } from '@/lib/ui-text';
 import AdminNav from './AdminNav';
 
@@ -10,7 +12,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   await requireUser('/admin');
   const tenant = await getTenant();
   const role = await getTenantRole(tenant.id);
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
+  const myShops = await getMyShops();
+  const pos = role === 'admin' || myShops.some(s => (s as unknown as { pos_enabled?: boolean }).pos_enabled);
   const tabs = [
     { href: '/admin', label: ui('dashboard', L) }, { href: '/admin/shops', label: ui('shops', L) }, { href: '/admin/orders', label: ui('orders', L) },
     { href: '/admin/zones', label: ui('zones', L) }, { href: '/admin/members', label: ui('members', L) }, { href: '/admin/settings', label: ui('settings', L) },
@@ -21,6 +25,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="container" style={{ flexWrap: 'wrap' }}>
           <Link href="/admin" className="brand">{tenant.brand_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· {ui('admin', L)}</span></Link>
           <AdminNav tabs={tabs} signOut={ui('signOut', L)} />
+        </div>
+        <div className="container module-links">
+          <span className="muted" style={{ fontSize: 12 }}>{ui('goTo', L)}</span>
+          <Link href="/" className="chip">🏠 {ui('home', L)}</Link>
+          <Link href="/shop/settings" className="chip">🏪 {ui('myShop', L)}</Link>
+          {pos && <a href="/pos" className="chip">🖥️ {ui('pos', L)}</a>}
+          <Link href="/orders" className="chip">🧾 {ui('purchaseHistory', L)}</Link>
+          <Link href="/courier" className="chip">🛵 {ui('courierApp', L)}</Link>
         </div>
       </header>
       <main className="container">

@@ -103,7 +103,7 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
       )}
       <table className="table"><tbody>
         {members.map(m => <tr key={m.user_id} className={m.active ? '' : 'muted'}>
-          <td><strong style={{ cursor: online ? 'pointer' : 'default' }} title={pt('staffName', locale)} onClick={() => { if (online) openEdit(m); }}>{m.display_name || m.full_name || '—'} ✎</strong>{m.user_id === staff.user_id ? ` (${pt('you', locale)})` : ''}<div className="muted" dir="ltr" style={{ fontSize: 12 }}>{m.phone ? '+' + m.phone.replace(/^\+/, '') : ''}{online && <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', fontSize: 12 }} title={pt('staffPhoneNew', locale)} onClick={() => openEdit(m)}>✎</button>}</div></td>
+          <td><div className="row" style={{ gap: 6, alignItems: 'center' }}><div><strong>{m.display_name || m.full_name || '—'}</strong>{m.user_id === staff.user_id ? ` (${pt('you', locale)})` : ''}<div className="muted" dir="ltr" style={{ fontSize: 12 }}>{m.phone ? '+' + m.phone.replace(/^\+/, '') : ''}</div></div>{online && <button className="btn icon" title={pt('edit', locale)} onClick={() => openEdit(m)}>✎</button>}</div></td>
           <td>{online ? <select className="input" value={m.role === 'staff' ? 'cashier' : m.role} onChange={e => set(m, { p_role: e.target.value })} style={{ width: 'auto', minHeight: 36 }}>{ROLES.map(r => <option key={r} value={r}>{pt(`role_${r}` as 'role_owner', locale)}</option>)}</select> : pt(`role_${m.role}` as 'role_owner', locale)}</td>
           <td className="muted">{m.pin ? 'PIN ✓' : pt('noPin', locale)}</td>
           <td style={{ whiteSpace: 'nowrap' }}>

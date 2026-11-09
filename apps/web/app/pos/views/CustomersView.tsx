@@ -9,7 +9,7 @@ import Modal from '../components/Modal';
 import { useConfirm } from '@/components/ConfirmProvider';
 
 /** الزبائن — everyone who ever ordered: search, edit (name / address / pin / notes), balance, order history, WhatsApp, new order. */
-export default function CustomersView({ boot, locale, tick, status, staff, onNewOrder }: { boot: Booted; locale: L; tick: number; status: SyncStatus | null; staff: Staff; onNewOrder: (c: { phone: string; name: string }) => void }) {
+export default function CustomersView({ boot, locale, tick, status, staff, onNewOrder, focus }: { boot: Booted; locale: L; tick: number; status: SyncStatus | null; staff: Staff; onNewOrder: (c: { phone: string; name: string }) => void; focus?: { phone: string; name: string; n: number } | null }) {
   const online = status?.online ?? true;
   const [q, setQ] = useState(''); const [list, setList] = useState<ShopCustomer[]>([]); const [all, setAll] = useState<ShopCustomer[]>([]);
   const [sel, setSel] = useState<ShopCustomer | null>(null); const [debt, setDebt] = useState<Map<string, number>>(new Map()); const [showInactive, setShowInactive] = useState(false); const [reload, setReload] = useState(0);
@@ -17,6 +17,8 @@ export default function CustomersView({ boot, locale, tick, status, staff, onNew
   useEffect(() => { const vis = showInactive ? all : all.filter(c => c.active !== false); if (!q.trim()) { setList(vis); return; } const digits = normPhone(q), text = q.trim().toLowerCase(); setList(vis.filter(c => (digits && c.phone_key.includes(digits)) || (text && c.name.toLowerCase().includes(text)))); }, [q, all, boot, showInactive]);
   useEffect(() => { if (sel) { const fresh = all.find(c => c.id === sel.id); if (fresh && fresh !== sel) setSel(fresh); } }, [all]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalDebt = useMemo(() => [...debt.values()].reduce((a, b) => a + b, 0), [debt]);
+  // opened from another screen (debts, order detail): search for that person and select them when found
+  useEffect(() => { if (!focus) return; setQ(focus.phone || focus.name); const k = normPhone(focus.phone); const c = all.find(x => (k && x.phone_key === k) || (!k && x.name === focus.name)); if (c) setSel(c); }, [focus, all]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="cust-page">
       <section className="cust-side">

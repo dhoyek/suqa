@@ -9,6 +9,7 @@ import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
+import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
@@ -17,7 +18,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'cats' };
+type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
@@ -26,7 +27,7 @@ type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; f
 export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
-  const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set()); const [catQ, setCatQ] = useState('');
+  const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
   const toggleCat = (id: string) => setCats(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -60,8 +61,6 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   // search first: typing searches everything; browsing shows the most-sold items of the (optional) category first
   const results = useMemo(() => (q.trim() ? index.search(q, 60, cats) : index.byCategory(cats, 400).sort((a, b) => (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0)).slice(0, 60)), [q, cats, index, tick, pop]);
   const catList = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
-  const catNames = [...cats].map(id => text(catList.find(c => c.id === id)?.name ?? {}, locale)).filter(Boolean);
-  const catMatches = catList.filter(c => { const n = catQ.trim().toLowerCase(); return !n || text(c.name, locale).toLowerCase().includes(n) || (c.name?.ar ?? '').toLowerCase().includes(n) || (c.name?.en ?? '').toLowerCase().includes(n); });
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
@@ -138,9 +137,9 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (results.length === 1 ? results[0] : null); if (p) add(p); } }} />
           <button className="btn big" style={{ width: 'auto' }} title={pt('cameraScan', locale)} onClick={() => setDialog({ k: 'camera' })}>📷</button>
           <button className="btn big" style={{ width: 'auto' }} title={pt('openItem', locale)} onClick={() => setDialog({ k: 'open' })}>＋</button>
-          {!!catList.length && <button className={`btn big cat-btn ${cats.size ? 'primary' : ''}`} style={{ width: 'auto' }} title={pt('categories', locale)} onClick={() => setDialog({ k: 'cats' })}>🗂</button>}
+          <CategoryFilter cats={catList} selected={cats} onChange={setCats} locale={locale} big />
         </div>
-        {cats.size > 0 && <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{[...cats].map(id => <button key={id} className="chip active" onClick={() => toggleCat(id)}>{text(catList.find(c => c.id === id)?.name ?? {}, locale)} ✕</button>)}<button className="chip" onClick={() => setCats(new Set())}>{pt('clearFilter', locale)}</button></div>}
+        <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />
         {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p)}>{b.label || text(p.name, locale)}</button> : null)}</div>}
         <div className="chips cat-chips">
           <button className={`chip ${cats.size === 0 ? 'active' : ''}`} onClick={() => setCats(new Set())}>{pt('all', locale)}</button>
@@ -211,14 +210,6 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'cats' && <Modal open onClose={() => setDialog(null)} title={`${pt('categories', locale)}${cats.size ? ` (${cats.size})` : ''}`} footer={<><button className="btn" onClick={() => setCats(new Set())}>✕ {pt('clearFilter', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDialog(null)}>{pt('ok', locale)}</button></>}>
-        <input className="input" autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches} placeholder={pt('filterCategories', locale)} value={catQ} onChange={e => setCatQ(e.target.value)} />
-        <p className="muted" style={{ fontSize: 12, margin: '6px 0' }}>{pt('multiCatHint', locale)}</p>
-        <div className="cat-list">
-          {catMatches.map(c => <label key={c.id} className={`cat-row ${cats.has(c.id) ? 'active' : ''}`}><input type="checkbox" checked={cats.has(c.id)} onChange={() => toggleCat(c.id)} /> <span>{text(c.name, locale)}</span></label>)}
-          {!catMatches.length && <p className="muted">—</p>}
-        </div>
-      </Modal>}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}

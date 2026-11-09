@@ -5,13 +5,14 @@ import { fmtLbp, fmtUsd, num, text, type CatalogIndex, type Conflict, type Produ
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import ItemEditor from '../components/ItemEditor';
+import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import Modal from '../components/Modal';
 import ImportDialog from '../components/ImportDialog';
 import BulkDialog from '../components/BulkDialog';
 
 /** Catalog: list + editor, quick buttons (owner, online), conflict review (owner). Bulk tools + import live in a separate dialog (M4-c). */
 export default function ItemsView({ boot, sb, locale, index, tick, staff, reindex }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
-  const [q, setQ] = useState(''); const [cat, setCat] = useState<string | null>(null); const [showArchived, setShowArchived] = useState(false);
+  const [q, setQ] = useState(''); const [cat, setCat] = useState<Set<string>>(new Set()); const [showArchived, setShowArchived] = useState(false);
   const [edit, setEdit] = useState<{ p: Product | null } | null>(null);
   const [members, setMembers] = useState<Staff[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
@@ -26,6 +27,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
     <div className="stack" style={{ padding: 16 }}>
       <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input className="input" style={{ flex: 1, minWidth: 220 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} />
+        <CategoryFilter cats={cats} selected={cat} onChange={setCat} locale={locale} />
         {canEdit && <button className="btn primary" onClick={() => setEdit({ p: null })}>＋ {pt('newItem', locale)}</button>}
         {boot.role === 'owner' && <button className="btn" onClick={() => setQuickOpen(true)}>⚡ {pt('quickButtons', locale)}</button>}
         {boot.role === 'owner' && <button className="btn" onClick={() => setBulkOpen(true)}>％ {locale === 'ar' ? 'تعديل جماعي' : 'Bulk'}</button>}
@@ -33,7 +35,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> {pt('archived', locale)} ({archived.length})</label>
       </div>
       {!canEdit && <p className="muted" style={{ margin: 0 }}>{pt('readOnly', locale)}</p>}
-      <div className="chips"><button className={`chip ${cat === null ? 'active' : ''}`} onClick={() => setCat(null)}>{pt('all', locale)} · {index.size}</button>{cats.map(c => <button key={c.id} className={`chip ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>{text(c.name, locale)}</button>)}</div>
+      <CategoryChips cats={cats} selected={cat} onChange={setCat} locale={locale} />
       {!!conflicts.length && boot.role === 'owner' && (
         <section className="card" style={{ borderColor: '#fcd34d', background: '#fffbeb' }}>
           <strong>⚠ {pt('conflicts', locale)} ({conflicts.length})</strong><p className="muted" style={{ fontSize: 12 }}>{pt('conflictHint', locale)}</p>

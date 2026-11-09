@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
+import DriverPicker from '../components/DriverPicker';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
@@ -30,7 +31,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
   const reload = async () => {
     const since = new Date(Date.now() - 36 * 3600_000).toISOString();
@@ -65,6 +66,8 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
     if (status === 'rejected') return setDialog({ k: 'reject', o });
     if (status === 'cancelled') return setDialog({ k: 'cancel', o });
     if (status === 'accepted' && o.channel === 'online') return setDialog({ k: 'eta', o });
+    // delivery leaves the shop: who takes it? (a driver gets a WhatsApp with the order; the shop itself needs nothing)
+    if (status === 'out_for_delivery' && o.fulfillment === 'delivery') return setDialog({ k: 'driver', o });
     // handover: pickup → pay dialog; delivery → cash-on-delivery settlement (what the customer paid, who delivered, driver fee)
     if (status === 'delivered' && !isPaid(o)) return setDialog({ k: 'pay', o, status });
     await setOrderStatus(boot.db, o, status); boot.engine.poke(); await reload();
@@ -99,6 +102,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
                   {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
+                  {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered') && <DriverLine o={o} boot={boot} locale={locale} />}
                   {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(num(o.total_lbp), locale)}</span></strong>
@@ -125,6 +129,8 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
 
       {gate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('deleteOrder', locale)} onDone={id => { const o = gate; setGate(null); if (id) void removeOrder(o, id); }} />}
       {dialog?.k === 'eta' && <EtaDialog locale={locale} onDone={async eta => { await setOrderStatus(boot.db, dialog.o, 'accepted', { eta_minutes: eta }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'driver' && <DriverPicker boot={boot} locale={locale} order={dialog.o} onClose={() => setDialog(null)}
+        onPick={async d => { await setOrderStatus(boot.db, dialog.o, 'out_for_delivery', { driver_id: d?.id ?? null, courier_name: d?.name ?? null }); boot.engine.poke(); setDialog(null); await reload(); }} />}
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
@@ -197,7 +203,6 @@ function neededLabel(iso: string, locale: L): string {
 }
 
 /** wa.me / tel want the international number without '+': 70 483 148 → 96170483148. */
-const waDigits = (p: string) => { const k = p.replace(/\D/g, '').replace(/^00/, ''); return k.startsWith('961') ? k : '961' + k.replace(/^0/, ''); };
 
 /** Online orders carry line1/line2/notes/label + a PostGIS point; POS-typed ones carry line1 + map_url/lat/lng. */
 function addrLine(a: Record<string, unknown>): string {
@@ -207,4 +212,11 @@ function mapHref(a: Record<string, unknown>): string | null {
   if (a.map_url) return String(a.map_url);
   const p = (a.lat != null && a.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a.location as string | null | undefined);
   return p ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : null;
+}
+
+/** "🛵 Abou Ali 📞 💬" on an order that left the shop — or "المحل" when the shop delivered it itself. */
+function DriverLine({ o, boot, locale }: { o: Order; boot: Booted; locale: L }) {
+  const [d, setD] = useState<Driver | null>(null);
+  useEffect(() => { if (o.driver_id) boot.db.drivers.get(o.driver_id).then(x => setD(x ?? null)); else setD(null); }, [boot, o.driver_id]);
+  return <div className="muted" style={{ fontSize: 12 }}>🛵 {d ? <>{d.name} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>💬</a></> : (o.courier_name || pt('shopDelivers', locale))}</div>;
 }

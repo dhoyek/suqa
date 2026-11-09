@@ -41,7 +41,7 @@ export interface Order {
   rate_lbp_per_usd: number; subtotal_cents: number; discount_cents: number; discount_reason?: string | null; total_cents: number; total_lbp: number;
   delivery_fee_usd?: number | string; total_usd?: number | string; courier_fee_cents?: number; courier_name?: string | null;
   paid_usd_cents: number; paid_lbp: number; change_usd_cents: number; change_lbp: number;
-  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null;
+  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null; driver_id?: string | null;
   placed_at: string; accepted_at?: string | null; delivered_at?: string | null; closed_at?: string | null; updated_at?: string;
 }
 export interface OrderLine {
@@ -63,11 +63,13 @@ export interface SupplierPayment { id: string; shop_id: string; supplier_id: str
 export interface CustomerAddress { line1?: string; notes?: string; map_url?: string; lat?: number; lng?: number; label?: string; transient?: boolean }
 /** One entry of a customer's address book (shop_customers.addresses). */
 export interface SavedAddress extends CustomerAddress { id: string; last_used_at?: string | null }
+/** A shop's contracted driver (shop_drivers): just a name and a WhatsApp number; user_id when he also has an account. */
+export interface Driver { id: string; shop_id: string; name: string; phone: string; phone_key: string; vehicle?: string | null; active: boolean; available: boolean; notes?: string | null; user_id?: string | null; last_used_at?: string | null; updated_at?: string }
 export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; addresses?: SavedAddress[]; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7
@@ -88,7 +90,7 @@ export interface Snapshot {
   categories: Category[]; products: Product[]; product_barcodes: Barcode[]; quick_buttons: QuickButton[]; exchange_rates: Rate[];
   shop_members: Staff[]; devices: Device[]; orders: Order[]; order_items: OrderLine[]; payments: Payment[]; shifts: Shift[]; cash_moves: CashMove[]; stock_moves: StockMove[];
   debt_settlements?: DebtSettlement[]; debt_allocations?: DebtAllocation[]; shop_customers?: ShopCustomer[];
-  suppliers?: Supplier[]; purchases?: Purchase[]; purchase_lines?: PurchaseLine[]; supplier_payments?: SupplierPayment[];
+  suppliers?: Supplier[]; purchases?: Purchase[]; purchase_lines?: PurchaseLine[]; supplier_payments?: SupplierPayment[]; shop_drivers?: Driver[];
 }
 
 export class SyncError extends Error {

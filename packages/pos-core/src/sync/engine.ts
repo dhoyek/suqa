@@ -27,7 +27,7 @@ export interface EngineOptions {
 const TABLE_STORE: Record<string, keyof PosDb & string> = {
   products: 'products', product_barcodes: 'barcodes', categories: 'categories', quick_buttons: 'quickButtons', exchange_rates: 'rates',
   shop_members: 'staff', devices: 'devices', orders: 'orders', order_items: 'orderLines', payments: 'payments', stock_moves: 'stockMoves',
-  shifts: 'shifts', cash_moves: 'cashMoves', conflict_log: 'conflicts', returns: 'returns', return_lines: 'returnLines', debt_settlements: 'debtSettlements', debt_allocations: 'debtAllocations', shop_customers: 'shopCustomers', suppliers: 'suppliers', purchases: 'purchases', purchase_lines: 'purchaseLines', supplier_payments: 'supplierPayments',
+  shifts: 'shifts', cash_moves: 'cashMoves', conflict_log: 'conflicts', returns: 'returns', return_lines: 'returnLines', debt_settlements: 'debtSettlements', debt_allocations: 'debtAllocations', shop_customers: 'shopCustomers', suppliers: 'suppliers', purchases: 'purchases', purchase_lines: 'purchaseLines', supplier_payments: 'supplierPayments', shop_drivers: 'drivers',
 };
 const defaultBackoff = (tries: number) => Math.min(5 * 60_000, 1000 * 2 ** Math.min(tries, 8)) * (0.8 + Math.random() * 0.4);
 
@@ -61,13 +61,13 @@ export class SyncEngine {
     await this.db.transaction('rw', this.db.tables, async () => {
       await Promise.all([this.db.products.clear(), this.db.barcodes.clear(), this.db.categories.clear(), this.db.quickButtons.clear(), this.db.rates.clear(),
         this.db.staff.clear(), this.db.devices.clear(), this.db.orders.clear(), this.db.orderLines.clear(), this.db.payments.clear(), this.db.shifts.clear(),
-        this.db.cashMoves.clear(), this.db.stockMoves.clear(), this.db.debtSettlements.clear(), this.db.debtAllocations.clear(), this.db.shopCustomers.clear(), this.db.suppliers.clear(), this.db.purchases.clear(), this.db.purchaseLines.clear(), this.db.supplierPayments.clear()]);
+        this.db.cashMoves.clear(), this.db.stockMoves.clear(), this.db.debtSettlements.clear(), this.db.debtAllocations.clear(), this.db.shopCustomers.clear(), this.db.suppliers.clear(), this.db.purchases.clear(), this.db.purchaseLines.clear(), this.db.supplierPayments.clear(), this.db.drivers.clear()]);
       await this.db.products.bulkPut(s.products); await this.db.barcodes.bulkPut(s.product_barcodes); await this.db.categories.bulkPut(s.categories);
       await this.db.quickButtons.bulkPut(s.quick_buttons); await this.db.rates.bulkPut(s.exchange_rates); await this.db.staff.bulkPut(s.shop_members);
       await this.db.devices.bulkPut(s.devices); await this.db.orders.bulkPut(s.orders); await this.db.orderLines.bulkPut(s.order_items);
       await this.db.payments.bulkPut(s.payments); await this.db.shifts.bulkPut(s.shifts); await this.db.cashMoves.bulkPut(s.cash_moves); await this.db.stockMoves.bulkPut(s.stock_moves);
       await this.db.debtSettlements.bulkPut(s.debt_settlements ?? []); await this.db.debtAllocations.bulkPut(s.debt_allocations ?? []); await this.db.shopCustomers.bulkPut(s.shop_customers ?? []);
-      await this.db.suppliers.bulkPut(s.suppliers ?? []); await this.db.purchases.bulkPut(s.purchases ?? []); await this.db.purchaseLines.bulkPut(s.purchase_lines ?? []); await this.db.supplierPayments.bulkPut(s.supplier_payments ?? []);
+      await this.db.suppliers.bulkPut(s.suppliers ?? []); await this.db.purchases.bulkPut(s.purchases ?? []); await this.db.purchaseLines.bulkPut(s.purchase_lines ?? []); await this.db.supplierPayments.bulkPut(s.supplier_payments ?? []); await this.db.drivers.bulkPut(s.shop_drivers ?? []);
       await setMeta(this.db, META.shop, s.shop); await setMeta(this.db, META.role, s.role);
       await setMeta(this.db, META.devicePrefix, s.device.prefix); await setMeta(this.db, META.deviceName, s.device.name);
       await setMeta(this.db, META.cursor, s.cursor); await setMeta(this.db, META.lastSyncAt, s.server_now); await setMeta(this.db, META.lastOnlineAt, s.server_now);

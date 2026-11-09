@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hashPin, isValidPin, type Conflict, type Device, type OutboxOp, type Staff, type SyncStatus } from '@suqa/pos-core';
 import StaffPanel from '../components/StaffPanel';
+import DriversPanel from '../components/DriversPanel';
 import ShopSettings from '../components/ShopSettings';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
@@ -83,6 +84,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         </div>
       </section>
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
+      {owner && <DriversPanel boot={boot} locale={locale} tick={tick} />}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🏬 {pt('onlineShop', locale)}</h3>
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>{pt('onlineShopHint', locale)}</p>

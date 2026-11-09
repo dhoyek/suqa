@@ -38,4 +38,5 @@ source of truth.
 | 34_pos_m12.sql | Scheduled orders `orders.needed_at` (sale.commit payload, op `order.needed`), customer address book `shop_customers.addresses` (`_addr_remember`, touch + upsert re-created), volume indexes on orders, `prune_sync_log(days)`, dispatcher re-created |
 | 35_pos_staff_phone.sql | `pos_staff_phone(shop, user, phone)` — owner moves an employee's login to a new WhatsApp number (auth.users + profiles, refuses numbers in use) |
 | 36_known_address.sql | `my_known_address(tenant)` — the signed-in customer's most recent address from the shops' address books, to prefill their first web checkout |
+| 37_pos_drivers.sql | Shop drivers (drivers-lite): `shop_drivers` (synced, linked to an account by number), `orders.driver_id`, op `driver.upsert`, `order.status` carries `driver_id`, event payload `driver`; snapshot + dispatcher re-created |
 | ../seed/batroun.sql | first tenant |

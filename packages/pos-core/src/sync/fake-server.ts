@@ -146,7 +146,7 @@ export class FakeServer {
         return { conflicts };
       }
       case 'rate.set': { if (this.role === 'cashier' && !p.approved_by) throw new Error('owner_approval_required'); const r: Rate = { id: p.id, shop_id: this.shop.id, lbp_per_usd: p.lbp_per_usd, effective_at: p.effective_at ?? new Date().toISOString() }; this.rates.push(r); this.log('exchange_rates', r as unknown as Record<string, unknown>, d.id); return { ok: true }; }
-      case 'shift.open': case 'shift.close': case 'cash.move': case 'sale.cancel': case 'order.edit': case 'order.pay': case 'return.commit': case 'debt.settle': case 'order.delete': case 'customer.upsert': case 'supplier.upsert': case 'purchase.commit': case 'purchase.void': case 'supplier.pay': case 'customer.merge': case 'customer.delete': case 'supplier.merge': case 'supplier.delete': case 'order.needed': return { ok: true };
+      case 'shift.open': case 'shift.close': case 'cash.move': case 'sale.cancel': case 'order.edit': case 'order.pay': case 'return.commit': case 'debt.settle': case 'order.delete': case 'customer.upsert': case 'supplier.upsert': case 'purchase.commit': case 'purchase.void': case 'supplier.pay': case 'customer.merge': case 'customer.delete': case 'supplier.merge': case 'supplier.delete': case 'order.needed': case 'driver.upsert': return { ok: true };
       default: throw new Error('unknown_op');
     }
   }

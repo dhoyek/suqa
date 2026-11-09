@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -50,6 +50,8 @@ export async function POST(req: Request) {
     if (e.order.notify_customer !== false) to(e.order.customer_phone, customerEdited(e, origin), 'customer', customerEditedTpl(e, origin));
   } else if (e.event === 'order.status') {
     if (shouldNotifyCustomer(e)) to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
+    // the shop's own driver (drivers-lite): assigned together with "out for delivery"
+    if (e.order.status === 'out_for_delivery' && e.driver?.phone && e.old_status !== 'out_for_delivery') to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
     if (e.order.status === 'ready' && e.order.fulfillment !== 'pickup' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {
       const msg = courierReady(e, origin); const tpl = courierReadyTpl(e, origin);
       for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier', tpl);

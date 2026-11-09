@@ -10,14 +10,15 @@ export const NEXT: Record<OrderStatus, OrderStatus[]> = {
   ready: ['out_for_delivery', 'delivered', 'cancelled'], out_for_delivery: ['delivered', 'cancelled'], delivered: [], rejected: [], cancelled: [],
 };
 
-export async function setOrderStatus(db: PosDb, order: Order, status: OrderStatus, extra: { reject_reason?: string; cancel_reason?: string; eta_minutes?: number | null; notify_customer?: boolean; shop_notes?: string } = {}): Promise<Order> {
+export async function setOrderStatus(db: PosDb, order: Order, status: OrderStatus, extra: { reject_reason?: string; cancel_reason?: string; eta_minutes?: number | null; notify_customer?: boolean; shop_notes?: string; driver_id?: string | null; courier_name?: string | null } = {}): Promise<Order> {
   const now = new Date().toISOString();
   const updated: Order = { ...order, status, reject_reason: extra.reject_reason ?? order.reject_reason, cancel_reason: extra.cancel_reason ?? order.cancel_reason, eta_minutes: extra.eta_minutes ?? order.eta_minutes,
-    notify_customer: extra.notify_customer ?? order.notify_customer, shop_notes: extra.shop_notes ?? order.shop_notes, accepted_at: status === 'accepted' ? now : order.accepted_at,
+    notify_customer: extra.notify_customer ?? order.notify_customer, shop_notes: extra.shop_notes ?? order.shop_notes, driver_id: 'driver_id' in extra ? extra.driver_id ?? null : order.driver_id, courier_name: 'driver_id' in extra ? extra.courier_name ?? null : order.courier_name, accepted_at: status === 'accepted' ? now : order.accepted_at,
     delivered_at: status === 'delivered' ? now : order.delivered_at, closed_at: ['delivered', 'rejected', 'cancelled'].includes(status) ? now : order.closed_at, updated_at: now };
   await db.transaction('rw', [db.orders, db.outbox], async () => {
     await db.orders.put(updated);
-    await enqueue(db, 'order.status', { id: order.id, status, ...extra });
+    const { courier_name: _cn, ...rest } = extra; void _cn;
+    await enqueue(db, 'order.status', { id: order.id, status, ...rest });
   });
   return updated;
 }

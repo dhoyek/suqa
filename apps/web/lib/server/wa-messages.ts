@@ -8,7 +8,8 @@ export type OrderEvent = {
   old_status?: string | null;
   order: { id: string; number: string; status: string; basket_id?: string | null; fulfillment?: 'delivery' | 'pickup'; notify_customer?: boolean; customer_name: string; customer_phone: string; customer_notes?: string | null;
     address: Record<string, unknown>; subtotal_usd: number; delivery_fee_usd: number; total_usd: number; fx_lbp_rate: number;
-    reject_reason?: string | null; eta_minutes?: number | null; shop_notes?: string | null; courier_id?: string | null };
+    reject_reason?: string | null; eta_minutes?: number | null; shop_notes?: string | null; courier_id?: string | null; driver_id?: string | null; courier_name?: string | null; needed_at?: string | null };
+  driver?: { id: string; name: string; phone: string; vehicle?: string | null } | null;
   items: { name: LocalizedText; unit?: string | null; quantity: number; line_total_usd: number; notes?: string | null }[];
   shop: { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; phone?: string | null; address?: string | null; location?: string | null; notify_stages?: string[] | null } | null;
   tenant: { id: string; slug: string; brand_name: string; default_locale: Locale; display_currency: DisplayCurrency; courier_enabled: boolean; delivery_mode: 'per_shop' | 'courier'; notify_stages?: string[] } | null;
@@ -17,7 +18,7 @@ export type OrderEvent = {
 };
 
 const addr = (a: Record<string, unknown>) => [a.label, a.line1, a.line2, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join(', ');
-const mapUrl = (a: Record<string, unknown>) => { const p = pointFromEwkb(a?.location as string | undefined); return p ? `https://maps.google.com/?q=${p.lat},${p.lng}` : ''; };
+const mapUrl = (a: Record<string, unknown>) => { if (a?.map_url) return String(a.map_url); const p = (a?.lat != null && a?.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a?.location as string | undefined); return p ? `https://maps.google.com/?q=${p.lat},${p.lng}` : ''; };
 const waMe = (phone: string) => `https://wa.me/${String(phone).replace(/\D/g, '')}`;
 const lines = (e: OrderEvent, L: Locale) => e.items.map(i => `• ${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}${i.notes ? ` (${i.notes})` : ''}`).join('\n');
 const money = (e: OrderEvent, usd: number) => formatMoney(Number(usd), Number(e.order.fx_lbp_rate), e.tenant?.display_currency ?? 'both', e.tenant?.default_locale ?? 'en');
@@ -67,7 +68,8 @@ export function customerStatus(e: OrderEvent, origin: string): string | null {
     ready:            pickup
       ? (ar ? `🛍️ طلبك ${o.number} جاهز للاستلام من ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.` : `🛍️ Your order ${o.number} is ready for pickup at ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.`)
       : (ar ? `📦 طلبك ${o.number} جاهز وسينطلق إليك قريباً.` : `📦 Your order ${o.number} is packed and leaving shortly.`),
-    out_for_delivery: ar ? `🛵 طلبك ${o.number} في الطريق إليك.` : `🛵 Your order ${o.number} is on its way.`,
+    out_for_delivery: e.driver ? (ar ? `🛵 طلبك ${o.number} في الطريق مع ${e.driver.name} (${e.driver.phone}).` : `🛵 Your order ${o.number} is on its way with ${e.driver.name} (${e.driver.phone}).`)
+                               : (ar ? `🛵 طلبك ${o.number} في الطريق إليك.` : `🛵 Your order ${o.number} is on its way.`),
     delivered:        ar ? `🎉 تم تسليم طلبك ${o.number} — ${money(e, o.total_usd)}. شكراً!` : `🎉 Order ${o.number} delivered — ${money(e, o.total_usd)}. Thank you!`,
     rejected:         ar ? `❌ عذراً، لم يتمكن ${shop} من قبول طلبك ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.` : `❌ Sorry, ${shop} could not accept your order ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.`,
     cancelled:        null,  // customer did it themselves
@@ -139,3 +141,25 @@ export function orderMessageTpl(orderNumber: string, from: string, text: string)
   return { name: 'order_message', lang: 'ar', params: [P(orderNumber), P(from), P(text)] };
 }
 export const tplComponents = (tpl: Tpl) => [{ type: 'body', parameters: tpl.params.map(text => ({ type: 'text', text })) }, ...(tpl.button ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: tpl.button }] }] : [])];
+
+/** To the shop's driver when the order is sent out with him: where to go, whom to call, what to collect. */
+export function driverDispatch(e: OrderEvent, origin: string): string {
+  const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
+  const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ');
+  const cod = o.total_usd; // POS marks COD orders unpaid until handover; the amount due is the order total
+  return [
+    ar ? `🛵 *طلب للتوصيل ${o.number}* — ${shop}` : `🛵 *Delivery ${o.number}* — ${shop}`,
+    `${ar ? 'الزبون' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,
+    `${ar ? 'الطلب' : 'Items'}: ${itemsOneLine(e, L)}`,
+    `${ar ? 'المطلوب تحصيله' : 'Collect'}: ${money(e, cod)}`,
+    o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
+    `${ar ? 'عند التسليم' : 'On delivery'}: ${origin}/t/${o.id}`,
+  ].filter(Boolean).join('\n');
+}
+export function driverDispatchTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
+  const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ');
+  return { name: 'driver_dispatch', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`)], button: o.id,
+    fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/t/${o.id}`)] } };
+}

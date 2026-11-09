@@ -38,6 +38,13 @@ export const TEMPLATES: TemplateDef[] = [
     button: { text: 'تتبّع الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
   },
   {
+    // Drivers-lite: the shop's driver gets the order when it is sent out with him. {{1}} shop, {{2}} order no, {{3}} customer, {{4}} address, {{5}} items + amount.
+    name: 'driver_dispatch', language: 'ar', category: 'UTILITY',
+    text: 'مرحباً، لديك طلب للتوصيل من {{1}} رقم {{2}}.\nالزبون: {{3}}\nالعنوان: {{4}}\nالطلب: {{5}}\nشكراً لك.',
+    samples: ['سمانة أبو إيلي', 'BAT-000030', 'Dan +96170483148', 'بيت داني حويك، حي الحرية — https://maps.google.com/?q=34.25,35.66', '2× لبنة، 1× خبز — $8.50'],
+    button: { text: 'تفاصيل الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
+  },
+  {
     // POS M9: ask a customer for their location pin (delivery orders typed in at the POS).
     name: 'location_request', language: 'ar', category: 'UTILITY',
     text: 'مرحباً {{1}}، لتوصيل طلبكم من {{2}} نرجو إرسال موقعكم على واتساب: اضغطوا على 📎 ثم «الموقع» وأرسلوا موقع البيت. شكراً.',

@@ -13,3 +13,4 @@ export * from './reports';
 export * from './debts';
 export * from './customers';
 export * from './purchases';
+export * from './drivers';

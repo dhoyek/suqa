@@ -1,5 +1,5 @@
 -- 42_migration_quiet.sql — bulk history stays off the device feed.
--- migrate_apply (38) sets suqa.skip_sync_log = '1' for order/purchase batches: 16k historical receipts are reporting
+-- migrate_apply (38) sets suqa.skip_sync_log = '1' for order batches: 16k historical receipts are reporting
 -- data, not something every phone and PC should download row by row into IndexedDB (the snapshot gives devices the
 -- last 7 days; older orders are read from the server). Requires 40 (sync_log_row).
 
@@ -38,11 +38,13 @@ end $$;
 
 -- The 430 receipts imported before this file went onto the feed; drop them so devices do not download them
 -- (they are already in the orders table; devices read history from the server).
+select set_config('suqa.skip_sync_log', '1', true);
 delete from suqa.sync_log where tbl in ('orders','order_items','payments','stock_moves')
   and row_id in (select new_id::text from suqa.migration_map where kind = 'order')
    or (tbl in ('order_items','payments') and (row->>'order_id') in (select new_id::text from suqa.migration_map where kind = 'order'));
 
 -- Receipt numbers: the old POS restarts RCPT_NO daily, so the convert step now uses RCPT_ID ("M-<id>", unique).
 -- Re-number the receipts imported before that fix so the whole history follows one rule.
-update suqa.orders o set number = 'M-' || m.old_key
-  from suqa.migration_map m where m.kind = 'order' and m.new_id = o.id and o.number <> 'M-' || m.old_key;
+select set_config('suqa.skip_sync_log', '1', true);     -- the renumbering is not a feed event either
+update suqa.orders o set number = 'TMP-' || m.old_key from suqa.migration_map m where m.kind = 'order' and m.new_id = o.id and o.number <> 'M-' || m.old_key;
+update suqa.orders o set number = 'M-' || m.old_key from suqa.migration_map m where m.kind = 'order' and m.new_id = o.id and o.number like 'TMP-%';

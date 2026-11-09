@@ -38,8 +38,8 @@ begin
   if v_shop.id is null then raise exception 'shop_not_found'; end if;
   if jsonb_typeof(p_rows) <> 'array' then raise exception 'rows_must_be_array'; end if;
   perform set_config('suqa.migrating', '1', true);
-  -- history (orders, purchases) is bulk: keep it off the device sync feed and out of the notification trigger (42_migration_quiet)
-  if p_kind in ('order', 'purchase') then perform set_config('suqa.skip_sync_log', '1', true); end if;
+  -- sales history is bulk: keep it off the device sync feed and out of the notification trigger (42_migration_quiet)
+  if p_kind = 'order' then perform set_config('suqa.skip_sync_log', '1', true); end if;   -- purchases stay on the feed (the POS purchases screen reads them locally)
 
   for r in select * from jsonb_array_elements(p_rows) loop
     begin

@@ -43,5 +43,5 @@ source of truth.
 | 39_pos_m14.sql | Pilot gaps: `products.supplier_id / margin_pct / next_expiry`, `shops.scale_formats` (extra scale-label formats); product.patch, shop settings and purchase.commit re-created (expiry + default supplier set on receiving). Apply before re-running 38. |
 | 40_sync_quiet.sql | Sync-log storm fix: device heartbeat updates (last_sync_at/cursor/pending/app_version) no longer logged to the feed; `pos_pull` returns the shop's `devices` list with every page instead; historic heartbeat rows purged. |
 | 41_access_requests.sql | `access_requests` table + `pos_request_targets` / `pos_request_access` (signed-in non-member asks a shop owner for POS access) and `pos_access_requests` / `pos_access_decide` (owner approves → shop_members, or rejects). |
-| 42_migration_quiet.sql | Migration history (orders/purchases) bypasses the device sync feed (`suqa.skip_sync_log`); purges the 430 already-fed receipts; re-numbers migrated receipts to `M-<RCPT_ID>`. Apply before re-running 38. |
+| 42_migration_quiet.sql | Migrated sales history bypasses the device sync feed (`suqa.skip_sync_log`); purges the 430 already-fed receipts; re-numbers migrated receipts to `M-<RCPT_ID>`. Apply before re-running 38. |
 | ../seed/batroun.sql | first tenant |

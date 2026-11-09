@@ -1,11 +1,12 @@
 -- 38_migration.sql — repeatable import from the pilot's old SQL Server POS   (2026-11-09)
--- Requires 37. Idempotent. Operator-only (called by /api/admin/migrate with the service role; not granted to users).
+-- Requires 37, 39 (products.supplier_id/margin_pct, shops.scale_formats) and 42 (quiet history). Idempotent. Operator-only (called by /api/admin/migrate with the service role; not granted to users).
 --
 -- The converter (migration/convert.py) turns the old CSV export into row batches; this function applies one batch.
 -- Every old record keeps its key in suqa.migration_map, so running the same export twice changes nothing, and a
 -- newer export only adds what is new (products/customers/suppliers are refreshed, history is append-only).
 --
 --   kind 'product'   { key, name, section, price_currency, price_usd, price_lbp, cost_cents, sku, unit_kind, decimal_qty, vat, active, on_hand,
+--                     supplier_key, margin_pct   (39: default supplier + margin on selling price)
 --                      barcodes: [{ barcode, pack_qty, pack_price_usd, pack_price_lbp }] }        on_hand → a 'count' stock move for the delta
 --   kind 'customer'  { key, phone, name, discount_pct, credit_limit_cents, notes, balance_cents }  balance → opening-balance order OB-<key> (unpaid)
 --   kind 'supplier'  { key, name, phone, contact, notes, balance_cents }                          balance → opening-balance purchase OB-<key>
@@ -37,6 +38,8 @@ begin
   if v_shop.id is null then raise exception 'shop_not_found'; end if;
   if jsonb_typeof(p_rows) <> 'array' then raise exception 'rows_must_be_array'; end if;
   perform set_config('suqa.migrating', '1', true);
+  -- history (orders, purchases) is bulk: keep it off the device sync feed and out of the notification trigger (42_migration_quiet)
+  if p_kind in ('order', 'purchase') then perform set_config('suqa.skip_sync_log', '1', true); end if;
 
   for r in select * from jsonb_array_elements(p_rows) loop
     begin
@@ -46,18 +49,21 @@ begin
         select new_id into v_pid from suqa.migration_map where shop_id = p_shop and kind = 'product' and old_key = v_key;
         if v_pid is null then
           insert into suqa.products (tenant_id, shop_id, name, description, price_usd, price_currency, price_lbp, cost_cents, sku, unit_kind, unit, decimal_qty, vat,
-                                     track_stock, visible_online, is_available, is_active, section, on_hand, sort_order)
+                                     track_stock, visible_online, is_available, is_active, section, on_hand, sort_order, supplier_id, margin_pct)
           values (v_shop.tenant_id, p_shop, r->'name', '{}'::jsonb, coalesce((r->>'price_usd')::numeric, 0), coalesce(r->>'price_currency', 'usd'), coalesce((r->>'price_lbp')::bigint, 0),
                   (r->>'cost_cents')::int, nullif(r->>'sku', ''), coalesce(r->>'unit_kind', 'piece'), case when coalesce(r->>'unit_kind', 'piece') = 'piece' then null else r->>'unit_kind' end,
                   coalesce((r->>'decimal_qty')::boolean, false), coalesce((r->>'vat')::boolean, false),
-                  true, false, true, coalesce((r->>'active')::boolean, true), nullif(r->>'section', ''), 0, 0)
+                  true, false, true, coalesce((r->>'active')::boolean, true), nullif(r->>'section', ''), 0, 0,
+                  (select new_id from suqa.migration_map where shop_id = p_shop and kind = 'supplier' and old_key = r->>'supplier_key'), (r->>'margin_pct')::numeric)
           returning id into v_pid;
           insert into suqa.migration_map (shop_id, kind, old_key, new_id) values (p_shop, 'product', v_key, v_pid);
           v_ins := v_ins + 1;
         else
           update suqa.products set name = r->'name', price_usd = coalesce((r->>'price_usd')::numeric, price_usd), price_currency = coalesce(r->>'price_currency', price_currency),
                  price_lbp = coalesce((r->>'price_lbp')::bigint, price_lbp), cost_cents = coalesce((r->>'cost_cents')::int, cost_cents), sku = coalesce(nullif(r->>'sku', ''), sku),
-                 section = coalesce(nullif(r->>'section', ''), section), is_active = coalesce((r->>'active')::boolean, is_active), vat = coalesce((r->>'vat')::boolean, vat)
+                 section = coalesce(nullif(r->>'section', ''), section), is_active = coalesce((r->>'active')::boolean, is_active), vat = coalesce((r->>'vat')::boolean, vat),
+                 supplier_id = coalesce((select new_id from suqa.migration_map where shop_id = p_shop and kind = 'supplier' and old_key = r->>'supplier_key'), supplier_id),
+                 margin_pct = coalesce((r->>'margin_pct')::numeric, margin_pct)
            where id = v_pid;
           v_upd := v_upd + 1;
         end if;
@@ -202,7 +208,8 @@ begin
       elsif p_kind = 'settings' then
         update suqa.shops set scale_prefix = coalesce(r->>'scale_prefix', scale_prefix), scale_code_len = coalesce((r->>'scale_code_len')::int, scale_code_len),
                scale_value_kind = coalesce(r->>'scale_value_kind', scale_value_kind), scale_value_divisor = coalesce((r->>'scale_value_divisor')::int, scale_value_divisor),
-               default_margin_pct = coalesce((r->>'default_margin_pct')::numeric, default_margin_pct)
+               default_margin_pct = coalesce((r->>'default_margin_pct')::numeric, default_margin_pct),
+               scale_formats = coalesce(r->'scale_formats', scale_formats)
          where id = p_shop;
         v_upd := v_upd + 1;
       else

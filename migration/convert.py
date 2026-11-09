@@ -146,7 +146,8 @@ def convert(exp, two_years=True):
             if amt <= 0: continue
             paid.append({'tender': 'card' if p['PAYMENT_METHOD'].strip() == '2' else ('cash_lbp' if pc == LL else 'cash_usd'), 'currency': 'lbp' if pc == LL else 'usd', 'amount': int(round(amt)) if pc == LL else cents(amt)})
         client = pmap.get(r['RCPT_CLIENT'])
-        orders.append({'key': r['RCPT_ID'], 'number': 'M-' + (r.get('RCPT_NO') or r['RCPT_ID']).strip(), 'at': iso(r['RCPT_DATE']), 'rate': int(rate),
+        # number: RCPT_NO restarts every day in the old POS; RCPT_ID is the unique one
+        orders.append({'key': r['RCPT_ID'], 'number': 'M-' + r['RCPT_ID'].strip(), 'at': iso(r['RCPT_DATE']), 'rate': int(rate),
                        'customer_name': client['TITLE'].strip() if client and r['RCPT_CLIENT'] != '1' else None,
                        'customer_phone': phone_clean(client['PHONE']) or None if client and r['RCPT_CLIENT'] != '1' else None,
                        'note': (r['REMARK'] or '').strip() or None, 'discount_cents': cents(disc), 'total_cents': total_c, 'lines': out_lines, 'paid': paid})

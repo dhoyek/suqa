@@ -3,9 +3,14 @@ import { useEffect, useState } from 'react';
 import { fmtPhone, upsertDriver, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import Modal from './Modal';
 
 /** الإعدادات → السائقون: the shop's contracted drivers, availability toggle, call / WhatsApp. */
-export default function DriversPanel({ boot, locale, tick }: { boot: Booted; locale: L; tick: number }) {
+type DirRow = { name: string; phone: string; vehicle: string | null; has_account: boolean; used_by: string | null };
+export default function DriversPanel({ boot, locale, tick, sb, online = true }: { boot: Booted; locale: L; tick: number; sb?: SupabaseClient; online?: boolean }) {
+  const [dir, setDir] = useState<DirRow[] | null>(null); const [dirOpen, setDirOpen] = useState(false);
+  const openDir = async () => { setDirOpen(true); if (!sb) return; const { data, error } = await sb.rpc('pos_driver_directory', { p_shop: boot.shop.id }); setDir(error ? [] : ((data as DirRow[]) ?? [])); };
   const [rows, setRows] = useState<Driver[]>([]); const [edit, setEdit] = useState<Partial<Driver> | null>(null); const [msg, setMsg] = useState<string | null>(null);
   const load = () => boot.db.drivers.toArray().then(r => setRows(r.sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))));
   useEffect(() => { load(); }, [boot, tick]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -15,7 +20,7 @@ export default function DriversPanel({ boot, locale, tick }: { boot: Booted; loc
   };
   return (
     <section className="card">
-      <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>🛵 {pt('drivers', locale)}</h3><button className="btn primary" onClick={() => setEdit({ name: '', phone: '', vehicle: '' })}>＋ {pt('newDriver', locale)}</button></div>
+      <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>🛵 {pt('drivers', locale)}</h3><div className="row" style={{ gap: 6 }}>{sb && online && <button className="btn" onClick={openDir}>📇 {pt('fromDirectory', locale)}</button>}<button className="btn primary" onClick={() => setEdit({ name: '', phone: '', vehicle: '' })}>＋ {pt('newDriver', locale)}</button></div></div>
       <p className="muted" style={{ fontSize: 13 }}>{pt('driversHint', locale)}</p>
       {rows.length ? <table className="table"><tbody>
         {rows.map(d => <tr key={d.id} className={d.active ? '' : 'muted'}>
@@ -27,6 +32,15 @@ export default function DriversPanel({ boot, locale, tick }: { boot: Booted; loc
       </tbody></table> : <p className="muted">—</p>}
       {msg && <small className="muted">{msg}</small>}
       {edit && <DriverForm locale={locale} d={edit} onSave={save} onClose={() => setEdit(null)} />}
+      {dirOpen && <Modal open onClose={() => setDirOpen(false)} title={`📇 ${pt('fromDirectory', locale)}`} footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDirOpen(false)}>{pt('ok', locale)}</button></>}>
+        <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>{pt('directoryHint', locale)}</p>
+        {dir === null ? <p className="muted">{pt('loading', locale)}</p> : !dir.length ? <p className="muted">—</p> : (
+          <div className="stack" style={{ gap: 4 }}>
+            {dir.map(r => <button key={r.phone} className="btn ghost" style={{ justifyContent: 'space-between' }} onClick={async () => { await save({ name: r.name, phone: r.phone, vehicle: r.vehicle ?? undefined }); setDir(d => (d ?? []).filter(x => x.phone !== r.phone)); }}>
+              <span>🛵 {r.name}{r.vehicle ? <span className="muted"> · {r.vehicle}</span> : null}{r.has_account ? ' 👤' : ''}<div className="muted" style={{ fontSize: 12 }}>{r.used_by}</div></span><span className="muted" dir="ltr">{fmtPhone(r.phone)}</span></button>)}
+          </div>
+        )}
+      </Modal>}
     </section>
   );
 }

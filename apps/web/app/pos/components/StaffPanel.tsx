@@ -16,6 +16,15 @@ const ROLES = ['owner', 'cashier', 'stock'] as const;
 export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: Booted; sb: SupabaseClient; locale: L; staff: Staff; online: boolean }) {
   const [members, setMembers] = useState<Member[]>([]); const [invites, setInvites] = useState<Invite[]>([]); const [reqs, setReqs] = useState<AccessReq[]>([]); const [reqRole, setReqRole] = useState<Record<string, typeof ROLES[number]>>({});
   const [phone, setPhone] = useState(''); const [name, setName] = useState(''); const [role, setRole] = useState<typeof ROLES[number]>('cashier');
+  type Hit = { id: string; full_name: string | null; phone: string | null; email: string | null; is_member: boolean; works_at: string | null };
+  const [hits, setHits] = useState<Hit[]>([]); const [picked, setPicked] = useState<Hit | null>(null);
+  // account search: whatever the owner types (name or number) is looked up among the association's accounts
+  useEffect(() => {
+    const q = (name.trim().length >= 3 ? name : phone.replace(/\D/g, '').length >= 3 ? phone : '').trim();
+    if (!online || !q || picked) { setHits([]); return; }
+    const h = setTimeout(async () => { const { data } = await sb.rpc('pos_account_search', { p_shop: boot.shop.id, p_q: q }); setHits(((data as Hit[]) ?? []).filter(x => !x.is_member)); }, 250);
+    return () => clearTimeout(h);
+  }, [name, phone, online, picked, sb, boot.shop.id]);
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [lastInvite, setLastInvite] = useState<{ phone: string; name: string } | null>(null);
   const confirm = useConfirm();
   const load = useCallback(async () => {
@@ -39,11 +48,13 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
   const add = async () => {
     if (busy) return; setBusy(true); setMsg(null);
     try {
-      const { data, error } = await sb.rpc('pos_staff_invite', { p_shop: boot.shop.id, p_phone: phone, p_name: name, p_role: role });
+      const { data, error } = picked
+        ? await sb.rpc('pos_staff_add_user', { p_shop: boot.shop.id, p_user: picked.id, p_role: role, p_name: name.trim() || picked.full_name })
+        : await sb.rpc('pos_staff_invite', { p_shop: boot.shop.id, p_phone: phone, p_name: name, p_role: role });
       if (error) { setMsg(error.message); return; }
       const r = data as { status: 'member' | 'invited'; phone?: string };
       setMsg(r.status === 'member' ? pt('staffAdded', locale) : pt('invited', locale));
-      setLastInvite({ phone: r.phone ?? phone.replace(/\D/g, ''), name }); setPhone(''); setName(''); boot.engine.poke(); await load();
+      setLastInvite(r.status === 'invited' ? { phone: r.phone ?? phone.replace(/\D/g, ''), name } : null); setPhone(''); setName(''); setPicked(null); boot.engine.poke(); await load();
     } finally { setBusy(false); }
   };
   const set = async (m: Member, patch: { p_role?: string; p_active?: boolean; p_name?: string }) => {
@@ -125,8 +136,17 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
             <div style={{ flex: 1, minWidth: 170 }}><label className="label">{pt('staffPhone', locale)}</label><input className="input" dir="ltr" inputMode="tel" placeholder="+961 70 000 000" value={phone} onChange={e => setPhone(e.target.value)} /></div>
             <div style={{ flex: 1, minWidth: 150 }}><label className="label">{pt('staffName', locale)}</label><input className="input" value={name} onChange={e => setName(e.target.value)} /></div>
             <div><label className="label">{pt('role', locale)}</label><div className="seg">{ROLES.map(r => <button key={r} className={role === r ? 'active' : ''} onClick={() => setRole(r)}>{pt(`role_${r}` as 'role_owner', locale)}</button>)}</div></div>
-            <button className="btn primary" disabled={busy || phone.replace(/\D/g, '').length < 8} onClick={add}>{pt('add', locale)}</button>
+            <button className="btn primary" disabled={busy || (!picked && phone.replace(/\D/g, '').length < 8)} onClick={add}>{pt('add', locale)}</button>
           </div>
+          {picked && <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8 }}><span className="chip active">👤 {picked.full_name || '—'} <span dir="ltr">{picked.phone ? `+${picked.phone}` : picked.email}</span></span><button className="btn ghost" onClick={() => setPicked(null)}>✕</button><span className="muted" style={{ fontSize: 12 }}>{pt('accountPicked', locale)}</span></div>}
+          {!picked && hits.length > 0 && (
+            <div className="card stack" style={{ marginTop: 8, gap: 4, padding: 8 }}>
+              <span className="muted" style={{ fontSize: 12 }}>{pt('existingAccounts', locale)}</span>
+              {hits.map(h => <button key={h.id} className="btn ghost" style={{ justifyContent: 'space-between' }} onClick={() => { setPicked(h); if (!name.trim()) setName(h.full_name ?? ''); setPhone(h.phone ? `+${h.phone}` : ''); }}>
+                <span>👤 {h.full_name || '—'}{h.works_at ? <span className="muted" style={{ fontSize: 12 }}> · {h.works_at}</span> : null}</span><span className="muted" dir="ltr">{h.phone ? `+${h.phone}` : h.email}</span></button>)}
+            </div>
+          )}
+          {!picked && !hits.length && (name.trim().length >= 3 || phone.replace(/\D/g, '').length >= 8) && online && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('noAccountYet', locale)}</p>}
           {msg && <p className="muted" style={{ margin: '8px 0 0' }}>{msg}{lastInvite && <> · <a href={waLink(lastInvite.phone, lastInvite.name)} target="_blank" rel="noreferrer">💬 {pt('sendInvite', locale)}</a></>}</p>}
         </div>
       ) : <p className="muted" style={{ fontSize: 12 }}>{pt('needOnline', locale)}</p>}

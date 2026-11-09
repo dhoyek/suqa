@@ -91,6 +91,8 @@ const T = {
   account: { en: 'Account', ar: 'حسابي' },
   language: { en: 'Language', ar: 'اللغة' },
   categories: { en: 'Categories', ar: 'الفئات' }, clearFilter: { en: 'Clear filter', ar: 'مسح الفلتر' }, typeToFilter: { en: 'Type to filter…', ar: 'اكتب للبحث…' }, showMore: { en: 'Show more', ar: 'عرض المزيد' },
+  accounts: { en: 'Accounts', ar: 'الحسابات' }, searchAccounts: { en: 'Search by name, number or email…', ar: 'ابحث بالاسم أو الرقم أو البريد…' }, admins: { en: 'Admins', ar: 'الإدارة' }, staffRole: { en: 'Shop staff', ar: 'موظفو المحلات' },
+  customers: { en: 'Customers', ar: 'الزبائن' }, drivers: { en: 'Drivers', ar: 'السائقون' }, lastSeen: { en: 'Last sign-in', ar: 'آخر دخول' }, accessPending: { en: 'access request pending', ar: 'طلب وصول معلّق' }, customerOnly: { en: 'customer account', ar: 'حساب زبون' }, accountsCount: { en: 'accounts', ar: 'حساب' },
   goTo: { en: 'Go to', ar: 'انتقل إلى' }, okBtn: { en: 'OK', ar: 'حسناً' },
   purchaseHistory: { en: 'Purchase history', ar: 'سجلّ مشترياتي' },
   guest: { en: 'Not signed in', ar: 'غير مسجّل الدخول' },

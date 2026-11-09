@@ -83,7 +83,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
         </div>
       </section>
-      {owner && <DriversPanel boot={boot} locale={locale} tick={tick} />}
+      {owner && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🏬 {pt('onlineShop', locale)}</h3>

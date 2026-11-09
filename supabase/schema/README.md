@@ -45,4 +45,5 @@ source of truth.
 | 41_access_requests.sql | `access_requests` table + `pos_request_targets` / `pos_request_access` (signed-in non-member asks a shop owner for POS access) and `pos_access_requests` / `pos_access_decide` (owner approves → shop_members, or rejects). |
 | 42_migration_quiet.sql | Migrated sales history bypasses the device sync feed (`suqa.skip_sync_log`); purges the 430 already-fed receipts; re-numbers migrated receipts to `M-<RCPT_ID>`. Apply before re-running 38. |
 | 43_accounts.sql | `tenant_accounts` (admin Accounts tab: every account that touched the tenant + roles), `pos_account_search` + `pos_staff_add_user` (owner adds staff by picking an existing account, linked by user id), `pos_driver_directory` (drivers used by other shops of the association). |
+| 44_admin_accounts.sql | `admin_account_update(tenant, user, name, phone)` — association admin edits an account's name / number from Admin → Accounts (number must be free; nothing merged). |
 | ../seed/batroun.sql | first tenant |

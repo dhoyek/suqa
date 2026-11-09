@@ -73,11 +73,11 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     setDraft(d => addToDraft(d, p, quantity)); setQ('');
   }, [draft.lines, shop.allow_negative_stock, locale]);
 
-  const onScan = useCallback((code: string) => {
+  const onScan = useCallback((code: string): string | void => {
     if (receipt) return;
     const hit = index.scanEx(code, scaleConfigs(shop));
     if (!hit) { if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`); return; }
-    if (!hit.pack && !hit.scale) { add(hit.product); return; }
+    if (!hit.pack && !hit.scale) { add(hit.product); return text(hit.product.name, locale); }
     // pack barcode or scale label → its own line (quantity / price come from the barcode)
     const base = lineFromProduct(hit.product, hit.qty);
     const line: DraftLine = { ...base,
@@ -85,6 +85,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       ...(hit.fixed_total_cents != null ? { unit_price_cents: hit.fixed_total_cents, price_currency: 'usd' as const, quantity: 1 } : {}), ...(hit.fixed_total_lbp != null ? { unit_price_lbp: hit.fixed_total_lbp, price_currency: 'lbp' as const, quantity: 1 } : {}),
       decimal_qty: base.decimal_qty || !!hit.scale, notes: hit.pack ? `${pt('pack', locale)} ${hit.pack.qty}` : hit.scale ? '⚖' : undefined };
     setDraft(d => ({ ...d, lines: [...d.lines, line] })); setQ('');
+    return text(hit.product.name, locale);
   }, [index, add, locale, receipt, boot.role, shop]);
   useScanner(onScan);
 

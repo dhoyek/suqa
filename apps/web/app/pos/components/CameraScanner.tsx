@@ -18,9 +18,14 @@ function beep() {
   } catch { /* no audio */ }
 }
 
-export default function CameraScanner({ open, locale, onScan, onClose }: { open: boolean; locale: L; onScan: (code: string) => void; onClose: () => void }) {
+export default function CameraScanner({ open, locale, onScan, onClose }: { open: boolean; locale: L; onScan: (code: string) => string | void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [err, setErr] = useState<string | null>(null); const [flash, setFlash] = useState(false);
+  // Deterministic repeat rule: the last code read is "armed off" — it is not counted again, however long or shaky the hold,
+  // until the cashier taps +1 or a different barcode is read. No timing heuristics.
+  const [lastRead, setLastRead] = useState<{ code: string; label: string; n: number } | null>(null);
+  const lastKey = useRef<string>('');
+  const onScanRef = useRef(onScan); onScanRef.current = onScan;
   useEffect(() => {
     if (!open) return;
     let stream: MediaStream | null = null; let stop = false; let timer: ReturnType<typeof setTimeout> | null = null;
@@ -34,10 +39,6 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
         if (stop) return;
         video.current!.srcObject = stream; await video.current!.play();
-        // Like a handheld scanner: one read per "aim". After a hit, pause briefly, then the SAME code counts again only
-        // once it has left the frame (so holding the camera on a barcode adds exactly one; lift and re-aim to add another).
-        // Detection flickers frame to frame even on a steady barcode, so "left the frame" is time-based: the same code
-        // is accepted again only when it has not been seen for 1.5 s straight.
         // The detector may report one physical symbol under different spellings between frames (UPC-A "012…" vs EAN-13
         // "0012…", with or without the check digit), so compare canonical keys, not raw strings.
         const key = (raw: string) => {
@@ -45,18 +46,17 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
           const body = [8, 12, 13, 14].includes(c.length) && gtinCheckDigit(c.slice(0, -1)) === Number(c[c.length - 1]) ? c.slice(0, -1) : c;
           return body.replace(/^0+/, '');
         };
-        let last = ''; let hitAt = 0; let lastSeenAt = 0;
+        let hitAt = 0;
         const tick = async () => {
           if (stop) return;
           try {
             const codes = await det.detect(video.current!);
             const c = codes.find(x => x.rawValue);
             const now = Date.now();
-            const same = !!c && key(c.rawValue) === last;
-            const away = now - lastSeenAt;              // how long since the previous code was last in view
-            if (same) lastSeenAt = now;
-            if (c && now - hitAt > 700 && (!same || away > 1500)) {
-              last = key(c.rawValue); hitAt = now; lastSeenAt = now; onScan(c.rawValue);
+            if (c && now - hitAt > 500 && key(c.rawValue) !== lastKey.current) {
+              lastKey.current = key(c.rawValue); hitAt = now;
+              const label = onScanRef.current(c.rawValue) || c.rawValue;
+              setLastRead({ code: c.rawValue, label, n: 1 });
               setFlash(true); setTimeout(() => setFlash(false), 350);
               try { navigator.vibrate?.(40); } catch { /* not supported */ }
               beep();
@@ -68,7 +68,7 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
       } catch (e) { setErr((e as Error).message); }
     })();
     return () => { stop = true; if (timer) clearTimeout(timer); stream?.getTracks().forEach(t => t.stop()); };
-  }, [open, onScan]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Modal open={open} onClose={onClose} title={pt('cameraScan', locale)}>
       {err ? <p className="bad">{pt('cameraNo', locale)}: {err}</p> : <p className="muted">{pt('cameraHint', locale)}</p>}
@@ -76,7 +76,12 @@ export default function CameraScanner({ open, locale, onScan, onClose }: { open:
         <video ref={video} muted playsInline style={{ width: '100%', borderRadius: 12, background: '#000', maxHeight: '60dvh', display: 'block' }} />
         <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: 12, pointerEvents: 'none', boxShadow: flash ? 'inset 0 0 0 6px #16a34a' : 'inset 0 0 0 0 transparent', transition: 'box-shadow .15s' }} />
       </div>
-      <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('cameraOnePerAim', locale)}</p>
+      {lastRead ? (
+        <div className="row spread" style={{ alignItems: 'center', gap: 8, marginTop: 8, padding: '8px 10px', background: '#ecfdf5', borderRadius: 10 }}>
+          <div style={{ minWidth: 0 }}><strong>✓ {lastRead.label}</strong>{lastRead.n > 1 && <span className="muted"> × {lastRead.n}</span>}<div className="muted" style={{ fontSize: 12 }}>{pt('cameraNextHint', locale)}</div></div>
+          <button className="btn primary" onClick={() => { onScanRef.current(lastRead.code); setLastRead(r => r && { ...r, n: r.n + 1 }); beep(); }}>+1</button>
+        </div>
+      ) : <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('cameraOnePerAim', locale)}</p>}
     </Modal>
   );
 }

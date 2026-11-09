@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { getTenantOrNull, isDevDeploy } from '@/lib/tenant';
@@ -32,7 +33,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </body></html>
     );
   }
-  const locale = t.default_locale;
+  const locale = await getLocale(t);
   return (
     <html lang={locale} dir={RTL[locale] ? 'rtl' : 'ltr'} style={brandCssVars(t) as any}>
       <body><ConfirmProvider labels={{ confirm: ui('confirm', locale), cancel: ui('cancel', locale) }}>{children}</ConfirmProvider></body>

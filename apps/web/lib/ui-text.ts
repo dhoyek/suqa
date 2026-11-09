@@ -89,6 +89,9 @@ const T = {
   noAccount: { en: 'New here? Create an account', ar: 'جديد هنا؟ أنشئ حساباً' },
   signupFailed: { en: 'Could not create the account', ar: 'تعذّر إنشاء الحساب' },
   account: { en: 'Account', ar: 'حسابي' },
+  language: { en: 'Language', ar: 'اللغة' },
+  purchaseHistory: { en: 'Purchase history', ar: 'سجلّ مشترياتي' },
+  guest: { en: 'Not signed in', ar: 'غير مسجّل الدخول' },
   merchantPortal: { en: 'Merchant portal', ar: 'بوابة التاجر' },
   from: { en: 'from', ar: 'من' },
   // admin

@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase-server';
@@ -17,7 +18,7 @@ export default async function CheckoutPage() {
     sb.rpc('my_known_address', { p_tenant: tenant.id }),
   ]);
   const suggested = known && typeof known === 'object' ? (known as { line1?: string; lat?: number; lng?: number; label?: string }) : null;
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   const center = pointFromEwkb((tenant as any).center) ?? { lat: 34.2553, lng: 35.6581 };
   const addrs = ((addresses as any[]) ?? []).map(a => { const p = pointFromEwkb(a.location) ?? center; const { location, ...rest } = a; return { ...rest, lat: p.lat, lng: p.lng }; });
   const keys = ['checkout', 'deliveryAddress', 'newAddress', 'addressLabel', 'addressLine1', 'addressLine2', 'addressNotes', 'phone', 'pinLocation', 'useMyLocation',

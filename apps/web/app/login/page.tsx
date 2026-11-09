@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
@@ -13,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const next = safeNext((await searchParams).next, '/shop');
   const tenant = await getTenant();
   if (await getUser()) redirect(next);
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   return (
     <main className="login">
       <div className="card stack">

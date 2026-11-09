@@ -12,5 +12,5 @@ export async function generateMetadata() {
 
 export default async function PosPage() {
   const t = await getTenant();
-  return <PosApp locale={t.default_locale === 'en' ? 'en' : 'ar'} brand={t.brand_name} />;
+  return <PosApp locale={t.default_locale === 'en' ? 'en' : 'ar'} brand={t.brand_name} tenantId={t.id} />;
 }

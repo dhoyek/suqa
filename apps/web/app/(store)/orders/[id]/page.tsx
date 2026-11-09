@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
@@ -15,7 +16,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const sb = await supabaseServer();
   const { data } = await sb.from('orders').select('*, items:order_items(*), shop:shops(name,slug,phone,whatsapp)').eq('id', id).maybeSingle();
   if (!data) notFound();
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   const statusLabels = Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]));
   return <OrderTracker initial={data as any} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} justPlaced={placed === '1'}
     statusLabels={statusLabels as any}

@@ -9,11 +9,12 @@ import Modal from './Modal';
 
 type Member = { user_id: string; role: 'owner' | 'cashier' | 'stock' | 'staff'; display_name: string | null; full_name: string | null; phone: string | null; active: boolean; pin: boolean };
 type Invite = { id: string; phone: string; display_name: string | null; role: string; created_at: string };
+type AccessReq = { id: string; user_id: string; name: string | null; phone: string | null; note: string | null; created_at: string };
 const ROLES = ['owner', 'cashier', 'stock'] as const;
 
 /** Owner view of the team: add by WhatsApp number (membership now, or an invite claimed at first sign-in), change role, deactivate. */
 export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: Booted; sb: SupabaseClient; locale: L; staff: Staff; online: boolean }) {
-  const [members, setMembers] = useState<Member[]>([]); const [invites, setInvites] = useState<Invite[]>([]);
+  const [members, setMembers] = useState<Member[]>([]); const [invites, setInvites] = useState<Invite[]>([]); const [reqs, setReqs] = useState<AccessReq[]>([]); const [reqRole, setReqRole] = useState<Record<string, typeof ROLES[number]>>({});
   const [phone, setPhone] = useState(''); const [name, setName] = useState(''); const [role, setRole] = useState<typeof ROLES[number]>('cashier');
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [lastInvite, setLastInvite] = useState<{ phone: string; name: string } | null>(null);
   const confirm = useConfirm();
@@ -22,7 +23,17 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
     const { data, error } = await sb.rpc('pos_staff_list', { p_shop: boot.shop.id });
     if (error) { setMsg(error.message); return; }
     const d = data as { members: Member[]; invites: Invite[] }; setMembers(d.members); setInvites(d.invites);
-  }, [sb, boot, online]);
+    if (staff.role === 'owner') { const r = await sb.rpc('pos_access_requests', { p_shop: boot.shop.id }); if (!r.error) setReqs((r.data as AccessReq[]) ?? []); }
+  }, [sb, boot, online, staff.role]);
+  const decide = async (r: AccessReq, approve: boolean) => {
+    if (busy) return;
+    if (!approve && !(await confirm(`${pt('decline', locale)}: ${r.name || r.phone || ''}?`))) return;
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = await sb.rpc('pos_access_decide', { p_id: r.id, p_approve: approve, p_role: reqRole[r.id] ?? 'cashier' }); if (error) throw error;
+      setMsg(approve ? pt('approved', locale) : pt('saved', locale)); boot.engine.poke(); await load();
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
   useEffect(() => { void load(); }, [load]);
 
   const add = async () => {
@@ -72,6 +83,24 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
 
   return (
     <div className="stack" style={{ gap: 10 }}>
+      {reqs.length > 0 && (
+        <div className="card stack" style={{ background: '#fff8e6', gap: 8 }}>
+          <strong>👤 {pt('accessRequests', locale)} ({reqs.length})</strong>
+          {reqs.map(r => (
+            <div key={r.id} className="row" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <strong>{r.name || '—'}</strong> <span className="muted">{pt('accessRequestOf', locale)}</span>
+                <div className="muted" dir="ltr" style={{ fontSize: 12 }}>{r.phone ? `+${r.phone}` : ''}{r.note ? ` · «${r.note}»` : ''}</div>
+              </div>
+              <select className="input" style={{ width: 'auto' }} value={reqRole[r.id] ?? 'cashier'} onChange={e => setReqRole(m => ({ ...m, [r.id]: e.target.value as typeof ROLES[number] }))}>
+                {ROLES.map(x => <option key={x} value={x}>{pt(`role_${x}` as Parameters<typeof pt>[0], locale)}</option>)}
+              </select>
+              <button className="btn primary" disabled={busy || !online} onClick={() => decide(r, true)}>✓ {pt('approve', locale)}</button>
+              <button className="btn ghost" disabled={busy || !online} onClick={() => decide(r, false)}>✕ {pt('decline', locale)}</button>
+            </div>
+          ))}
+        </div>
+      )}
       <table className="table"><tbody>
         {members.map(m => <tr key={m.user_id} className={m.active ? '' : 'muted'}>
           <td><strong style={{ cursor: online ? 'pointer' : 'default' }} title={pt('staffName', locale)} onClick={() => { if (online) openEdit(m); }}>{m.display_name || m.full_name || '—'} ✎</strong>{m.user_id === staff.user_id ? ` (${pt('you', locale)})` : ''}<div className="muted" dir="ltr" style={{ fontSize: 12 }}>{m.phone ? '+' + m.phone.replace(/^\+/, '') : ''}{online && <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', fontSize: 12 }} title={pt('staffPhoneNew', locale)} onClick={() => openEdit(m)}>✎</button>}</div></td>

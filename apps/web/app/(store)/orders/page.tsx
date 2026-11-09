@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import Link from 'next/link';
 import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
@@ -16,7 +17,7 @@ export default async function OrdersPage() {
     sb.from('baskets').select('id,number,total_usd').eq('customer_id', user.id).order('placed_at', { ascending: false }).limit(50),
   ]);
   const basketById = Object.fromEntries(((baskets as any[]) ?? []).map(b => [b.id, b]));
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   const rows = (data as any[]) ?? [];
   // group a basket's parts into one card
   const list: any[] = [];

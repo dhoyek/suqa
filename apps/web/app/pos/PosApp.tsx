@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { CatalogIndex, type SyncError, type Staff, type SyncEvent, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
+import AccessRequest from './components/AccessRequest';
 import { LS_SHOP, bootDevice, downloadJson, myMemberships, subscribePoke, type Booted, type Membership } from './lib/boot';
 import LockScreen from './LockScreen';
 import Shell from './Shell';
@@ -10,10 +11,10 @@ import './pos.css';
 
 type Phase =
   | { k: 'loading' } | { k: 'needSignIn' } | { k: 'chooseShop'; shops: Membership[] } | { k: 'askName'; resolve: (n: string) => void }
-  | { k: 'downloading' } | { k: 'error'; msg: string; retry: () => void } | { k: 'locked' } | { k: 'open' } | { k: 'revoked' };
+  | { k: 'downloading' } | { k: 'error'; msg: string; retry: () => void } | { k: 'locked' } | { k: 'open' } | { k: 'revoked' } | { k: 'noAccess' };
 
 export const LS_LOCALE = 'suqa-pos-locale';
-export default function PosApp({ locale: tenantLocale, brand }: { locale: L; brand: string }) {
+export default function PosApp({ locale: tenantLocale, brand, tenantId }: { locale: L; brand: string; tenantId: string }) {
   // per-device language (Settings → اللغة); falls back to the tenant default
   const [locale, setLocaleState] = useState<L>(tenantLocale);
   useEffect(() => { try { const v = localStorage.getItem(LS_LOCALE); if (v === 'ar' || v === 'en') setLocaleState(v); if (localStorage.getItem('suqa-pos-big') === '1') document.documentElement.classList.add('pos-big'); } catch {} }, []);
@@ -46,7 +47,7 @@ export default function PosApp({ locale: tenantLocale, brand }: { locale: L; bra
       let shops: Membership[];
       try { shops = await myMemberships(sb); }
       catch (e) { setPhase({ k: 'error', msg: (e as Error).message, retry: () => void start() }); return; }
-      if (!shops.length) { setPhase({ k: 'error', msg: pt('noShop', locale), retry: () => void start() }); return; }
+      if (!shops.length) { setPhase({ k: 'noAccess' }); return; }
       if (shops.length > 1) { setPhase({ k: 'chooseShop', shops }); return; }
       shopId = shops[0].shop_id; localStorage.setItem(LS_SHOP, shopId);
     }
@@ -61,6 +62,8 @@ export default function PosApp({ locale: tenantLocale, brand }: { locale: L; bra
       const msg = err.code === 'device_revoked' ? pt('revokedTitle', locale) : err.code === 'pos_disabled' ? pt('posDisabled', locale)
         : err.code === 'network' ? pt('offlineNoSetup', locale) : err.message;
       if (err.code === 'device_revoked') { setPhase({ k: 'revoked' }); return; }
+      // signed in with an account that is not a member of the shop this device was set up for → ask for access
+      if (err.code === 'auth' && /not_a_member/.test(err.message)) { localStorage.removeItem(LS_SHOP); setPhase({ k: 'noAccess' }); return; }
       setPhase({ k: 'error', msg, retry: () => void start() });
     }
   }, [sb, locale, onEvent]);
@@ -102,6 +105,7 @@ export default function PosApp({ locale: tenantLocale, brand }: { locale: L; bra
     <Center><div className="brand">{brand}</div><h2>{pt('chooseShop', locale)}</h2>
       <div className="stack">{phase.shops.map(m => <button key={m.shop_id} className="btn big" onClick={() => { localStorage.setItem(LS_SHOP, m.shop_id); void start(); }}>{m.shop.name[locale] ?? m.shop.name.ar ?? m.shop.name.en}</button>)}</div>
     </Center>);
+  if (phase.k === 'noAccess') return <AccessRequest sb={sb} locale={locale} brand={brand} tenantId={tenantId} onRetry={() => void start()} />;
   if (phase.k === 'askName') return <AskName locale={locale} brand={brand} onDone={phase.resolve} />;
   if (phase.k === 'error') return <Center><div className="brand">{brand}</div><p className="bad">{phase.msg}</p><button className="btn" onClick={phase.retry}>{pt('retry', locale)}</button><a className="btn ghost" href="/shop">{pt('backToShop', locale)}</a></Center>;
   if (phase.k === 'revoked') return <Center><div className="brand">{brand}</div><h2>{pt('revokedTitle', locale)}</h2><p className="muted">{pt('revokedBody', locale)}</p><a className="btn" href="/shop">{pt('backToShop', locale)}</a></Center>;

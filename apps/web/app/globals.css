@@ -199,3 +199,20 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
   .topbar .tabs .tab { white-space: nowrap; }
   .addr .btn { min-height: 36px; }
 }
+
+/* profile menu (storefront header) */
+.profile-menu { position: relative; }
+.profile-menu .avatar { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--brand-primary); color: #fff; font-weight: 700; display: grid; place-items: center; cursor: pointer; font-size: 15px; }
+.profile-menu .avatar.guest { background: #f3f4f6; color: var(--muted); }
+.profile-menu .menu { position: absolute; top: calc(100% + 8px); inset-inline-end: 0; min-width: 240px; padding: 6px; display: flex; flex-direction: column; gap: 2px; z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.profile-menu .who { padding: 10px 12px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; font-size: 14px; }
+.profile-menu .who .muted { font-size: 12px; }
+.profile-menu .item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: inherit; background: none; border: 0; font: inherit; text-align: start; cursor: pointer; }
+.profile-menu .item:hover { background: #f5f7f8; }
+.profile-menu .item.strong { font-weight: 700; color: var(--brand-primary); }
+.profile-menu .item.danger { color: #b42318; }
+.profile-menu .item.lang { justify-content: space-between; cursor: default; }
+.profile-menu .item.lang:hover { background: none; }
+.profile-menu .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.profile-menu .seg button { border: 0; background: #fff; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.profile-menu .seg button.on { background: var(--brand-primary); color: #fff; }

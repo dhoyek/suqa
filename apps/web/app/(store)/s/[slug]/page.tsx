@@ -1,3 +1,4 @@
+import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
 import { getShopWithProducts } from '@/lib/public-data';
@@ -16,7 +17,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
   const res = await getShopWithProducts(tenant.id, slug);
   if (!res) notFound();
   const { shop: s, products } = res;
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   const open = isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone);
   const wa = waLink(s.whatsapp ?? s.phone, `${ui('waHello', L)} ${tr(s.name, L)} 👋`);
   const tel = telLink(s.phone ?? s.whatsapp);

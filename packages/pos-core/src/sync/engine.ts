@@ -41,17 +41,26 @@ export class SyncEngine {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false; private loopPromise: Promise<void> | null = null; private wake: (() => void) | null = null;
   private releaseLock: (() => void) | null = null;
+  private bc: BroadcastChannel | null = null;                   // leader ↔ follower tabs: status mirror + poke relay
+  private watchdog: ReturnType<typeof setInterval> | null = null;
 
   constructor(opt: EngineOptions) { this.opt = opt; this.db = opt.db; this.t = opt.transport; this.deviceId = opt.deviceId; }
 
   private emit(e: SyncEvent) { this.opt.onEvent?.(e); }
-  private setStatus(patch: Partial<SyncStatus>) { this.status = { ...this.status, ...patch }; this.emit({ type: 'status', status: this.status }); }
+  private setStatus(patch: Partial<SyncStatus>, fromPeer = false) {
+    this.status = { ...this.status, ...patch }; this.emit({ type: 'status', status: this.status });
+    if (!fromPeer && this.status.leader && this.bc) { const { leader: _l, ...rest } = this.status; try { this.bc.postMessage({ type: 'status', status: rest }); } catch { /* channel closed */ } }
+  }
   private now() { return this.opt.now ? this.opt.now() : Date.now(); }
 
   /** First run on a device: full snapshot. Later runs: nothing (the cursor is in meta). */
   async bootstrap(): Promise<boolean> {
     const cursor = await getMeta<number>(this.db, META.cursor);
-    if (cursor !== undefined) { this.setStatus({ cursor }); await this.refreshCounts(); return false; }
+    if (cursor !== undefined) {
+      // a follower tab shows what the leader last did, not "never"
+      this.setStatus({ cursor, lastSyncAt: (await getMeta<string>(this.db, META.lastSyncAt)) ?? null, lastOnlineAt: (await getMeta<string>(this.db, META.lastOnlineAt)) ?? null });
+      await this.refreshCounts(); return false;
+    }
     const snap = await this.t.snapshot(this.deviceId);
     await this.applySnapshot(snap);
     return true;
@@ -85,6 +94,7 @@ export class SyncEngine {
       if (res.resync) { this.emit({ type: 'resync' }); const snap = await this.t.snapshot(this.deviceId); await this.applySnapshot(snap); return applied; }
       if (res.rows.length) { await this.applyRows(res.rows, res.cursor); applied += res.rows.length; }
       else await setMeta(this.db, META.cursor, res.cursor);
+      if (res.devices?.length) { await this.db.devices.bulkPut(res.devices as never[]); this.emit({ type: 'applied', rows: [] }); }
       await setMeta(this.db, META.lastSyncAt, res.server_now); await setMeta(this.db, META.lastOnlineAt, res.server_now);
       if (res.role) await setMeta(this.db, META.role, res.role);
       this.setStatus({ cursor: res.cursor, lastSyncAt: res.server_now, lastOnlineAt: res.server_now, online: true, error: null });
@@ -170,8 +180,23 @@ export class SyncEngine {
     } finally { this.setStatus({ syncing: false }); }
   }
 
-  /** Called by the Realtime subscription or the UI ("Sync now"). */
-  poke(): void { this.wake?.(); if (!this.running) void this.sync(); }
+  /** Called by the Realtime subscription or the UI ("Sync now"). A follower tab relays to the leader and, so that a
+   *  frozen/background leader can't leave the user staring at a stale screen, also syncs itself. */
+  poke(): void {
+    if (this.status.leader) { this.wake?.(); return; }
+    if (!this.running) { void this.sync(); return; }
+    try { this.bc?.postMessage({ type: 'poke' }); } catch { /* ignore */ }
+    void this.sync();
+  }
+
+  /** Follower tabs: if the leader hasn't synced for 3 intervals while we're visible, it's probably frozen — sync ourselves. */
+  private checkLeaderAlive = async () => {
+    if (this.status.leader || !this.running) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const last = (await getMeta<string>(this.db, META.lastSyncAt)) ?? this.status.lastSyncAt;
+    const age = last ? this.now() - Date.parse(last) : Infinity;
+    if (age > 3 * (this.opt.pullInterval ?? 60_000)) void this.sync();
+  };
 
   /** Background loop: leader election (Web Locks) → periodic sync + wake on poke/online. */
   start(): void {
@@ -186,6 +211,15 @@ export class SyncEngine {
       }
       this.setStatus({ leader: false });
     };
+    if (typeof BroadcastChannel !== 'undefined') {
+      this.bc = new BroadcastChannel(this.opt.lockName ?? `suqa-pos-sync-${this.deviceId}`);
+      this.bc.onmessage = (ev: MessageEvent) => {
+        const m = ev.data as { type: string; status?: Partial<SyncStatus> };
+        if (m?.type === 'poke' && this.status.leader) this.wake?.();
+        else if (m?.type === 'status' && !this.status.leader && m.status) this.setStatus({ ...m.status, leader: false }, true);
+      };
+      this.watchdog = setInterval(() => { void this.checkLeaderAlive(); }, this.opt.pullInterval ?? 60_000);
+    }
     if (locks) {
       this.loopPromise = locks.request(this.opt.lockName ?? `suqa-pos-sync-${this.deviceId}`, async () => { await run(); }).then(() => undefined, () => undefined);
     } else {
@@ -201,6 +235,7 @@ export class SyncEngine {
 
   async stop(): Promise<void> {
     this.running = false; this.wake?.(); if (this.timer) clearTimeout(this.timer);
+    if (this.watchdog) clearInterval(this.watchdog); this.watchdog = null; this.bc?.close(); this.bc = null;
     if (typeof window !== 'undefined') { window.removeEventListener('online', this.onOnline); document.removeEventListener('visibilitychange', this.onVisible); }
     this.releaseLock?.(); await this.loopPromise?.catch(() => undefined);
   }

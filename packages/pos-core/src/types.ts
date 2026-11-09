@@ -83,7 +83,7 @@ export interface OutboxOp {
   last_error?: string;
 }
 export interface FeedRow { seq: number; tbl: string; row_id: string; op: 'upsert' | 'delete'; row: Record<string, unknown>; origin_device?: string | null }
-export interface PullResult { rows: FeedRow[]; cursor: number; count?: number; resync?: boolean; server_now: string; role?: Role; device?: Pick<Device, 'id' | 'prefix' | 'name'> }
+export interface PullResult { rows: FeedRow[]; cursor: number; count?: number; resync?: boolean; server_now: string; role?: Role; device?: Pick<Device, 'id' | 'prefix' | 'name'>; devices?: Device[] }
 export interface PushResult { results: Array<{ op_id: string; status: 'ok' | 'rejected'; replayed?: boolean; number?: string; error?: string; code?: string; detail?: string; [k: string]: unknown }>; server_now: string }
 export interface Snapshot {
   cursor: number; server_now: string; role: Role; device: Pick<Device, 'id' | 'prefix' | 'name'>; shop: Shop;

@@ -101,6 +101,13 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
           {msg && <p className="muted" style={{ margin: '8px 0 0' }}>{msg}{lastInvite && <> · <a href={waLink(lastInvite.phone, lastInvite.name)} target="_blank" rel="noreferrer">💬 {pt('sendInvite', locale)}</a></>}</p>}
         </div>
       ) : <p className="muted" style={{ fontSize: 12 }}>{pt('needOnline', locale)}</p>}
+      {edit && <Modal open onClose={() => setEdit(null)} title={`✎ ${edit.display_name || edit.full_name || ''}`}
+        footer={<><button className="btn ghost" onClick={() => setEdit(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={busy || !eName.trim() || ePhone.replace(/\D/g, '').length < 8} onClick={saveEdit}>{pt('save', locale)}</button></>}>
+        <label className="label">{pt('staffName', locale)}<input className="input" value={eName} onChange={e => setEName(e.target.value)} autoFocus /></label>
+        <label className="label">{pt('staffPhoneNew', locale)}<input className="input" dir="ltr" inputMode="tel" value={ePhone} onChange={e => setEPhone(e.target.value)} /></label>
+        <p className="muted" style={{ fontSize: 12 }}>{pt('staffPhoneHint', locale)}</p>
+        {eErr && <div className="bad">{eErr}</div>}
+      </Modal>}
     </div>
   );
 }

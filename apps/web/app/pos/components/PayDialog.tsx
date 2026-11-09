@@ -54,7 +54,10 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
     if (rem <= 0) return notes.slice(0, 6);
     for (const d of notes) for (let k = 1; out.length < 12; k++) { const v = Math.ceil(rem / d) * d + (k - 1) * d; if (v > rem - 1e-9 && !out.includes(v)) { out.push(v); break; } }
     for (const d of notes) { const v = Math.ceil(rem / d) * d + d; if (!out.includes(v)) out.push(v); }
-    return out.sort((a, b) => a - b).slice(0, 6);
+    const list = out.sort((a, b) => a - b).slice(0, cur === 'usd' ? 4 : 6);
+    // USD: $50 and $100 are always offered last — customers often only carry big notes
+    if (cur === 'usd') for (const big of [50, 100]) { if (big > rem - 1e-9 && !list.includes(big)) list.push(big); }
+    return cur === 'usd' ? [...new Set(list)].sort((a, b) => a - b) : list;
   }, [cur, committed.remaining_cents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [credit, setCredit] = useState<{ limit: number; outstanding: number } | null>(null);

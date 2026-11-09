@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useCart } from './CartProvider';
 
 export type HeaderUser = { name: string | null; phone: string | null; email: string | null } | null;
-type Labels = { cart: string; account: string; signIn: string; myOrders: string; myShop?: string; pos?: string; signOut: string; language: string; purchaseHistory: string; guest: string };
+type Labels = { cart: string; account: string; signIn: string; myOrders: string; myShop?: string; pos?: string; signOut: string; language: string; purchaseHistory: string; guest: string; admin: string };
 
-export default function StoreHeader({ brand, labels, user, staff = false, pos = false, locale }: { brand: string; labels: Labels; user: HeaderUser; staff?: boolean; pos?: boolean; locale: 'ar' | 'en' }) {
+export default function StoreHeader({ brand, labels, user, staff = false, pos = false, admin = false, locale }: { brand: string; labels: Labels; user: HeaderUser; staff?: boolean; pos?: boolean; admin?: boolean; locale: 'ar' | 'en' }) {
   const { count } = useCart();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +45,7 @@ export default function StoreHeader({ brand, labels, user, staff = false, pos = 
                 {user && <Link href="/orders" className="item" onClick={() => setOpen(false)}>🧾 {labels.purchaseHistory}</Link>}
                 {user && staff && <Link href="/shop/settings" className="item" onClick={() => setOpen(false)}>🏪 {labels.myShop}</Link>}
                 {user && staff && <a href="/pos" className="item">🖥️ {labels.pos}</a>}
+                {user && admin && <Link href="/admin" className="item" onClick={() => setOpen(false)}>🛠️ {labels.admin}</Link>}
                 <form action="/api/lang" method="post" className="item lang">
                   <input type="hidden" name="next" value={path} />
                   <span className="muted">{labels.language}</span>

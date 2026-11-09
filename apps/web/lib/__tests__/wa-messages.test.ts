@@ -16,7 +16,7 @@ describe('wa-messages', () => {
   it('shop message lists items, totals, customer and portal link', () => {
     const m = shopNewOrder(base, 'https://x.test');
     expect(m).toContain('BAT-000012-A'); expect(m).toContain('0.5 kg زعتر'); expect(m).toContain('2× خبز');
-    expect(m).toContain('$14.50'); expect(m).toContain('Dany +961 70 483 148 https://wa.me/96170483148'); expect(m).toContain('https://x.test/shop');
+    expect(m).toContain('$14.50'); expect(m).toContain('Dany +961 70 483 148 https://wa.me/96170483148'); expect(m).toContain('https://x.test/pos#orders');
   });
   it('customer messages exist for the notified statuses only', () => {
     for (const s of ['accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'rejected'])

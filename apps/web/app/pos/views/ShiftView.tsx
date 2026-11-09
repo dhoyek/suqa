@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { cashMove, closeShift, currentShift, fmtLbp, fmtUsd, num, openShift, shiftSummary, type Currency, type Shift, type ShiftSummary, type Staff } from '@suqa/pos-core';
+import { cashMove, closeShift, currentShift, fmtLbp, fmtUsd, num, openShift, shiftSummary, type Currency, type Shift, type ShiftSummary, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -8,7 +8,7 @@ import { doPrint, loadPrintSettings, zReportHtml } from '../lib/print';
 import Modal, { NumPad } from '../components/Modal';
 
 /** Shift per device: open with a float, cash in/out with reason, close with a count per currency; Z report printable any time. */
-export default function ShiftView({ boot, locale, staff, tick }: { boot: Booted; locale: L; staff: Staff; tick: number }) {
+export default function ShiftView({ boot, locale, staff, tick, status }: { boot: Booted; locale: L; staff: Staff; tick: number; status?: SyncStatus | null }) {
   const [shift, setShift] = useState<Shift | null>(null);
   const [sum, setSum] = useState<ShiftSummary | null>(null);
   const [past, setPast] = useState<Shift[]>([]);
@@ -51,6 +51,7 @@ export default function ShiftView({ boot, locale, staff, tick }: { boot: Booted;
               {Object.entries(sum.by_tender).map(([t, v]) => <tr key={t}><td>{pt(t as 'cash_usd', locale)}</td><td className="muted">{v.count}</td><td className="num">{v.usd ? fmtUsd(v.usd) : ''} {v.lbp ? fmtLbp(v.lbp, locale) : ''}</td></tr>)}
               {sum.moves.map(m => <tr key={m.id}><td>{m.kind === 'in' ? '＋' : '−'} {m.reason}</td><td className="muted">{fmtTime(m.at, locale)}</td><td className="num">{m.currency === 'lbp' ? fmtLbp(num(m.amount), locale) : fmtUsd(num(m.amount))}</td></tr>)}
             </tbody></table>
+            {!!status?.pending && <div className="pill warn" style={{ marginTop: 12 }}>⚠ {status.pending} {pt('pending', locale)} — {pt('syncBeforeClose', locale)}</div>}
             <button className="btn danger big" style={{ marginTop: 12 }} onClick={() => setDialog('close')}>{pt('closeShift', locale)}</button>
           </section>
         </>

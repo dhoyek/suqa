@@ -24,6 +24,8 @@ export type Booted = { db: PosDb; engine: SyncEngine; deviceId: string; shop: Sh
 
 export async function bootDevice(sb: SupabaseClient, shopId: string, userId: string, onEvent: (e: SyncEvent) => void, askDeviceName: () => Promise<string>): Promise<Booted> {
   const transport = new SupabaseTransport(sb);
+  // ask the browser never to evict this origin's storage (unsynced sales live in IndexedDB until they reach the server)
+  try { if (typeof navigator !== 'undefined' && navigator.storage?.persist) void navigator.storage.persist(); } catch { /* unsupported */ }
   const db = openPosDb(shopId);
   await db.open();
   let deviceId = localStorage.getItem(lsDeviceKey(shopId)) ?? (await getMeta<string>(db, META.deviceId)) ?? null;

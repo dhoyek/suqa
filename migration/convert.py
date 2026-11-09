@@ -20,6 +20,8 @@ Skipped on purpose: TRANSACTIONS S / R / SR (ledger postings and party payments 
 their effect), PENDING_RECEIPTS (16 parked baskets), Delivery_Persons (no phone numbers in the old system).
 """
 import argparse, csv, json, os, sys, time, urllib.request, collections
+try: sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')   # Windows consoles default to cp1252
+except Exception: pass
 from datetime import datetime, timedelta
 
 LL, USD = '0', '1'
@@ -207,12 +209,12 @@ def main():
         with open(f'{a.out}/{kind}.jsonl', 'w', encoding='utf-8') as h:
             for r in rows: h.write(json.dumps(r, ensure_ascii=False) + '\n')
     summary['converted_in_s'] = round(time.time() - t0, 1)
-    print(json.dumps(summary, ensure_ascii=False, indent=1))
+    print(json.dumps(summary, ensure_ascii=True, indent=1))
     if a.upload:
         if not (a.shop and a.secret): sys.exit('--upload needs --shop and --secret (or SUQA_SECRET)')
-        print(('DRY RUN → ' if a.dry_run else 'UPLOAD → ') + a.upload)
+        print(('DRY RUN -> ' if a.dry_run else 'UPLOAD -> ') + a.upload)
         res = upload(data, a.upload.rstrip('/'), a.shop, a.secret, a.dry_run)
-        print(json.dumps(res, ensure_ascii=False, indent=1))
+        print(json.dumps(res, ensure_ascii=True, indent=1))
         with open(f'{a.out}/upload-result.json', 'w', encoding='utf-8') as h: json.dump({'summary': summary, 'result': res}, h, ensure_ascii=False, indent=1)
 
 if __name__ == '__main__': main()

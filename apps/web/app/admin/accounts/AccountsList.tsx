@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { t as tr, type LocalizedText } from '@suqa/shared';
 
@@ -10,10 +11,14 @@ export type Account = {
 };
 export type ShopBrief = { id: string; name: LocalizedText; pos: boolean };
 type Labels = Record<'accounts' | 'search' | 'all' | 'admins' | 'staff' | 'drivers' | 'customers' | 'lastSeen' | 'orders' | 'pending' | 'noRole' | 'count' | 'edit' | 'name' | 'phone' | 'save' | 'cancel' | 'phoneTaken' | 'saved'
-  | 'roles' | 'assocRole' | 'none' | 'tenantAdmin' | 'tenantOps' | 'block' | 'unblock' | 'blocked' | 'deleted' | 'delete' | 'merge' | 'mergeInto' | 'confirmDelete' | 'confirmMerge' | 'confirmBlock' | 'roleOwner' | 'roleCashier' | 'roleStock' | 'shopRoles' | 'mergeHint' | 'deleteHint', string>;
+  | 'roles' | 'assocRole' | 'none' | 'tenantAdmin' | 'tenantOps' | 'block' | 'unblock' | 'blocked' | 'deleted' | 'delete' | 'merge' | 'mergeInto' | 'confirmDelete' | 'confirmMerge' | 'confirmBlock' | 'roleOwner' | 'roleCashier' | 'roleStock' | 'shopRoles' | 'mergeHint' | 'deleteHint'
+  | 'signoutAll' | 'resetPin' | 'activity' | 'exportCsv' | 'inviteAccount' | 'inviteHint' | 'pendingInvites' | 'invited' | 'applied' | 'confirmSignout' | 'confirmResetPin' | 'add', string>;
 type Kind = 'all' | 'admins' | 'staff' | 'drivers' | 'customers';
 
-export default function AccountsList({ initial, locale: L, labels, tenantId, canEdit, shops }: { initial: Account[]; locale: 'ar' | 'en'; labels: Labels; tenantId: string; canEdit: boolean; shops: ShopBrief[] }) {
+type Invite = { id: string; kind: 'tenant' | 'shop'; phone: string; name: string | null; role: string; shop?: LocalizedText; created_at: string };
+export default function AccountsList({ initial, locale: L, labels, tenantId, canEdit, shops, invites: invites0 }: { initial: Account[]; locale: 'ar' | 'en'; labels: Labels; tenantId: string; canEdit: boolean; shops: ShopBrief[]; invites: Invite[] }) {
+  const [invites, setInvites] = useState<Invite[]>(invites0);
+  const [inv, setInv] = useState(false); const [iPhone, setIPhone] = useState(''); const [iName, setIName] = useState(''); const [iTenant, setITenant] = useState(''); const [iShop, setIShop] = useState(''); const [iShopRole, setIShopRole] = useState('cashier'); const [iMsg, setIMsg] = useState<string | null>(null);
   const sb = useMemo(() => supabaseBrowser(), []);
   const [list, setList] = useState<Account[]>(initial);
   const [roles, setRoles] = useState<Account | null>(null);
@@ -23,6 +28,17 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
   const [confirm, setConfirm] = useState<{ text: string; run: () => Promise<void> } | null>(null);
   const reload = async () => { const { data } = await sb.rpc('tenant_accounts', { p_tenant: tenantId }); if (data) setList(data as Account[]); };
   const call = async (fn: string, args: Record<string, unknown>) => { setBusy(true); setEErr(null); const { error } = await sb.rpc(fn, args); setBusy(false); if (error) { setMsg(null); setEErr(error.message); return false; } await reload(); setMsg(labels.saved); setTimeout(() => setMsg(null), 2500); return true; };
+  const reloadInvites = async () => { const { data } = await sb.rpc('admin_account_invites', { p_tenant: tenantId }); if (data) setInvites(data as Invite[]); };
+  const sendInvite = async () => {
+    setBusy(true); setIMsg(null); setEErr(null);
+    const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: iPhone, p_name: iName || null, p_tenant_role: iTenant || null, p_shop: iShop || null, p_shop_role: iShop ? iShopRole : null });
+    setBusy(false);
+    if (error) { setEErr(error.message); return; }
+    setIMsg((data as { status: string }).status === 'applied' ? labels.applied : labels.invited); setIPhone(''); setIName(''); setITenant(''); setIShop('');
+    await Promise.all([reload(), reloadInvites()]);
+  };
+  const signout = (a: Account) => setConfirm({ text: `${labels.signoutAll}: ${a.name || a.phone || ''}? ${labels.confirmSignout}`, run: async () => { await call('admin_account_signout', { p_tenant: tenantId, p_user: a.id }); } });
+  const resetPin = (a: Account) => setConfirm({ text: `${labels.resetPin}: ${a.name || a.phone || ''}? ${labels.confirmResetPin}`, run: async () => { await call('admin_account_reset_pin', { p_tenant: tenantId, p_user: a.id }); } });
   const block = (a: Account) => setConfirm({ text: `${a.blocked ? labels.unblock : labels.block}: ${a.name || a.phone || ''}?${a.blocked ? '' : ' ' + labels.confirmBlock}`, run: async () => { await call('admin_account_block', { p_tenant: tenantId, p_user: a.id, p_block: !a.blocked }); } });
   const del = (a: Account) => setConfirm({ text: `${labels.delete}: ${a.name || a.phone || ''}? ${labels.confirmDelete}`, run: async () => { await call('admin_account_delete', { p_tenant: tenantId, p_user: a.id }); } });
   const doMerge = () => { if (!mergeFrom || !mergeTo) return; const keep = list.find(x => x.id === mergeTo); setConfirm({ text: `${labels.merge}: ${mergeFrom.name || mergeFrom.phone} → ${keep?.name || keep?.phone}? ${labels.confirmMerge}`, run: async () => { if (await call('admin_account_merge', { p_tenant: tenantId, p_keep: mergeTo, p_dup: mergeFrom.id })) { setMergeFrom(null); setMergeTo(''); } } }); };
@@ -57,8 +73,33 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
     <section className="card stack">
       <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ margin: 0 }}>{labels.accounts} <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>· {rows.length} {labels.count}</span></h2>
-        <input className="input" style={{ maxWidth: 320 }} placeholder={labels.search} value={q} onChange={e => setQ(e.target.value)} />
+        <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input className="input" style={{ maxWidth: 320 }} placeholder={labels.search} value={q} onChange={e => setQ(e.target.value)} />
+          {canEdit && <button type="button" className="btn" onClick={() => setInv(v => !v)}>➕ {labels.inviteAccount}</button>}
+          {canEdit && <a className="btn" href="/api/admin/accounts.csv">⬇ {labels.exportCsv}</a>}
+        </div>
       </div>
+      {inv && canEdit && (
+        <div className="card stack" style={{ background: '#f8fafc' }}>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>{labels.inviteHint}</p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <input className="input" style={{ flex: 1, minWidth: 160 }} dir="ltr" inputMode="tel" placeholder="+961 70 000 000" value={iPhone} onChange={e => setIPhone(e.target.value)} />
+            <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder={labels.name} value={iName} onChange={e => setIName(e.target.value)} />
+            <select className="input" style={{ width: 'auto' }} value={iTenant} onChange={e => setITenant(e.target.value)}><option value="">{labels.assocRole}: {labels.none}</option><option value="ops">{labels.tenantOps}</option><option value="admin">{labels.tenantAdmin}</option></select>
+            <select className="input" style={{ width: 'auto' }} value={iShop} onChange={e => setIShop(e.target.value)}><option value="">{labels.shopRoles}: {labels.none}</option>{shops.filter(s => s.pos).map(s => <option key={s.id} value={s.id}>{tr(s.name, L)}</option>)}</select>
+            {iShop && <select className="input" style={{ width: 'auto' }} value={iShopRole} onChange={e => setIShopRole(e.target.value)}><option value="owner">{labels.roleOwner}</option><option value="cashier">{labels.roleCashier}</option><option value="stock">{labels.roleStock}</option></select>}
+            <button type="button" className="btn primary" disabled={busy || iPhone.replace(/\D/g, '').length < 8 || (!iTenant && !iShop)} onClick={sendInvite}>{labels.add}</button>
+          </div>
+          {iMsg && <p className="muted" style={{ margin: 0 }}>✓ {iMsg}</p>}
+          {invites.length > 0 && <div className="stack" style={{ gap: 4 }}>
+            <span className="muted" style={{ fontSize: 12 }}>{labels.pendingInvites} ({invites.length})</span>
+            {invites.map(i => <div key={i.id} className="row spread" style={{ alignItems: 'center', fontSize: 13 }}>
+              <span><strong dir="ltr">+{i.phone}</strong> {i.name ? `· ${i.name}` : ''} · {i.kind === 'tenant' ? `🛠️ ${i.role}` : `🏪 ${i.shop ? tr(i.shop, L) : ''} · ${i.role}`}</span>
+              <button type="button" className="btn ghost" disabled={busy} onClick={async () => { await sb.rpc('admin_account_invite_cancel', { p_tenant: tenantId, p_kind: i.kind, p_id: i.id }); await reloadInvites(); }}>✕</button>
+            </div>)}
+          </div>}
+        </div>
+      )}
       <nav className="row chips">{KINDS.map(k => <button type="button" key={k} className={`chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>{labels[k]} ({k === 'all' ? list.length : list.filter(a => kindOf(a).includes(k)).length})</button>)}</nav>
       <div style={{ overflowX: 'auto' }}>
         <table className="table">
@@ -84,7 +125,10 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
                 <td className="muted" style={{ textAlign: 'center' }}>{when(a.last_sign_in_at)}</td>
                 {canEdit && <td style={{ whiteSpace: 'nowrap' }}>{!a.deleted && <>
                   <button type="button" className="btn ghost" title={labels.edit} onClick={() => openEdit(a)}>✎</button>
+                  <Link href={`/admin/accounts/${a.id}`} className="btn ghost" title={labels.activity}>📋</Link>
                   <button type="button" className="btn ghost" title={labels.roles} onClick={() => setRoles(a)}>🎖️</button>
+                  <button type="button" className="btn ghost" title={labels.signoutAll} onClick={() => signout(a)}>⎋</button>
+                  {a.shops.some(s => s.active) && <button type="button" className="btn ghost" title={labels.resetPin} onClick={() => resetPin(a)}>🔢</button>}
                   <button type="button" className="btn ghost" title={a.blocked ? labels.unblock : labels.block} onClick={() => block(a)}>{a.blocked ? '🔓' : '⛔'}</button>
                   <button type="button" className="btn ghost" title={labels.merge} onClick={() => { setMergeFrom(a); setMergeTo(''); }}>⇄</button>
                   <button type="button" className="btn ghost" title={labels.delete} onClick={() => del(a)}>🗑</button>

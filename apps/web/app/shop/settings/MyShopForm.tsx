@@ -14,11 +14,18 @@ const DAY_LABEL: Record<string, { en: string; ar: string }> = {
   fri: { en: 'Fri', ar: 'الجمعة' }, sat: { en: 'Sat', ar: 'السبت' }, sun: { en: 'Sun', ar: 'الأحد' },
 };
 type Labels = Record<'myShop' | 'shopDetails' | 'nameAr' | 'nameEn' | 'descAr' | 'descEn' | 'logo' | 'cover' | 'photo' | 'changePhoto' | 'remove' | 'contact' | 'publicPhone' | 'whatsapp' | 'addressText'
-  | 'openingHours' | 'closedDay' | 'addRange' | 'pauseOrders' | 'pauseHint' | 'followHours' | 'forceOpen' | 'forceClosed' | 'minOrderUsd' | 'prepMinutes' | 'save' | 'saved' | 'pickupEnabled', string>;
+  | 'openingHours' | 'closedDay' | 'addRange' | 'pauseOrders' | 'pauseHint' | 'followHours' | 'forceOpen' | 'forceClosed' | 'minOrderUsd' | 'prepMinutes' | 'save' | 'saved' | 'pickupEnabled'
+  | 'zonesServed' | 'zonesServedHint' | 'feeOverride' | 'noZonesYet' | 'noZonesServed', string>;
+type Zone = { id: string; name: string; fee_usd: number };
 
-export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop: Shop; locale: Locale; canEdit: boolean; labels: Labels }) {
+export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, served: served0 }: { shop: Shop; locale: Locale; canEdit: boolean; labels: Labels; zones: Zone[]; served: { zone_id: string; fee_usd: number | null }[] }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
+  // which association zones this shop delivers to, with an optional fee of its own (empty = the zone's standard fee)
+  const [served, setServed] = useState<Record<string, { on: boolean; fee: string }>>(Object.fromEntries(zones.map(z => {
+    const s = served0.find(x => x.zone_id === z.id); return [z.id, { on: !!s, fee: s?.fee_usd == null ? '' : String(s.fee_usd) }];
+  })));
+  const servedCount = Object.values(served).filter(v => v.on).length;
   const [f, setF] = useState({
     name_ar: shop.name.ar ?? '', name_en: shop.name.en ?? '', desc_ar: shop.description?.ar ?? '', desc_en: shop.description?.en ?? '',
     phone: shop.phone ?? '', whatsapp: shop.whatsapp ?? '', address_text: shop.address_text ?? '',
@@ -54,8 +61,15 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop:
       logo_url: f.logo_url, cover_url: f.cover_url, opening_hours: hours,
       is_open_override: f.override === 'open' ? true : f.override === 'closed' ? false : null,
     }).eq('id', shop.id);
+    if (error) { setBusy(false); setMsg(friendlyError(error, L)); return; }
+    // zones served: replace the shop's rows (upsert the kept ones, drop the unticked ones)
+    const keep = Object.entries(served).filter(([, v]) => v.on).map(([zone_id, v]) => ({ shop_id: shop.id, zone_id, fee_usd: v.fee.trim() === '' ? null : Number(v.fee) }));
+    const drop = Object.entries(served).filter(([, v]) => !v.on).map(([zone_id]) => zone_id);
+    const r1 = keep.length ? await sb.from('shop_delivery_zones').upsert(keep, { onConflict: 'shop_id,zone_id' }) : { error: null };
+    const r2 = drop.length ? await sb.from('shop_delivery_zones').delete().eq('shop_id', shop.id).in('zone_id', drop) : { error: null };
     setBusy(false);
-    if (error) { setMsg(friendlyError(error, L)); return; }
+    const zerr = r1.error ?? r2.error;
+    if (zerr) { setMsg(friendlyError(zerr, L)); return; }
     setMsg(labels.saved); router.refresh();
   }
 
@@ -99,6 +113,23 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels }: { shop:
           <div style={{ flex: 1 }}><label className="label">{labels.whatsapp}</label><input className="input" dir="ltr" inputMode="tel" disabled={dis} value={f.whatsapp} onChange={e => setF({ ...f, whatsapp: e.target.value })} /></div>
         </div>
         <div><label className="label">{labels.addressText}</label><input className="input" disabled={dis} value={f.address_text} onChange={e => setF({ ...f, address_text: e.target.value })} /></div>
+      </section>
+
+      <section className="card stack">
+        <strong>🗺 {labels.zonesServed}</strong>
+        <div className="muted" style={{ fontSize: 13 }}>{labels.zonesServedHint}</div>
+        {zones.length === 0 && <div className="muted">{labels.noZonesYet}</div>}
+        {zones.length > 0 && servedCount === 0 && <div className="pill warn" style={{ alignSelf: 'flex-start' }}>{labels.noZonesServed}</div>}
+        {zones.map(z => (
+          <div key={z.id} className="row" style={{ alignItems: 'center', gap: 10 }}>
+            <label className="row" style={{ flex: 1, gap: 10, cursor: dis ? 'default' : 'pointer' }}>
+              <input type="checkbox" className="check" disabled={dis} checked={served[z.id]?.on ?? false} onChange={e => setServed({ ...served, [z.id]: { ...served[z.id], on: e.target.checked } })} />
+              {z.name} <span className="muted">(${z.fee_usd.toFixed(2)})</span>
+            </label>
+            <input className="input" style={{ width: 110 }} dir="ltr" inputMode="decimal" placeholder={labels.feeOverride} disabled={dis || !served[z.id]?.on}
+              value={served[z.id]?.fee ?? ''} onChange={e => setServed({ ...served, [z.id]: { ...served[z.id], fee: e.target.value } })} />
+          </div>
+        ))}
       </section>
 
       <section className="card stack">

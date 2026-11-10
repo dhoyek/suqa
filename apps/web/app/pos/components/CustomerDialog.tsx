@@ -26,13 +26,18 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const phoneRef = useRef<HTMLInputElement>(null);
   const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
   const [asking, setAsking] = useState<string | null>(null); const [picker, setPicker] = useState(false);
+  const [noZones, setNoZones] = useState(false);
   // delivery-zone fee from the pin (online only; outside the zones → keep the default/typed fee)
   useEffect(() => {
     if (!coords || !online || ful !== 'delivery') { setZone(null); return; }
     let on = true;
-    sb.rpc('pos_delivery_fee', { p_shop: boot.shop.id, p_lat: coords.lat, p_lng: coords.lng }).then(({ data }) => {
+    sb.rpc('pos_delivery_fee', { p_shop: boot.shop.id, p_lat: coords.lat, p_lng: coords.lng }).then(async ({ data }) => {
       if (!on) return; const z = data as typeof zone; setZone(z);
       if (z?.zone_id && z.fee_usd != null && !feeTouched.current) setF(String(Number(z.fee_usd)));
+      if (z && !z.zone_id) {   // outside — or the shop simply hasn't picked its areas yet (different message, different fix)
+        const { count } = await sb.from('shop_delivery_zones').select('zone_id', { count: 'exact', head: true }).eq('shop_id', boot.shop.id);
+        if (on) setNoZones(count === 0);
+      } else setNoZones(false);
     });
     return () => { on = false; };
   }, [coords, online, ful, sb, boot.shop.id]);
@@ -152,7 +157,9 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
               {coords && <small className="muted" dir="ltr">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} · <a href={mapUrlFor(coords.lat, coords.lng)} target="_blank" rel="noreferrer">{pt('openMap', locale)}</a></small>}
               <label className="label">{pt('deliveryFee', locale)} ($)</label>
               <input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />
-              {zone && (zone.zone_id ? <small className="muted">🗺 {text(zone.name ?? {}, locale)} · ${Number(zone.fee_usd ?? 0)}{zone.eta_minutes ? ` · ~${zone.eta_minutes} ${pt('min', locale)}` : ''}</small> : <small className="pill warn">{pt('outsideZones', locale)}</small>)}
+              {zone && (zone.zone_id ? <small className="muted">🗺 {text(zone.name ?? {}, locale)} · ${Number(zone.fee_usd ?? 0)}{zone.eta_minutes ? ` · ~${zone.eta_minutes} ${pt('min', locale)}` : ''}</small> : noZones
+                ? <small className="pill warn">{pt('noZonesServed', locale)} · <a href={`/shop/settings?shop=${boot.shop.id}`} target="_blank" rel="noreferrer">{pt('shopSettingsLink', locale)}</a></small>
+                : <small className="pill warn">{pt('outsideZones', locale)}</small>)}
             </>}
             {isOrder && <>
               <label className="label">{pt('orderNotes', locale)}</label>

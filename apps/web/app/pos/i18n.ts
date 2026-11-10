@@ -153,6 +153,8 @@ const T = {
   findOrder: { ar: 'رقم الفاتورة أو امسح QR الإيصال', en: 'Receipt number or scan the receipt QR' },
   signOut: { ar: 'تسجيل الخروج', en: 'Sign out' },
   backToShop: { ar: 'لوحة المحل', en: 'Shop dashboard' },
+  noZonesServed: { ar: 'لم تُحدَّد مناطق التوصيل للمحل بعد', en: 'The shop has not picked its delivery areas yet' },
+  shopSettingsLink: { ar: 'إعدادات المحل', en: 'shop settings' },
   backHome: { ar: 'الصفحة الرئيسية', en: 'Home' }, shop: { ar: 'المحل', en: 'Shop' }, yourName: { ar: 'اسمك', en: 'Your name' },
   noAccessTitle: { ar: 'لا صلاحية لنقطة البيع', en: 'No POS access' },
   noAccessBody: { ar: 'حسابك غير مرتبط بأي محل. أرسل طلب وصول لصاحب المحل ليوافق عليه، وعندها تظهر لك شاشات نقطة البيع.', en: 'Your account is not a member of any shop. Send an access request to the shop owner; once approved, the POS opens for you.' },

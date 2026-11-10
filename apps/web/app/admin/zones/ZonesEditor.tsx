@@ -52,7 +52,8 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
       Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current);
       layers.current = Lf.layerGroup().addTo(map.current);
       drawLayer.current = Lf.layerGroup().addTo(map.current);
-      map.current.on('click', (e: any) => setDrawing(d => [...d, [e.latlng.lat, e.latlng.lng]]));
+      map.current.doubleClickZoom.disable();
+      map.current.on('click', (e: any) => { const t = e.originalEvent?.target as HTMLElement | undefined; if (t?.closest?.('.zone-vertex, .zone-midpoint')) return; setDrawing(d => [...d, [e.latlng.lat, e.latlng.lng]]); });
     });
     return () => { dead = true; map.current?.remove(); map.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,17 +73,23 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
     drawLayer.current.clearLayers();
     if (drawing.length) Lf.polyline(drawing.length >= 3 ? [...drawing, drawing[0]] : drawing, { color: '#F59E0B', weight: 2, dashArray: '6 4' }).addTo(drawLayer.current);
     if (drawing.length >= 3) Lf.polygon(drawing, { color: '#F59E0B', weight: 1, fillOpacity: 0.2 }).addTo(drawLayer.current);
-    const vIcon = Lf.divIcon({ className: 'zone-vertex', iconSize: [14, 14] }); const mIcon = Lf.divIcon({ className: 'zone-midpoint', iconSize: [10, 10] });
+    const vIcon = Lf.divIcon({ className: 'zone-vertex', iconSize: [16, 16], iconAnchor: [8, 8] }); const mIcon = Lf.divIcon({ className: 'zone-midpoint', iconSize: [12, 12], iconAnchor: [6, 6] });
+    const stop = (e: any) => { if (e?.originalEvent) { Lf.DomEvent.stopPropagation(e.originalEvent); Lf.DomEvent.preventDefault(e.originalEvent); } };
+    // vertices: drag to move, double-click / right-click (long-press on touch) to remove. Marker events do not bubble to the
+    // map, so touching a handle never appends a new point.
     drawing.forEach((p, i) => {
-      const m = Lf.marker(p, { icon: vIcon, draggable: true, title: labels.vertexHint }).addTo(drawLayer.current);
+      const m = Lf.marker(p, { icon: vIcon, draggable: true, bubblingMouseEvents: false, autoPan: true, title: labels.vertexHint }).addTo(drawLayer.current);
+      m.on('click', stop);
       m.on('dragend', (e: any) => { const ll = e.target.getLatLng(); setDrawing(d => d.map((q, k) => k === i ? [ll.lat, ll.lng] : q)); });
-      m.on('click', (e: any) => { Lf.DomEvent.stopPropagation(e); setDrawing(d => d.length > 3 || d.length <= 3 ? d.filter((_, k) => k !== i) : d); });
+      const removeMe = (e: any) => { stop(e); setDrawing(d => d.filter((_, k) => k !== i)); };
+      m.on('dblclick', removeMe); m.on('contextmenu', removeMe);
     });
     if (drawing.length >= 2) drawing.forEach((p, i) => {
-      const q = drawing[(i + 1) % drawing.length]; if (drawing.length < 3 && i === drawing.length - 1) return;
+      if (drawing.length < 3 && i === drawing.length - 1) return;
+      const q = drawing[(i + 1) % drawing.length];
       const mid: [number, number] = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
-      const m = Lf.marker(mid, { icon: mIcon, title: labels.midpointHint }).addTo(drawLayer.current);
-      m.on('click', (e: any) => { Lf.DomEvent.stopPropagation(e); setDrawing(d => [...d.slice(0, i + 1), mid, ...d.slice(i + 1)]); });
+      const m = Lf.marker(mid, { icon: mIcon, bubblingMouseEvents: false, title: labels.midpointHint }).addTo(drawLayer.current);
+      m.on('click', (e: any) => { stop(e); setDrawing(d => [...d.slice(0, i + 1), mid, ...d.slice(i + 1)]); });
     });
   }, [drawing, labels.vertexHint, labels.midpointHint]);
 

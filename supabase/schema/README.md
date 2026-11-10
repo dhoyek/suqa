@@ -46,4 +46,5 @@ source of truth.
 | 42_migration_quiet.sql | Migrated sales history bypasses the device sync feed (`suqa.skip_sync_log`); purges the 430 already-fed receipts; re-numbers migrated receipts to `M-<RCPT_ID>`. Apply before re-running 38. |
 | 43_accounts.sql | `tenant_accounts` (admin Accounts tab: every account that touched the tenant + roles), `pos_account_search` + `pos_staff_add_user` (owner adds staff by picking an existing account, linked by user id), `pos_driver_directory` (drivers used by other shops of the association). |
 | 44_admin_accounts.sql | `admin_account_update(tenant, user, name, phone)` — association admin edits an account's name / number from Admin → Accounts (number must be free; nothing merged). |
+| 45_account_admin.sql | Admin → Accounts as the one user-management place: `admin_account_block/_delete/_merge/_set_shop_role/_set_tenant_role`, `tenant_shops_brief`; `tenant_accounts` re-created with `blocked`/`deleted`. Delete = anonymise + block (history kept). |
 | ../seed/batroun.sql | first tenant |

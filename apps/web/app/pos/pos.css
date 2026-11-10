@@ -151,6 +151,7 @@
   .vch table td.q { text-align: center; width: 30px; direction: ltr; }
   .vch table td.a { text-align: left; width: 62px; direction: ltr; }
   .vch table td .u { font-size: 10px; font-weight: 400; }
+  .vch table td .u.nt { font-size: 12px; font-weight: 700; }
   .vch .tot { font-size: 14px; font-weight: 800; direction: rtl; unicode-bidi: isolate; }
   .vch i { font-style: normal; display: inline-block; direction: ltr; unicode-bidi: isolate; }
   .vch .tot .sep { padding: 0 3px; }
@@ -379,3 +380,5 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cart-totals .muted { font-size: 13px; }
 .kbd { display: inline-block; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font-size: 12px; font-family: inherit; background: #f9fafb; }
 @media (max-width: 760px) { .cart-line .qty-btns button { min-width: 36px; min-height: 36px; } }
+
+.r-note { font-size: 12px; color: #92400e; background: #fffbeb; border-radius: 4px; padding: 1px 6px; display: inline-block; margin: 2px 0; }

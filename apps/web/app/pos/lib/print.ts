@@ -41,13 +41,14 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
   const no = opts.serverNumber ?? o.number ?? o.local_number ?? '';
   const rows = lines.filter(l => !l.voided).map(l => {
     const unit = l.price_currency === 'usd' ? fmtUsd(num(l.unit_price_cents)) : fmtLbp(num(l.unit_price_lbp), L);
-    return `<tr><td class="q">${num(l.quantity)}×</td><td>${esc(text(l.name, L))}${l.discount_cents ? ` <small>−${fmtUsd(num(l.discount_cents))}</small>` : ''}<div class="u">${ltr(unit)}</div></td><td class="a">${ltr(fmtUsd(num(l.line_total_cents)))}</td></tr>`;
+    return `<tr><td class="q">${num(l.quantity)}${l.unit ? esc(l.unit) : '×'}</td><td>${esc(text(l.name, L))}${l.discount_cents ? ` <small>−${fmtUsd(num(l.discount_cents))}</small>` : ''}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}<div class="u">${ltr(unit)}</div></td><td class="a">${ltr(fmtUsd(num(l.line_total_cents)))}</td></tr>`;
   }).join('');
   const pays = payments.map(p => `<div class="ft">${esc(pt(p.tender, L))}${p.unpaid_name ? ' · ' + esc(p.unpaid_name) : ''}: ${ltr(p.currency === 'lbp' ? fmtLbp(num(p.amount), L) : fmtUsd(num(p.amount)))}</div>`).join('');
   const change = num(o.change_usd_cents) || num(o.change_lbp) ? `<div class="ft">${esc(pt('change', L))}: ${ltr(num(o.change_usd_cents) ? fmtUsd(num(o.change_usd_cents)) : fmtLbp(num(o.change_lbp), L))}</div>` : '';
   return `<div class="vch">
     <div class="club">${esc(text(shop.name, L))}</div>${shop.phone ? `<div class="ev">${esc(shop.phone)}</div>` : ''}<hr>
-    <div class="no">${esc(no)}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${opts.cashier ? ' · ' + esc(opts.cashier) : ''}</div><hr>
+    <div class="no">${esc(no)}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${opts.cashier ? ' · ' + esc(opts.cashier) : ''}</div>
+    ${o.customer_name || o.customer_phone ? `<div class="ev">${esc(o.customer_name || '')} ${ltr(esc(o.customer_phone || ''))}</div>` : ''}<hr>
     <table>${rows}</table><hr>
     ${num(o.discount_cents) ? `<div class="ft">${esc(pt('discount', L))}: ${ltr('−' + fmtUsd(num(o.discount_cents)))}</div>` : ''}
     <div class="tot">${ltr(fmtUsd(num(o.total_cents)))}${st.showLbp ? '<span class="sep">·</span>' + ltr(fmtLbp(num(o.total_lbp) || usdToLbp(num(o.total_cents), rate), L)) : ''}</div>

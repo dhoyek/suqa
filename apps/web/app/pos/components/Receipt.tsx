@@ -36,13 +36,15 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
           <span>{pt('orderNo', locale)} {serverNumber ?? order.number ?? order.local_number}{serverNumber || order.number ? ` (${order.local_number})` : ''}</span>
           <span>{new Date(order.placed_at).toLocaleString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}</span>
         </div>
+        {(order.customer_name || order.customer_phone) && <div className="r-meta muted"><span>👤 {order.customer_name || ''}</span><span dir="ltr">{order.customer_phone || ''}</span></div>}
         <table className="r-lines"><tbody>
           {lines.filter(l => !l.voided).map(l => (
-            <tr key={l.id}><td>{text(l.name, locale)}<div className="muted">{l.quantity} × {l.price_currency === 'usd' ? fmtUsd(l.unit_price_cents) : fmtLbp(l.unit_price_lbp, locale)}{l.discount_cents ? ` − ${fmtUsd(l.discount_cents)}` : ''}</div></td><td className="num">{fmtUsd(l.line_total_cents)}</td></tr>
+            <tr key={l.id}><td>{text(l.name, locale)}{l.notes && <div className="r-note">📝 {l.notes}</div>}<div className="muted">{l.quantity}{l.unit ? ` ${l.unit}` : ''} × {l.price_currency === 'usd' ? fmtUsd(l.unit_price_cents) : fmtLbp(l.unit_price_lbp, locale)}{l.discount_cents ? ` − ${fmtUsd(l.discount_cents)}` : ''}</div></td><td className="num">{fmtUsd(l.line_total_cents)}</td></tr>
           ))}
         </tbody></table>
         <div className="r-totals">
-          {order.discount_cents > 0 && <div><span>{pt('discount', locale)}</span><span>−{fmtUsd(order.discount_cents)}</span></div>}
+          <div className="muted"><span>{lines.filter(l => !l.voided).length} {pt('itemsCount', locale)}</span><span>{order.discount_cents > 0 ? fmtUsd(order.subtotal_cents) : ''}</span></div>
+          {order.discount_cents > 0 && <div><span>{pt('discount', locale)}{order.discount_reason ? ` · ${order.discount_reason}` : ''}</span><span>−{fmtUsd(order.discount_cents)}</span></div>}
           <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(order.total_cents)}</span></div>
           <div className="big"><span></span><span>{fmtLbp(order.total_lbp, locale)}</span></div>
           <div className="muted"><span>{pt('rate', locale)}</span><span>{rate.toLocaleString('en-US')} / $1</span></div>

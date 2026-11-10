@@ -69,7 +69,7 @@ export interface ShopCustomer { id: string; shop_id: string; phone: string; phon
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert';
+export type OpKind = 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert' | 'driver.delete';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7

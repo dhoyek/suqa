@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fmtPhone, upsertDriver, waDigits, type Driver } from '@suqa/pos-core';
+import { deleteDriver, fmtPhone, upsertDriver, waDigits, type Driver } from '@suqa/pos-core';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -12,6 +13,11 @@ export default function DriversPanel({ boot, locale, tick, sb, online = true }: 
   const [dir, setDir] = useState<DirRow[] | null>(null); const [dirOpen, setDirOpen] = useState(false);
   const openDir = async () => { setDirOpen(true); if (!sb) return; const { data, error } = await sb.rpc('pos_driver_directory', { p_shop: boot.shop.id }); setDir(error ? [] : ((data as DirRow[]) ?? [])); };
   const [rows, setRows] = useState<Driver[]>([]); const [edit, setEdit] = useState<Partial<Driver> | null>(null); const [msg, setMsg] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const remove = async (d: Driver) => {
+    if (!(await confirm(`${pt('removeDriver', locale)}: ${d.name}? ${pt('removeDriverHint', locale)}`, { danger: true }))) return;
+    await deleteDriver(boot.db, d.id); await load(); boot.engine.poke();
+  };
   const load = () => boot.db.drivers.toArray().then(r => setRows(r.sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))));
   useEffect(() => { load(); }, [boot, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async (patch: Partial<Driver> & { name: string; phone: string }) => {
@@ -27,7 +33,7 @@ export default function DriversPanel({ boot, locale, tick, sb, online = true }: 
           <td><strong>{d.name}</strong>{d.vehicle ? <span className="muted"> · {d.vehicle}</span> : null}{d.user_id ? <span className="pill ok" style={{ marginInlineStart: 6 }}>👤</span> : null}</td>
           <td dir="ltr">{fmtPhone(d.phone)} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer">💬</a></td>
           <td><label className="row" style={{ gap: 6, alignItems: 'center' }}><input type="checkbox" checked={d.available} onChange={e => save({ id: d.id, name: d.name, phone: d.phone, available: e.target.checked })} /> {pt('availableToday', locale)}</label></td>
-          <td><button className="btn ghost" onClick={() => setEdit(d)}>✎</button></td>
+          <td style={{ whiteSpace: 'nowrap' }}><button className="btn ghost" title={pt('edit', locale)} onClick={() => setEdit(d)}>✎</button><button className="btn ghost" title={pt('removeDriver', locale)} onClick={() => remove(d)}>🗑</button></td>
         </tr>)}
       </tbody></table> : <p className="muted">—</p>}
       {msg && <small className="muted">{msg}</small>}

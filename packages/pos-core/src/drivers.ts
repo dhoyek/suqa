@@ -24,3 +24,13 @@ export async function upsertDriver(db: PosDb, shopId: string, input: { id?: stri
 
 /** International digits for wa.me / tel: links. */
 export const waDigits = (p: string) => { const k = (p ?? '').replace(/\D/g, '').replace(/^00/, ''); return k.startsWith('961') ? k : '961' + k.replace(/^0/, ''); };
+
+/** Remove a driver from the shop. Deleted outright if never assigned to an order (server decides; the feed then drops the
+ *  row), otherwise kept inactive so old orders still show who delivered them. Locally we mark inactive at once. */
+export async function deleteDriver(db: PosDb, id: string, opts: { approved_by?: string } = {}): Promise<void> {
+  const d = await db.drivers.get(id); if (!d) return;
+  const used = await db.orders.filter(o => (o as { driver_id?: string | null }).driver_id === id).count().catch(() => 0);
+  if (used) await db.drivers.update(id, { active: false, available: false, updated_at: new Date().toISOString() });
+  else await db.drivers.delete(id);
+  await enqueue(db, 'driver.delete', { id, ...(opts.approved_by ? { approved_by: opts.approved_by } : {}) });
+}

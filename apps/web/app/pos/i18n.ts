@@ -100,7 +100,9 @@ const T = {
   receipt: { ar: 'الإيصال', en: 'Receipt' }, newSale: { ar: 'بيع جديد', en: 'New sale' }, print: { ar: 'طباعة', en: 'Print' }, sendWhatsApp: { ar: 'إرسال واتساب', en: 'Send WhatsApp' },
   showQr: { ar: 'عرض QR', en: 'Show QR' }, qrHint: { ar: 'الزبون يمسح الرمز لفتح الإيصال', en: 'The customer scans to open the receipt' }, sent: { ar: 'تم الإرسال', en: 'Sent' },
   orderNo: { ar: 'رقم', en: 'No.' }, date: { ar: 'التاريخ', en: 'Date' }, cashier: { ar: 'الكاشير', en: 'Cashier' }, thanks: { ar: 'شكراً لزيارتكم', en: 'Thank you' },
-  shortcuts: { ar: 'اختصارات: F2 بحث · F4 كمية · F6 خصم · F8 دفع · F9 تعليق · Esc إغلاق', en: 'Shortcuts: F2 search · F4 qty · F6 discount · F8 pay · F9 park · Esc close' },
+  shortcuts: { ar: 'اختصارات لوحة المفاتيح', en: 'Keyboard shortcuts' }, shortcutsLine: { ar: 'اختصارات: F2 بحث · F4 كمية · F6 خصم · F8 دفع · F9 تعليق · Esc إغلاق', en: 'Shortcuts: F2 search · F4 qty · F6 discount · F8 pay · F9 park · Esc close' }, enterAdds: { ar: 'إدخال: يضيف الصنف عند نتيجة واحدة أو باركود', en: 'Enter: adds the item on a single match or barcode' },
+  favourites: { ar: 'الأكثر طلباً', en: 'Top sellers' }, lineNoteHint: { ar: 'ملاحظة على الصنف: مقطّع، بدون كيس…', en: 'Item note: sliced, no bag…' }, debtShort: { ar: 'دين', en: 'owes' },
+  byAmount: { ar: 'بالمبلغ', en: 'By amount' },
   // shift / cash / reports / printing (M3)
   openShift: { ar: 'فتح وردية', en: 'Open shift' }, closeShift: { ar: 'إقفال الوردية', en: 'Close shift' }, noShift: { ar: 'لا وردية مفتوحة على هذا الجهاز', en: 'No open shift on this device' },
   shiftOpenSince: { ar: 'وردية مفتوحة منذ', en: 'Shift open since' }, openedBy: { ar: 'فتحها', en: 'Opened by' },

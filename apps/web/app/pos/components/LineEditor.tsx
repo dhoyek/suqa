@@ -5,7 +5,7 @@ import { pt, type L } from '../i18n';
 import Modal, { NumPad } from './Modal';
 import OwnerPin from './OwnerPin';
 
-type Field = 'qty' | 'price' | 'discount';
+type Field = 'qty' | 'amount' | 'price' | 'discount';
 
 /**
  * Edit one cart line: quantity (decimals for weighed items), unit price override, line discount, note, void.
@@ -19,11 +19,14 @@ export default function LineEditor({ line, locale, rate, maxDiscountPct, staff, 
   const [qty, setQty] = useState(String(line.quantity));
   const [price, setPrice] = useState(line.price_currency === 'usd' ? (line.unit_price_cents / 100).toString() : String(line.unit_price_lbp));
   const [disc, setDisc] = useState(line.discount_cents ? (line.discount_cents / 100).toString() : '');
+  const [amount, setAmount] = useState('');            // weighed items: type the money, get the weight
   const [note, setNote] = useState(line.notes ?? '');
   const [gate, setGate] = useState<null | (() => void)>(null);
   const [voiding, setVoiding] = useState(false); const [voidReason, setVoidReason] = useState('');
 
-  const q = Math.max(0, Number(qty) || 0);
+  const weighed = isDecimalOk(line) && !!line.product_id;
+  const unitForAmount = line.price_currency === 'usd' ? Number(price) || 0 : (Number(price) || 0) / rate;   // USD per unit
+  const q = field === 'amount' && weighed && unitForAmount > 0 ? Math.round(((Number(amount) || 0) / unitForAmount) * 1000) / 1000 : Math.max(0, Number(qty) || 0);
   const unitCents = line.price_currency === 'usd' ? Math.round((Number(price) || 0) * 100) : line.unit_price_cents;
   const unitLbp = line.price_currency === 'lbp' ? Math.round(Number(price) || 0) : line.unit_price_lbp;
   const discCents = Math.round((Number(disc) || 0) * 100);
@@ -39,8 +42,8 @@ export default function LineEditor({ line, locale, rate, maxDiscountPct, staff, 
   const save = () => { if (q <= 0) return; if (needsOwner && !line.approved_by) setGate(() => () => apply()); else apply(); };
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Enter' && !voiding) { e.preventDefault(); save(); } }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const val = field === 'qty' ? qty : field === 'price' ? price : disc;
-  const set = field === 'qty' ? setQty : field === 'price' ? setPrice : setDisc;
+  const val = field === 'qty' ? qty : field === 'amount' ? amount : field === 'price' ? price : disc;
+  const set = field === 'qty' ? setQty : field === 'amount' ? (v: string) => { setAmount(v); const u = unitForAmount; if (u > 0) setQty(String(Math.round(((Number(v) || 0) / u) * 1000) / 1000)); } : field === 'price' ? setPrice : setDisc;
 
   return (
     <>
@@ -53,10 +56,10 @@ export default function LineEditor({ line, locale, rate, maxDiscountPct, staff, 
         </>}>
         <div className="line-editor">
           <div className="stack">
-            {(['qty', 'price', 'discount'] as Field[]).map(f => (
+            {((weighed ? ['qty', 'amount', 'price', 'discount'] : ['qty', 'price', 'discount']) as Field[]).map(f => (
               <button key={f} type="button" className={`field ${field === f ? 'active' : ''}`} onClick={() => setField(f)}>
-                <span className="muted">{pt(f === 'qty' ? 'qty' : f === 'price' ? 'price' : 'lineDiscount', locale)}{f === 'price' ? ` (${line.price_currency === 'usd' ? '$' : 'ل.ل.'})` : f === 'discount' ? ' ($)' : line.unit ? ` (${line.unit})` : ''}</span>
-                <strong>{f === 'qty' ? qty || '0' : f === 'price' ? price || '0' : disc || '0'}</strong>
+                <span className="muted">{pt(f === 'qty' ? 'qty' : f === 'amount' ? 'byAmount' : f === 'price' ? 'price' : 'lineDiscount', locale)}{f === 'price' ? ` (${line.price_currency === 'usd' ? '$' : 'ل.ل.'})` : f === 'discount' || f === 'amount' ? ' ($)' : line.unit ? ` (${line.unit})` : ''}</span>
+                <strong>{f === 'qty' ? qty || '0' : f === 'amount' ? amount || '0' : f === 'price' ? price || '0' : disc || '0'}</strong>
               </button>
             ))}
             <label className="label">{pt('note', locale)}</label>

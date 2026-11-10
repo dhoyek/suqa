@@ -62,7 +62,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
           <button className="btn" onClick={sendWa} disabled={!phone.trim() || waState === 'sending'}>{waState === 'sent' ? '✓ ' + pt('sent', locale) : '💬 ' + pt('sendWhatsApp', locale)}</button>
         </div>
         {waState === 'error' && <p className="bad">WhatsApp: error</p>}
-        <p className="muted" style={{ fontSize: 12 }}>{usdToLbp(order.total_cents, rate) === order.total_lbp ? '' : ''}{pt('shortcuts', locale)}</p>
+        <p className="muted" style={{ fontSize: 12 }}>{usdToLbp(order.total_cents, rate) === order.total_lbp ? '' : ''}{pt('shortcutsLine', locale)}</p>
       </div>
       {showQr && <Modal open onClose={() => setShowQr(false)} title={pt('receipt', locale)}>
         <div style={{ textAlign: 'center' }}>{qr ? <img src={qr} alt="QR" width={280} height={280} /> : <p className="muted">…</p>}<p className="muted">{pt('qrHint', locale)}</p><p style={{ fontSize: 12, direction: 'ltr' }}>{url}</p></div>

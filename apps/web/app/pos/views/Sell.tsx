@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
+import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
@@ -19,7 +19,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
+type Dialog = null | { k: 'help' } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
@@ -57,19 +57,36 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const feeCents = isOrder && draft.fulfillment === 'delivery' ? fee : 0;
   const grand = totals.total_cents + feeCents;
   const [pop, setPop] = useState<Map<string, number>>(new Map());
-  useEffect(() => { boot.db.orderLines.toArray().then(ls => { const m = new Map<string, number>(); for (const l of ls) if (l.product_id && !l.voided) m.set(l.product_id, (m.get(l.product_id) ?? 0) + 1); setPop(m); }); }, [boot, tick]);
+  const [pop30, setPop30] = useState<Map<string, number>>(new Map());
+  useEffect(() => { void (async () => {
+    const since = new Date(Date.now() - 30 * 86400e3).toISOString();
+    const recent = new Set((await boot.db.orders.toArray()).filter(o => o.placed_at >= since && o.status !== 'cancelled' && o.status !== 'rejected').map(o => o.id));
+    const m = new Map<string, number>(), m30 = new Map<string, number>();
+    for (const l of await boot.db.orderLines.toArray()) { if (!l.product_id || l.voided) continue; m.set(l.product_id, (m.get(l.product_id) ?? 0) + 1); if (recent.has(l.order_id)) m30.set(l.product_id, (m30.get(l.product_id) ?? 0) + 1); }
+    setPop(m); setPop30(m30);
+  })(); }, [boot, tick]);
+  // ⭐ favourites: the 12 most-sold items of the last 30 days, shown while browsing the whole catalog
+  const favs = useMemo(() => (q.trim() || cats.size ? [] : [...pop30.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => index.byId.get(id)).filter((p): p is Product => !!p && p.is_active).slice(0, 12)), [pop30, index, q, cats, tick]);
+  // open debt of the customer on the cart (shown next to 👤 so the cashier knows before "pay")
+  const [debt, setDebt] = useState(0);
+  useEffect(() => { if (!draft.customer_phone) { setDebt(0); return; } let on = true; debtLines(boot.db, { openOnly: true, phones: [draft.customer_phone] }).then(ls => { if (on) setDebt(ls.reduce((s, l) => s + l.outstanding_cents, 0)); }); return () => { on = false; }; }, [draft.customer_phone, boot.db, tick]);
+  const [noteFor, setNoteFor] = useState<string | null>(null);        // cart line whose note input is open
   // search first: typing searches everything; browsing shows the most-sold items of the (optional) category first
   const results = useMemo(() => (q.trim() ? index.search(q, 60, cats) : index.byCategory(cats, 400).sort((a, b) => (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0)).slice(0, 60)), [q, cats, index, tick, pop]);
   const catList = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
-  const add = useCallback((p: Product, quantity = 1) => {
+  const add = useCallback((p: Product, quantity = 1, opts: { weigh?: boolean } = {}) => {
     if (p.track_stock) {
       const avail = num(p.on_hand) - num(p.reserved);
       const inCart = draft.lines.filter(l => l.product_id === p.id && !l.voided).reduce((s, l) => s + l.quantity, 0);
       if (avail - inCart - quantity < 0) { if (!shop.allow_negative_stock) { flash(pt('outOfStock', locale)); return; } flash(`${pt('outOfStock', locale)} (${avail})`); }
       else if (avail - inCart - quantity <= num(p.min_stock)) flash(`${pt('lowStock', locale)}: ${avail - inCart - quantity} ${pt('available', locale)}`);
+    }
+    if (opts.weigh && p.decimal_qty) {                                  // kg/g item tapped on the grid → ask for the weight (or the amount) right away
+      const line = lineFromProduct(p, quantity);
+      setDraft(d => ({ ...d, lines: [...d.lines, line] })); setQ(''); setDialog({ k: 'line', id: line.id, field: 'qty' }); return;
     }
     setDraft(d => addToDraft(d, p, quantity)); setQ('');
   }, [draft.lines, shop.allow_negative_stock, locale]);
@@ -120,6 +137,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     F8: () => { if (live.length) setDialog({ k: 'pay' }); },
     F9: () => { if (live.length) setDialog({ k: 'park' }); },
     'ctrl+Delete': () => { if (live.length) setDialog({ k: 'cancel' }); },
+    Escape: () => { if (dialog) setDialog(null); else if (live.length) setDialog({ k: 'cancel' }); },
+    F1: () => setDialog(d => (d?.k === 'help' ? null : { k: 'help' })),
   }, !receipt);
 
   if (receipt) return <Receipt result={receipt} shop={shop} locale={locale} cashier={staff.display_name || staff.full_name || ''} serverNumber={serverNo} onNew={startNew} />;
@@ -138,18 +157,23 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (results.length === 1 ? results[0] : null); if (p) add(p); } }} />
           <button className="btn big" style={{ width: 'auto' }} title={pt('cameraScan', locale)} onClick={() => setDialog({ k: 'camera' })}>📷</button>
           <button className="btn big" style={{ width: 'auto' }} title={pt('openItem', locale)} onClick={() => setDialog({ k: 'open' })}>＋</button>
+          {typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches && <button className="btn big" style={{ width: 'auto' }} title={pt('shortcuts', locale)} onClick={() => setDialog({ k: 'help' })}>?</button>}
           <CategoryFilter cats={catList} selected={cats} onChange={setCats} locale={locale} big />
         </div>
         <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />
-        {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p)}>{b.label || text(p.name, locale)}</button> : null)}</div>}
+        {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p, 1, { weigh: true })}>{b.label || text(p.name, locale)}</button> : null)}</div>}
+        {!!favs.length && <div className="quick-row favs"><span className="muted" style={{ fontSize: 12, alignSelf: 'center', whiteSpace: 'nowrap' }}>⭐ {pt('favourites', locale)}</span>{favs.map(p => <button key={p.id} className="quick fav" onClick={() => add(p, 1, { weigh: true })}>{text(p.name, locale)}</button>)}</div>}
         <div className="grid-items">
           {results.map(p => {
             const avail = num(p.on_hand) - num(p.reserved);
+            const stock = !p.track_stock ? null : avail < 0 ? 'neg' : avail <= 0 ? 'out' : avail <= num(p.min_stock) ? 'low' : 'ok';
             return (
-              <button key={p.id} className="item-tile" onClick={() => add(p)}>
+              <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''}`} onClick={() => add(p, 1, { weigh: true })}>
                 <div className="item-name">{text(p.name, locale)}</div>
-                <div className="item-price">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}</div>
-                {p.track_stock && <div className={`muted ${avail <= num(p.min_stock) ? 'bad' : ''}`} style={{ fontSize: 12 }}>{avail} {pt('available', locale)}</div>}
+                <div className="row spread" style={{ alignItems: 'center', marginTop: 'auto' }}>
+                  <div className="item-price">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}{p.decimal_qty && p.unit ? <span className="muted" style={{ fontWeight: 400 }}> /{p.unit}</span> : ''}</div>
+                  {stock && <span className={`stock ${stock}`} title={`${avail} ${pt('available', locale)}`}>{stock === 'neg' ? '⚠' : ''}{avail}</span>}
+                </div>
               </button>
             );
           })}
@@ -162,37 +186,50 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
             {!!parked.length && <button className="btn" onClick={() => setDialog({ k: 'park' })}>⏸ {parked.length}</button>}
-            <button className={`btn ${isOrder ? 'primary' : 'icon'}`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>{isOrder ? `${pt(draft.channel as 'whatsapp', locale)} · ${draft.customer_name || draft.customer_phone || '👤'}` : draft.customer_phone ? '👤✓' : '👤'}</button>
+            <button className={`btn ${isOrder ? 'primary' : draft.customer_phone ? '' : 'icon'}`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>
+              {isOrder ? `${pt(draft.channel as 'whatsapp', locale)} · ${draft.customer_name || draft.customer_phone || '👤'}` : draft.customer_phone ? `👤 ${draft.customer_name || draft.customer_phone}` : '👤'}
+              {debt > 0 && <span className="pill bad" style={{ marginInlineStart: 6, padding: '1px 7px', fontSize: 12 }}>{pt('debtShort', locale)} {fmtUsd(debt)}</span>}
+            </button>
           </span>
         </div>
         <div className="cart-lines">
           {!live.length && <p className="muted" style={{ padding: 20, textAlign: 'center' }}>{pt('emptyCart', locale)}</p>}
-          {live.map(l => (
-            <div key={l.id} className="cart-line" onClick={() => setDialog({ k: 'line', id: l.id })}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="cart-name">{text(l.name, locale)}{l.notes ? <span className="muted"> · {l.notes}</span> : ''}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{l.quantity}{l.unit ? ` ${l.unit}` : ''} × {l.price_currency === 'usd' ? fmtUsd(l.unit_price_cents) : fmtLbp(l.unit_price_lbp, locale)}{l.discount_cents ? ` − ${fmtUsd(l.discount_cents)}` : ''}</div>
+          {live.map(l => {
+            const step = l.decimal_qty ? 0.1 : 1, min = l.decimal_qty ? 0.01 : 1;
+            const lineUsd = Math.max(0, (l.price_currency === 'usd' ? Math.round(l.unit_price_cents * l.quantity) : Math.round((Math.round(l.unit_price_lbp * l.quantity) * 100) / rate)) - l.discount_cents);
+            return (
+            <div key={l.id} className={`cart-line ${l.notes ? 'noted' : ''}`} onClick={() => setDialog({ k: 'line', id: l.id })}>
+              <div className="cart-line-top">
+                <div className="cart-name">{text(l.name, locale)}</div>
+                <strong className="num">{fmtUsd(lineUsd)}</strong>
               </div>
-              <div className="qty-btns" onClick={e => e.stopPropagation()}>
-                <button onClick={() => updateLine({ ...l, quantity: Math.max(l.decimal_qty ? 0.001 : 1, l.quantity - 1) })}>−</button>
-                <span>{l.quantity}</span>
-                <button onClick={() => updateLine({ ...l, quantity: l.quantity + 1 })}>+</button>
-                <button className="rm" title={pt('voidLine', locale)} onClick={() => updateLine({ ...l, voided: true })}>✕</button>
+              <div className="cart-line-bottom" onClick={e => e.stopPropagation()}>
+                <span className="muted num" style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.price_currency === 'usd' ? fmtUsd(l.unit_price_cents) : fmtLbp(l.unit_price_lbp, locale)}{l.unit ? ` /${l.unit}` : ''}{l.discount_cents ? ` − ${fmtUsd(l.discount_cents)}` : ''}</span>
+                <div className="qty-btns">
+                  <button onClick={() => updateLine({ ...l, quantity: Math.max(min, Math.round((l.quantity - step) * 1000) / 1000) })}>−</button>
+                  <span onClick={() => setDialog({ k: 'line', id: l.id, field: 'qty' })}>{l.quantity}{l.unit ? <small className="muted"> {l.unit}</small> : ''}</span>
+                  <button onClick={() => updateLine({ ...l, quantity: Math.round((l.quantity + step) * 1000) / 1000 })}>+</button>
+                  <button className={l.notes ? 'noted' : ''} title={pt('note', locale)} onClick={() => setNoteFor(noteFor === l.id ? null : l.id)}>✎</button>
+                  <button className="rm" title={pt('voidLine', locale)} onClick={() => updateLine({ ...l, voided: true })}>✕</button>
+                </div>
               </div>
-              <strong className="num">{fmtUsd(Math.max(0, (l.price_currency === 'usd' ? Math.round(l.unit_price_cents * l.quantity) : Math.round((Math.round(l.unit_price_lbp * l.quantity) * 100) / rate)) - l.discount_cents))}</strong>
-            </div>
-          ))}
+              {(noteFor === l.id || (l.notes && noteFor !== l.id)) && (noteFor === l.id
+                ? <input className="input cart-note" autoFocus placeholder={pt('lineNoteHint', locale)} value={l.notes ?? ''} onClick={e => e.stopPropagation()} onChange={e => updateLine({ ...l, notes: e.target.value || null })} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.stopPropagation(); setNoteFor(null); } }} onBlur={() => setNoteFor(null)} />
+                : <div className="cart-note-text" onClick={e => { e.stopPropagation(); setNoteFor(l.id); }}>📝 {l.notes}</div>)}
+            </div>);
+          })}
         </div>
         <div className="cart-totals">
+          {(totals.discount_cents > 0 || feeCents > 0) && <div className="muted"><span>{pt('subtotal', locale)}</span><span>{fmtUsd(totals.subtotal_cents)}</span></div>}
           {totals.discount_cents > 0 && <div><span>{pt('discount', locale)}{draft.discount_reason ? ` · ${draft.discount_reason}` : ''}</span><span>−{fmtUsd(totals.discount_cents)}</span></div>}
           {feeCents > 0 && <div><span>{pt('deliveryFee', locale)}</span><span>{fmtUsd(feeCents)}</span></div>}
           <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(grand)}</span></div>
           <div className="big lbp"><span></span><span>{fmtLbp(Math.round((grand * rate) / 100 / lbpStep) * lbpStep, locale)}</span></div>
-          <div className="muted" style={{ fontSize: 11 }}>{rate.toLocaleString('en-US')} / $1</div>
+          <div className="muted num" style={{ fontSize: 11 }}><span>{pt('rate', locale)}</span><span>$1 = {rate.toLocaleString('en-US')} ل.ل.</span></div>
         </div>
         <div className="cart-actions">
           <button className="btn" disabled={!live.length} onClick={() => setDialog({ k: 'discount' })}>{pt('discount', locale)} <kbd>F6</kbd></button>
-          <button className="btn" disabled={!live.length} onClick={() => setDialog({ k: 'park' })}>{pt('park', locale)} <kbd>F9</kbd></button>
+          <button className="btn" disabled={!live.length && !parked.length} onClick={() => setDialog({ k: 'park' })}>{pt('park', locale)}{!!parked.length && <span className="badge">{parked.length}</span>} <kbd>F9</kbd></button>
           <button className="btn danger" disabled={!live.length} onClick={() => setDialog({ k: 'cancel' })}>✕</button>
           {isOrder && <button className="btn primary pay" disabled={!live.length} onClick={saveToOrders}>📥 {pt('saveToOrders', locale)} · {fmtUsd(grand)} <span className="muted" style={{ fontSize: 11 }}>({pt('payAtHandover', locale)})</span></button>}
           <button className={`btn ${isOrder ? '' : 'primary'} pay`} disabled={!live.length} onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)} {fmtUsd(grand)} <kbd>F8</kbd></button>
@@ -206,6 +243,11 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
       {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'help' && <Modal open onClose={() => setDialog(null)} title={`⌨ ${pt('shortcuts', locale)}`}>
+        <table className="table"><tbody>
+          {([['F1', 'shortcuts'], ['F2', 'searchItems'], ['F4', 'qty'], ['F6', 'discount'], ['F8', 'pay'], ['F9', 'park'], ['Esc', 'cancelSale'], ['Ctrl+Del', 'cancelSale'], ['Enter', 'enterAdds']] as const).map(([k, t]) => <tr key={k}><td><kbd className="kbd">{k}</kbd></td><td>{pt(t, locale)}</td></tr>)}
+        </tbody></table>
+      </Modal>}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}

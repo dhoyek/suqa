@@ -20,6 +20,8 @@ export type OrderEvent = {
 const addr = (a: Record<string, unknown>) => [a.label, a.line1, a.line2, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join(', ');
 const mapUrl = (a: Record<string, unknown>) => { if (a?.map_url) return String(a.map_url); const p = (a?.lat != null && a?.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a?.location as string | undefined); return p ? `https://maps.google.com/?q=${p.lat},${p.lng}` : ''; };
 const waMe = (phone: string) => `https://wa.me/${String(phone).replace(/\D/g, '')}`;
+/** Phone as one unbroken +digits token: a spaced number ("+961 76 302 456") gets its groups reordered inside Arabic text. */
+const tel = (phone: string | null | undefined) => { const d = String(phone ?? '').replace(/\D/g, ''); return d ? `+${d.replace(/^00/, '')}` : ''; };
 const lines = (e: OrderEvent, L: Locale) => e.items.map(i => `• ${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}${i.notes ? ` (${i.notes})` : ''}`).join('\n');
 const money = (e: OrderEvent, usd: number) => formatMoney(Number(usd), Number(e.order.fx_lbp_rate), e.tenant?.display_currency ?? 'both', e.tenant?.default_locale ?? 'en');
 
@@ -38,7 +40,7 @@ export function shopNewOrder(e: OrderEvent, origin: string): string {
     Number(o.delivery_fee_usd) > 0 ? `${ar ? 'التوصيل' : 'Delivery'}: ${money(e, o.delivery_fee_usd)}` : null,
     `*${ar ? 'الإجمالي' : 'Total'}: ${money(e, o.total_usd)}*`,
     '',
-    `${ar ? 'العميل' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    `${ar ? 'العميل' : 'Customer'}: ${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
     o.fulfillment === 'pickup' ? null : `${ar ? 'العنوان' : 'Address'}: ${[addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ') || '-'}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
     '',
@@ -68,7 +70,7 @@ export function customerStatus(e: OrderEvent, origin: string): string | null {
     ready:            pickup
       ? (ar ? `🛍️ طلبك ${o.number} جاهز للاستلام من ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.` : `🛍️ Your order ${o.number} is ready for pickup at ${shop}${shopWhere ? ` — ${shopWhere}` : ''}.`)
       : (ar ? `📦 طلبك ${o.number} جاهز وسينطلق إليك قريباً.` : `📦 Your order ${o.number} is packed and leaving shortly.`),
-    out_for_delivery: e.driver ? (ar ? `🛵 طلبك ${o.number} في الطريق مع ${e.driver.name} (${e.driver.phone}).` : `🛵 Your order ${o.number} is on its way with ${e.driver.name} (${e.driver.phone}).`)
+    out_for_delivery: e.driver ? (ar ? `🛵 طلبك ${o.number} في الطريق مع ${e.driver.name} (${tel(e.driver.phone)}).` : `🛵 Your order ${o.number} is on its way with ${e.driver.name} (${tel(e.driver.phone)}).`)
                                : (ar ? `🛵 طلبك ${o.number} في الطريق إليك.` : `🛵 Your order ${o.number} is on its way.`),
     delivered:        ar ? `🎉 تم تسليم طلبك ${o.number} — ${money(e, o.total_usd)}. شكراً!` : `🎉 Order ${o.number} delivered — ${money(e, o.total_usd)}. Thank you!`,
     rejected:         ar ? `❌ عذراً، لم يتمكن ${shop} من قبول طلبك ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.` : `❌ Sorry, ${shop} could not accept your order ${o.number}${o.reject_reason ? `: ${o.reject_reason}` : ''}.`,
@@ -88,7 +90,7 @@ export function courierReady(e: OrderEvent, origin: string): string {
   return [
     ar ? `📦 *طلب جاهز للتوصيل ${o.number}*` : `📦 *Order ${o.number} ready for delivery*`,
     `${ar ? 'من' : 'From'}: ${shop}${shopWhere ? ` — ${shopWhere}` : ''}`,
-    `${ar ? 'إلى' : 'To'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    `${ar ? 'إلى' : 'To'}: ${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
     dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,
     `${ar ? 'الطلب' : 'Items'}: ${itemsOneLine(e, L)} — ${ar ? 'المجموع' : 'total'} ${money(e, o.total_usd)}${Number(o.delivery_fee_usd) > 0 ? ` (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})` : ''}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
@@ -105,7 +107,7 @@ const itemsOneLine = (e: OrderEvent, L: Locale) => e.items.map(i => `${i.quantit
 
 export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
-  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/pos#orders`)] };
+  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/pos#orders`)] };
 }
 export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const text = customerStatus(e, origin); if (!text) return null;
@@ -135,7 +137,7 @@ export function customerEditedTpl(e: OrderEvent, origin: string): Tpl {
 export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;
   const shopWhere = [e.shop?.address, e.shop?.location ? mapUrl({ location: e.shop.location }) : ''].filter(Boolean).join(' ');
-  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(`${e.shop ? t(e.shop.name, L) : ''} ${shopWhere}`), P(`${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)} — ${[a.area ?? a.city ?? addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ')} — ${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`), P(`${origin}/courier`)] };
+  return { name: 'order_ready_courier', lang: 'ar', params: [P(o.number), P(`${e.shop ? t(e.shop.name, L) : ''} ${shopWhere}`), P(`${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)} — ${[a.area ?? a.city ?? addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ')} — ${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`), P(`${origin}/courier`)] };
 }
 export function orderMessageTpl(orderNumber: string, from: string, text: string): Tpl {
   return { name: 'order_message', lang: 'ar', params: [P(orderNumber), P(from), P(text)] };
@@ -147,11 +149,11 @@ export function driverDispatch(e: OrderEvent, origin: string): string {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
   const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ');
   const cod = o.total_usd; // POS marks COD orders unpaid until handover; the amount due is the order total
-  const shopPhone = e.shop?.whatsapp || e.shop?.phone || '';
+  const shopPhone = tel(e.shop?.whatsapp || e.shop?.phone);
   return [
     ar ? `🛵 *طلب للتوصيل ${o.number}* — ${shop}` : `🛵 *Delivery ${o.number}* — ${shop}`,
     shopPhone ? `${ar ? 'المحل' : 'Shop'}: ${shopPhone} ${waMe(shopPhone)}` : null,
-    `${ar ? 'الزبون' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
+    `${ar ? 'الزبون' : 'Customer'}: ${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
     dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,
     `${ar ? 'الطلب' : 'Items'}: ${itemsOneLine(e, L)}`,
     `${ar ? 'قيمة الطلب' : 'Order'}: ${money(e, o.subtotal_usd)} · ${ar ? 'التوصيل' : 'Delivery'}: ${money(e, o.delivery_fee_usd)}`,
@@ -163,7 +165,7 @@ export function driverDispatch(e: OrderEvent, origin: string): string {
 export function driverDispatchTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order;
   const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ');
-  const shopPhone = e.shop?.whatsapp || e.shop?.phone || '';
-  return { name: 'driver_dispatch', lang: 'ar', params: [P(`${e.shop ? t(e.shop.name, L) : e.tenant?.brand_name}${shopPhone ? ` ${shopPhone}` : ''}`), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)} (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})`)], button: `d-${o.id}`,
-    fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/d/${o.id}`)] } };
+  const shopPhone = tel(e.shop?.whatsapp || e.shop?.phone);
+  return { name: 'driver_dispatch', lang: 'ar', params: [P(`${e.shop ? t(e.shop.name, L) : e.tenant?.brand_name}${shopPhone ? ` ${shopPhone}` : ''}`), P(o.number), P(`${o.customer_name || ''} ${tel(o.customer_phone)}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)} (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})`)], button: `d-${o.id}`,
+    fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${tel(o.customer_phone)} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/d/${o.id}`)] } };
 }

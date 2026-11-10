@@ -22,7 +22,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   return (
     <main className="container" style={{ maxWidth: 420, padding: 16 }} dir={ar ? 'rtl' : 'ltr'}>
       <div className="card" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14 }}>
-        <div style={{ textAlign: 'center' }}><strong style={{ fontSize: 18 }}>{tx(shop?.name)}</strong>{shop?.phone && <div className="muted">{shop.phone}</div>}</div>
+        <div style={{ textAlign: 'center' }}><strong style={{ fontSize: 18 }}>{tx(shop?.name)}</strong>{shop?.phone && <div className="muted" dir="ltr">{shop.phone}</div>}</div>
         <div className="row spread muted" style={{ margin: '10px 0', fontSize: 12 }}><span>{ar ? 'رقم' : 'No.'} {o.number ?? o.local_number}</span><span>{new Date(o.placed_at).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}</span></div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}><tbody>
           {items.map((i, k) => <tr key={k}><td style={{ padding: '4px 0' }}>{tx(i.name)}{i.notes && <div style={{ fontSize: 12, color: '#92400e' }}>📝 {i.notes}</div>}<div className="muted" style={{ fontSize: 12 }}>{Number(i.quantity)}{i.unit ? ` ${i.unit}` : ''} × {i.price_currency === 'usd' ? usd(i.unit_price_cents) : lbp(i.unit_price_lbp, ar)}{i.discount_cents ? ` − ${usd(i.discount_cents)}` : ''}</div></td><td style={{ textAlign: 'end', verticalAlign: 'top' }}>{usd(i.line_total_cents)}</td></tr>)}

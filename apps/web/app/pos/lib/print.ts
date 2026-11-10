@@ -46,7 +46,7 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
   const pays = payments.map(p => `<div class="ft">${esc(pt(p.tender, L))}${p.unpaid_name ? ' · ' + esc(p.unpaid_name) : ''}: ${ltr(p.currency === 'lbp' ? fmtLbp(num(p.amount), L) : fmtUsd(num(p.amount)))}</div>`).join('');
   const change = num(o.change_usd_cents) || num(o.change_lbp) ? `<div class="ft">${esc(pt('change', L))}: ${ltr(num(o.change_usd_cents) ? fmtUsd(num(o.change_usd_cents)) : fmtLbp(num(o.change_lbp), L))}</div>` : '';
   return `<div class="vch">
-    <div class="club">${esc(text(shop.name, L))}</div>${shop.phone ? `<div class="ev">${esc(shop.phone)}</div>` : ''}<hr>
+    <div class="club">${esc(text(shop.name, L))}</div>${shop.phone ? `<div class="ev">${ltr(esc(shop.phone))}</div>` : ''}<hr>
     <div class="no">${esc(no)}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${opts.cashier ? ' · ' + esc(opts.cashier) : ''}</div>
     ${o.customer_name || o.customer_phone ? `<div class="ev">${esc(o.customer_name || '')} ${ltr(esc(o.customer_phone || ''))}</div>` : ''}<hr>
     <table>${rows}</table><hr>

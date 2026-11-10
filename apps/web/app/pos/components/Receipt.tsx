@@ -50,7 +50,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
   return (
     <div className="receipt-wrap">
       <div className={`receipt ${ps.paper === 80 ? 'w80' : 'w58'}`} id="receipt">
-        <div className="r-head"><strong>{text(shop.name, locale)}</strong><div className="muted">{shop.phone ?? ''}</div></div>
+        <div className="r-head"><strong>{text(shop.name, locale)}</strong><div className="muted" dir="ltr">{shop.phone ?? ''}</div></div>
         <div className="r-meta">
           <span>{pt('orderNo', locale)} {serverNumber ?? order.number ?? order.local_number}{serverNumber || order.number ? ` (${order.local_number})` : ''}</span>
           <span>{new Date(order.placed_at).toLocaleString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}</span>

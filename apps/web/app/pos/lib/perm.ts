@@ -18,8 +18,9 @@ const VIEWS_BY_ROLE: Record<PosRole, View[]> = {
 };
 export const viewsFor = (role: PosRole): View[] => VIEWS_BY_ROLE[role];
 
-export type Cap = 'items.edit' | 'items.cost' | 'items.tools' | 'customers.manage' | 'reports.profit' | 'shifts.all' | 'settings.shop' | 'settings.devices' | 'settings.ops' | 'newItemOnScan';
+export type Cap = 'items.edit' | 'items.cost' | 'items.tools' | 'customers.manage' | 'reports.profit' | 'shifts.all' | 'settings.shop' | 'settings.devices' | 'settings.ops' | 'newItemOnScan' | 'signOut';
 const CAPS: Record<Cap, PosRole[]> = {
+  'signOut': ['owner'],                // a cashier only locks the till (🔒); leaving the account is the owner's call
   'items.edit': ['owner', 'stock'],
   'items.cost': ['owner'],
   'items.tools': ['owner'],            // quick buttons, bulk price change, import

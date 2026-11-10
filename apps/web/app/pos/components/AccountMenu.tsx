@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import Modal from './Modal';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
+import { can, roleOf } from '../lib/perm';
 
 type Staff = { display_name?: string | null; full_name?: string | null; role?: string };
 
@@ -26,7 +27,7 @@ export default function AccountMenu({ sb, boot, staff, locale, setLocale, onLock
     <>
       <button className="btn icon avatar-btn" title={pt('account', locale)} onClick={() => setOpen(true)}><span className="avatar-sm">{initial}</span><span className="avatar-name">{name}</span></button>
       {open && <Modal open onClose={() => setOpen(false)} title={`👤 ${name}`}
-        footer={<><form action="/auth/signout" method="post"><button className="btn ghost" type="submit">⎋ {pt('signOut', locale)}</button></form><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => { setOpen(false); onLock(); }}>🔒 {pt('lock', locale)}</button></>}>
+        footer={<>{can(roleOf(staff), 'signOut') && <form action="/auth/signout" method="post"><button className="btn ghost" type="submit">⎋ {pt('signOut', locale)}</button></form>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={() => { setOpen(false); onLock(); }}>🔒 {pt('lock', locale)}</button></>}>
         <div className="stack" style={{ gap: 10 }}>
           <div className="muted" style={{ fontSize: 13 }}>
             {pt(`role_${boot.role}` as Parameters<typeof pt>[0], locale)}

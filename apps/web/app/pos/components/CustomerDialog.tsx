@@ -71,9 +71,21 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const address: CustomerAddress = useMemo(() => ({ ...(line1.trim() ? { line1: line1.trim() } : {}), ...(map.trim() ? { map_url: map.trim() } : {}), ...(coords ? { lat: coords.lat, lng: coords.lng } : {}) }), [line1, map, coords]);
   const ok = !isOrder || key.length >= 6;
   const book = useMemo(() => addressBook(picked), [picked]);
-  const selected = book.find(a => a.id === addrSel) ?? null;
-  const addrDirty = !!selected && Object.keys(address).length > 0 && !(selected.line1 === (address.line1 ?? selected.line1) && (selected.lat == null || address.lat == null || sameAddress(selected, address)));
-  const useAddr = (a: SavedAddress) => { setAddrSel(a.id); setLine1(a.line1 ?? ''); setMap(a.map_url ?? ''); setCoords(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null); };
+  // the customer's own online-account addresses (read-only suggestions), minus the ones the shop already has
+  const [acct, setAcct] = useState<SavedAddress[]>([]);
+  useEffect(() => {
+    if (!online || !isOrder || ful !== 'delivery' || key.length < 6) { setAcct([]); return; }
+    let on = true;
+    const t = setTimeout(() => { sb.rpc('pos_account_addresses', { p_shop: boot.shop.id, p_phone: phone.trim() }).then(({ data }) => { if (on && Array.isArray(data)) setAcct(data as SavedAddress[]); }); }, 350);
+    return () => { on = false; clearTimeout(t); };
+  }, [online, isOrder, ful, key, sb, boot.shop.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const acctNew = useMemo(() => acct.filter(a => !book.some(b => sameAddress(a, b))), [acct, book]);
+  const isAcct = (id: string) => id.startsWith('acct-');
+  const selected = book.find(a => a.id === addrSel) ?? acctNew.find(a => a.id === addrSel) ?? null;
+  // nothing saved at the shop yet and nothing typed → start from the account's default / latest address
+  useEffect(() => { if (!book.length && acctNew.length && !line1 && !coords && addrSel === 'new') useAddr(acctNew[0]); }, [acctNew]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addrDirty = !!selected && !isAcct(selected.id) && Object.keys(address).length > 0 && !(selected.line1 === (address.line1 ?? selected.line1) && (selected.lat == null || address.lat == null || sameAddress(selected, address)));
+  const useAddr = (a: SavedAddress) => { setAddrSel(a.id); setLine1(a.line1 ?? ''); setMap(a.map_url ?? (a.lat != null && a.lng != null ? mapUrlFor(a.lat, a.lng) : '')); setCoords(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null); };
   const neededIso = needed ? new Date(needed).toISOString() : null;
   const bump = (min: number) => { const d = new Date(Date.now() + min * 60000); d.setSeconds(0, 0); setNeeded(toLocalInput(d.toISOString())); };
   const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); setNeeded(toLocalInput(d.toISOString())); };
@@ -142,10 +154,12 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
           <div className="stack">
             {isOrder && ful === 'delivery' && <>
               <label className="label">{pt('address', locale)}</label>
-              {book.length > 0 && <select className="input" value={selected ? selected.id : 'new'} onChange={e => { const a = book.find(x => x.id === e.target.value); if (a) useAddr(a); else { setAddrSel('new'); setLine1(''); setMap(''); setCoords(null); } }}>
-                {book.map(a => <option key={a.id} value={a.id}>📍 {a.label ? `${a.label} · ` : ''}{a.line1 || (a.lat != null ? `${a.lat.toFixed(4)}, ${a.lng?.toFixed(4)}` : '—')}</option>)}
+              {(book.length > 0 || acctNew.length > 0) && <select className="input" value={selected ? selected.id : 'new'} onChange={e => { const a = book.find(x => x.id === e.target.value) ?? acctNew.find(x => x.id === e.target.value); if (a) useAddr(a); else { setAddrSel('new'); setLine1(''); setMap(''); setCoords(null); } }}>
+                {book.length > 0 && <optgroup label={pt('shopAddresses', locale)}>{book.map(a => <option key={a.id} value={a.id}>📍 {a.label ? `${a.label} · ` : ''}{a.line1 || (a.lat != null ? `${a.lat.toFixed(4)}, ${a.lng?.toFixed(4)}` : '—')}</option>)}</optgroup>}
+                {acctNew.length > 0 && <optgroup label={pt('accountAddresses', locale)}>{acctNew.map(a => <option key={a.id} value={a.id}>👤 {a.label ? `${a.label} · ` : ''}{a.line1 || (a.lat != null ? `${a.lat.toFixed(4)}, ${a.lng?.toFixed(4)}` : '—')}</option>)}</optgroup>}
                 <option value="new">＋ {pt('newAddress', locale)}</option>
               </select>}
+              {selected && isAcct(selected.id) && <small className="muted">👤 {pt('fromAccountHint', locale)}{selected.notes ? ` · 📝 ${selected.notes}` : ''}</small>}
               <input className="input" value={line1} placeholder={pt('addressHint', locale)} onChange={e => setLine1(e.target.value)} />
               {addrDirty && <small className="muted">✎ {pt('addrEdited', locale)}</small>}
               <label className="label">{pt('mapPin', locale)}</label>

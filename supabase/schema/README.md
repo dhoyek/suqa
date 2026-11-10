@@ -51,4 +51,5 @@ source of truth.
 | 47_account_merge_fix.sql | Merge completes (`_account_delete_impl` without the membership check); kept account inherits the missing sign-in method (email identity + password, or phone) so the person can sign in either way; devices re-attributed. |
 | 48_pos_driver_delete.sql | `driver.delete` op (`_pos_driver_delete`: hard delete if never used on an order, else deactivate); `pos_push` re-created. |
 | 49_order_history.sql | `pos_order_history(order)` — read-only: order events + thread notes, POS audit (edits/pay/status/driver), payments, debt settlements, returns, stock moves, WhatsApp messages, customer context. Feeds the POS order detail sheet. |
+| 50_pos_account_addresses.sql | `pos_account_addresses(shop, phone)` — read-only: the registered customer's own saved addresses (matched by phone) as suggestions in the POS customer dialog; the account is never written. |
 | ../seed/batroun.sql | first tenant |

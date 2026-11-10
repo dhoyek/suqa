@@ -382,3 +382,10 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 @media (max-width: 760px) { .cart-line .qty-btns button { min-width: 36px; min-height: 36px; } }
 
 .r-note { font-size: 12px; color: #92400e; background: #fffbeb; border-radius: 4px; padding: 1px 6px; display: inline-block; margin: 2px 0; }
+
+/* receipt page: centred, paper-width preview, unpaid band */
+.receipt-wrap { grid-template-columns: minmax(280px, 420px) 360px; justify-content: center; align-content: start; }
+.receipt.w58 { max-width: 300px; } .receipt.w80 { max-width: 380px; }
+.r-unpaid { margin: 6px 0; padding: 6px 8px; border: 2px dashed #991b1b; color: #991b1b; font-weight: 800; text-align: center; border-radius: 6px; }
+.r-change { font-weight: 700; }
+.receipt-actions kbd { font-size: 10px; opacity: .6; margin-inline-start: 4px; }

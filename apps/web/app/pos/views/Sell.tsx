@@ -32,6 +32,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
+  const [lastSale, setLastSale] = useState<{ r: CommitResult; no: string | null } | null>(null);   // reopen the last receipt (print / QR / WhatsApp / return)
+  const [reopened, setReopened] = useState(false);
   const [serverNo, setServerNo] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [parked, setParked] = useState<Awaited<ReturnType<typeof listParked>>>([]);
@@ -111,7 +113,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const voidLine = (id: string, reason: string) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === id ? { ...x, voided: true, void_reason: reason } : x)) }));
   const live = draft.lines.filter(l => !l.voided);
 
-  const startNew = useCallback(async () => { setReceipt(null); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, []);
+  const startNew = useCallback(async () => { setReceipt(r => { if (r) setLastSale({ r, no: serverNo }); return null; }); setReopened(false); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, [serverNo]);
   const park = async (label: string) => { await saveDraft(boot.db, draft, true, label); setParked(await listParked(boot.db)); await startNew(); };
   const resume = async (id: string) => { const row = parked.find(p => p.id === id); if (!row) return; if (live.length) await saveDraft(boot.db, draft, true); await dropDraft(boot.db, id); setDraft(row.draft); setParked(await listParked(boot.db)); setDialog(null); };
   const cancel = async (reason: string) => { await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
@@ -141,7 +143,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     F1: () => setDialog(d => (d?.k === 'help' ? null : { k: 'help' })),
   }, !receipt);
 
-  if (receipt) return <Receipt result={receipt} shop={shop} locale={locale} cashier={staff.display_name || staff.full_name || ''} serverNumber={serverNo} onNew={startNew} />;
+  if (receipt) return <Receipt result={receipt} shop={shop} locale={locale} cashier={staff.display_name || staff.full_name || ''} serverNumber={serverNo} onNew={startNew} boot={boot} staff={staff} again={reopened} />;
   if (shift === null) return (
     <div className="pos-center" style={{ minHeight: '60dvh' }}><div className="card stack" style={{ textAlign: 'center', maxWidth: 420 }}>
       <h3 style={{ margin: 0 }}>{pt('shiftRequired', locale)}</h3>
@@ -185,6 +187,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <div className="row spread" style={{ alignItems: 'center' }}>
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
+            {lastSale && !live.length && <button className="btn ghost" title={pt('lastSale', locale)} onClick={() => { setReopened(true); setServerNo(lastSale.no); setReceipt(lastSale.r); }}>🧾 {pt('lastSale', locale)}</button>}
             {!!parked.length && <button className="btn" onClick={() => setDialog({ k: 'park' })}>⏸ {parked.length}</button>}
             <button className={`btn ${isOrder ? 'primary' : draft.customer_phone ? '' : 'icon'}`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>
               {isOrder ? `${pt(draft.channel as 'whatsapp', locale)} · ${draft.customer_name || draft.customer_phone || '👤'}` : draft.customer_phone ? `👤 ${draft.customer_name || draft.customer_phone}` : '👤'}

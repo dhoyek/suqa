@@ -133,7 +133,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
         onPick={async d => { await setOrderStatus(boot.db, dialog.o, 'out_for_delivery', { driver_id: d?.id ?? null, courier_name: d?.name ?? null }); boot.engine.poke(); setDialog(null); await reload(); }} />}
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} paidCents={paidCents(dialog.o)} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
         customer={{ name: dialog.o.customer_name, phone: dialog.o.customer_phone }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
         onConfirm={async (pays, changeIn: Currency, extra) => {
@@ -163,32 +163,82 @@ function ReasonDialog({ locale, title, label, onDone, onClose }: { locale: L; ti
   </Modal>;
 }
 
-/** Missing item: remove a line, change its quantity, or add a substitute from the catalog. The customer gets the new list. */
-function EditOrderDialog({ boot, locale, index, order, lines, onDone, onClose }: { boot: Booted; locale: L; index: CatalogIndex; order: Order; lines: OrderLine[]; onDone: () => void; onClose: () => void }) {
-  const [rows, setRows] = useState(() => lines.filter(l => !l.voided).map(l => ({ l, qty: num(l.quantity), voided: false })));
+/** Missing item: remove a line (undoable until save), change its quantity, or add a substitute from the catalog. The customer gets the new list. */
+function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone, onClose }: { boot: Booted; locale: L; index: CatalogIndex; order: Order; lines: OrderLine[]; paidCents: number; onDone: () => void; onClose: () => void }) {
+  const confirm = useConfirm();
+  const locked = order.status === 'delivered' || order.status === 'cancelled' || order.status === 'rejected';
+  const [rows, setRows] = useState(() => lines.filter(l => !l.voided).map(l => ({ l, qty: num(l.quantity), voided: false, dec: !!(l.product_id && index.byId.get(l.product_id)?.decimal_qty) || (num(l.quantity) % 1 !== 0) })));
   const [adds, setAdds] = useState<Array<{ p: Product; qty: number }>>([]);
   const [q, setQ] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
-  const results = q.trim() ? index.search(q, 12) : [];
-  const total = rows.filter(r => !r.voided).reduce((s, r) => s + Math.round(num(r.l.unit_price_cents) * r.qty) - num(r.l.discount_cents), 0) + adds.reduce((s, a) => s + Math.round(num(a.p.price_usd) * 100 * a.qty), 0);
+  const scanned = q.trim().length >= 6 && /^\d+$/.test(q.trim()) ? index.scan(q.trim()) : null;
+  const results = q.trim() ? (scanned ? [scanned, ...index.search(q, 11).filter(p => p.id !== scanned.id)] : index.search(q, 12)) : [];
+  const lineTotal = (r: typeof rows[number]) => Math.round(num(r.l.unit_price_cents) * r.qty) - num(r.l.discount_cents);
+  const oldSubtotal = rows.reduce((s, r) => s + num(r.l.line_total_cents), 0);
+  const subtotal = rows.filter(r => !r.voided).reduce((s, r) => s + lineTotal(r), 0) + adds.reduce((s, a) => s + Math.round(num(a.p.price_usd) * 100 * a.qty), 0);
+  const fee = Math.round(num(order.delivery_fee_usd) * 100); const discount = Math.min(num(order.discount_cents), subtotal);
+  const total = subtotal - discount + fee; const oldTotal = num(order.total_cents);
+  const removed = rows.filter(r => r.voided).length, changed = rows.filter(r => !r.voided && r.qty !== num(r.l.quantity)).length, added = adds.length;
+  const dirty = removed + changed + added > 0;
+  const refund = paidCents - total;                                                  // > 0 → the customer already paid more than the new total
+  const REASONS: Key[] = ['reasonOutOfStock', 'reasonNotToday', 'reasonCustomerAsked', 'reasonMistake'];
+  const stepOf = (dec: boolean) => (dec ? 0.1 : 1);
+  const minOf = (dec: boolean) => (dec ? 0.01 : 1);
+  const setQty = (i: number, v: number, dec: boolean) => setRows(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(dec), Math.round(v * 1000) / 1000) } : y)));
   const save = async () => {
     setBusy(true);
     const edits = [...rows.filter(r => r.voided || r.qty !== num(r.l.quantity)).map(r => (r.voided ? { id: r.l.id, voided: true, void_reason: note } : { id: r.l.id, qty: r.qty })), ...adds.map(a => ({ product: a.p, new_qty: a.qty }))];
     await editOrder(boot.db, order, edits, note.trim() || undefined, order.notify_customer !== false); boot.engine.poke(); setBusy(false); onDone();
   };
+  const close = async () => { if (!dirty || await confirm(pt('discardChanges', locale), { danger: true })) onClose(); };
+  const unitOf = (l: OrderLine) => (l.unit ? ' ' + l.unit : '');
   return (
-    <Modal open onClose={onClose} title={`${pt('editOrder', locale)} · ${order.number ?? order.local_number}`} wide
-      footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><strong>{fmtUsd(total)}</strong><button className="btn primary" disabled={busy} onClick={save}>{pt('save', locale)}</button></>}>
-      <table className="table"><tbody>
-        {rows.map((r, i) => <tr key={r.l.id} style={{ opacity: r.voided ? .45 : 1 }}>
-          <td>{text(r.l.name, locale)}<div className="muted" style={{ fontSize: 12 }}>{fmtUsd(num(r.l.unit_price_cents))}</div></td>
-          <td><div className="qty-btns"><button onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(0.001, y.qty - 1) } : y)))}>−</button><span>{r.qty}</span><button onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, qty: y.qty + 1 } : y)))}>+</button></div></td>
-          <td><button className="btn danger" onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, voided: !y.voided } : y)))}>{r.voided ? '↶' : pt('removeLine', locale)}</button></td>
-        </tr>)}
-        {adds.map((a, i) => <tr key={'a' + i}><td>＋ {text(a.p.name, locale)}</td><td><div className="qty-btns"><button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(1, y.qty - 1) } : y)))}>−</button><span>{a.qty}</span><button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: y.qty + 1 } : y)))}>+</button></div></td><td><button className="btn icon" onClick={() => setAdds(x => x.filter((_, j) => j !== i))}>✕</button></td></tr>)}
-      </tbody></table>
-      <input className="input" placeholder={pt('substitute', locale)} value={q} onChange={e => setQ(e.target.value)} style={{ marginTop: 8 }} />
-      {!!results.length && <ul className="tender-list" style={{ marginTop: 6 }}>{results.map(p => <li key={p.id}><span>{text(p.name, locale)} <span className="muted">{fmtUsd(Math.round(num(p.price_usd) * 100))}</span></span><button className="btn" onClick={() => { setAdds(x => [...x, { p, qty: 1 }]); setQ(''); }}>＋</button></li>)}</ul>}
-      <label className="label" style={{ marginTop: 8 }}>{pt('editNote', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} />
+    <Modal open onClose={close} title={`${pt('editOrder', locale)} · ${order.number ?? order.local_number}`} wide
+      footer={<><button className="btn ghost" onClick={close}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} />
+        <span className="num" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1 }}>
+          {dirty && total !== oldTotal && <small className="muted" style={{ textDecoration: 'line-through' }}>{fmtUsd(oldTotal)}</small>}<strong>{fmtUsd(total)}</strong></span>
+        <button className="btn primary" disabled={busy || !dirty || locked} onClick={save}>{pt('save', locale)}</button></>}>
+      {locked && <div className="pill warn" style={{ marginBottom: 8 }}>{pt('orderLocked', locale)}</div>}
+      <div className="edit-lines">
+        {rows.map((r, i) => <div key={r.l.id} className={`edit-line ${r.voided ? 'voided' : ''}`}>
+          <div className="edit-line-name">
+            <div className={r.voided ? 'strike' : ''}>{text(r.l.name, locale)}</div>
+            <div className="muted num" style={{ fontSize: 12 }}>{fmtUsd(num(r.l.unit_price_cents))}{unitOf(r.l) ? ` /${r.l.unit}` : ''} × {r.qty}{unitOf(r.l)} = <strong>{fmtUsd(lineTotal(r))}</strong>
+              {!r.voided && r.qty !== num(r.l.quantity) && <span style={{ textDecoration: 'line-through', marginInlineStart: 6 }}>{fmtUsd(num(r.l.line_total_cents))}</span>}</div>
+          </div>
+          <div className="qty-btns">
+            <button disabled={r.voided || locked} onClick={() => setQty(i, r.qty - stepOf(r.dec), r.dec)}>−</button>
+            <input className="qty-in num" inputMode="decimal" disabled={r.voided || locked} value={r.qty} onChange={e => { if (e.target.value === '') return; const v = Number(e.target.value); if (!Number.isNaN(v)) setQty(i, r.dec ? v : Math.round(v), r.dec); }} />
+            <button disabled={r.voided || locked} onClick={() => setQty(i, r.qty + stepOf(r.dec), r.dec)}>+</button>
+          </div>
+          <button className={`btn ${r.voided ? '' : 'danger'}`} disabled={locked} onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, voided: !y.voided } : y)))}>{r.voided ? '↶ ' + pt('restoreLine', locale) : pt('removeLine', locale)}</button>
+        </div>)}
+        {adds.map((a, i) => <div key={'a' + i} className="edit-line added">
+          <div className="edit-line-name"><div>＋ {text(a.p.name, locale)}</div><div className="muted num" style={{ fontSize: 12 }}>{fmtUsd(Math.round(num(a.p.price_usd) * 100))} × {a.qty}{a.p.unit ? ' ' + a.p.unit : ''} = <strong>{fmtUsd(Math.round(num(a.p.price_usd) * 100 * a.qty))}</strong></div></div>
+          <div className="qty-btns">
+            <button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), Math.round((y.qty - stepOf(!!a.p.decimal_qty)) * 1000) / 1000) } : y)))}>−</button>
+            <input className="qty-in num" inputMode="decimal" value={a.qty} onChange={e => { if (e.target.value === '') return; const v = Number(e.target.value); if (!Number.isNaN(v)) setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), a.p.decimal_qty ? v : Math.round(v)) } : y))); }} />
+            <button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.round((y.qty + stepOf(!!a.p.decimal_qty)) * 1000) / 1000 } : y)))}>+</button>
+          </div>
+          <button className="btn icon" onClick={() => setAdds(x => x.filter((_, j) => j !== i))}>✕</button>
+        </div>)}
+      </div>
+      {!locked && <>
+        <input className="input" placeholder={pt('substituteHint', locale)} value={q} onChange={e => setQ(e.target.value)} style={{ marginTop: 8 }} />
+        {!!results.length && <ul className="tender-list" style={{ marginTop: 6 }}>{results.map(p => <li key={p.id}><span>{text(p.name, locale)} <span className="muted num">{fmtUsd(Math.round(num(p.price_usd) * 100))}{p.unit ? ` /${p.unit}` : ''}</span>{p.track_stock && num(p.on_hand) <= 0 && <span className="pill warn" style={{ marginInlineStart: 6 }}>{pt('outOfStock', locale)}</span>}</span><button className="btn" onClick={() => { setAdds(x => [...x, { p, qty: 1 }]); setQ(''); }}>＋</button></li>)}</ul>}
+        {q.trim() && !results.length && <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>{pt('noResults', locale)}</div>}
+      </>}
+      {dirty && <div className="edit-summary num">
+        {removed > 0 && <span>🗑 {removed}</span>}{changed > 0 && <span>✎ {changed}</span>}{added > 0 && <span>＋ {added}</span>}
+        <span style={{ flex: 1 }} />
+        <span>{pt('subtotal', locale)}: <s className="muted">{fmtUsd(oldSubtotal)}</s> → <strong>{fmtUsd(subtotal)}</strong></span>
+      </div>}
+      {dirty && refund > 0 && <div className="pill warn" style={{ marginTop: 6 }}>💵 {pt('refundDue', locale)} {fmtUsd(refund)}</div>}
+      {dirty && paidCents > 0 && refund < 0 && <div className="pill" style={{ marginTop: 6 }}>💵 {pt('extraDue', locale)} {fmtUsd(-refund)}</div>}
+      {!locked && <>
+        <label className="label" style={{ marginTop: 8 }}>{pt('editNote', locale)}</label>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>{REASONS.map(k => <button key={k} className={`btn ${note === pt(k, locale) ? 'primary' : 'ghost'}`} style={{ minHeight: 32, padding: '4px 10px', fontSize: 13 }} onClick={() => setNote(note === pt(k, locale) ? '' : pt(k, locale))}>{pt(k, locale)}</button>)}</div>
+        <input className="input" value={note} onChange={e => setNote(e.target.value)} />
+      </>}
     </Modal>
   );
 }

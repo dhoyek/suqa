@@ -5,8 +5,16 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
 
 type Zone = { id: string; name: LocalizedText; fee_usd: number; eta_minutes: number | null; is_active: boolean; sort_order: number; geojson: any };
-type Labels = Record<'zones' | 'newZone' | 'zoneName' | 'nameAr' | 'nameEn' | 'deliveryFee' | 'etaMinutes' | 'active' | 'drawZone' | 'finish' | 'clearDrawing' | 'save' | 'saved' | 'cancel' | 'remove', string>;
+type Labels = Record<'zones' | 'newZone' | 'zoneName' | 'nameAr' | 'nameEn' | 'deliveryFee' | 'etaMinutes' | 'active' | 'drawZone' | 'finish' | 'clearDrawing' | 'save' | 'saved' | 'cancel' | 'remove' | 'vertexHint' | 'midpointHint' | 'editHint', string>;
 declare global { interface Window { L?: any } }
+/** First outer ring of a (Multi)Polygon GeoJSON as [lat, lng] pairs (closing point dropped). */
+function ringOf(g: any): [number, number][] {
+  const geom = g?.type === 'Feature' ? g.geometry : g?.type === 'FeatureCollection' ? g.features?.[0]?.geometry : g;
+  const ring: number[][] = geom?.type === 'Polygon' ? geom.coordinates?.[0] : geom?.type === 'MultiPolygon' ? geom.coordinates?.[0]?.[0] : [];
+  const pts = (ring ?? []).map(([lng, lat]) => [lat, lng] as [number, number]);
+  if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+  return pts;
+}
 
 function loadLeaflet(): Promise<any> {
   if (window.L) return Promise.resolve(window.L);
@@ -37,6 +45,10 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
     loadLeaflet().then(Lf => {
       if (dead || !el.current || map.current) return;
       map.current = Lf.map(el.current).setView([center.lat, center.lng], 14);
+      // open on the areas that exist; a new association starts on its own centre
+      const pts: [number, number][] = [];
+      initial.forEach(z => { try { Lf.geoJSON(z.geojson).getLayers().forEach((l: any) => l.getLatLngs?.().flat(2).forEach((ll: any) => pts.push([ll.lat, ll.lng]))); } catch { /* ignore */ } });
+      if (pts.length >= 3) map.current.fitBounds(Lf.latLngBounds(pts).pad(0.25));
       Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current);
       layers.current = Lf.layerGroup().addTo(map.current);
       drawLayer.current = Lf.layerGroup().addTo(map.current);
@@ -58,14 +70,29 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
   useEffect(() => {
     const Lf = window.L; if (!Lf || !drawLayer.current) return;
     drawLayer.current.clearLayers();
-    if (drawing.length) { Lf.polyline(drawing, { color: '#F59E0B', weight: 2, dashArray: '6 4' }).addTo(drawLayer.current); drawing.forEach(p => Lf.circleMarker(p, { radius: 4, color: '#F59E0B' }).addTo(drawLayer.current)); }
+    if (drawing.length) Lf.polyline(drawing.length >= 3 ? [...drawing, drawing[0]] : drawing, { color: '#F59E0B', weight: 2, dashArray: '6 4' }).addTo(drawLayer.current);
     if (drawing.length >= 3) Lf.polygon(drawing, { color: '#F59E0B', weight: 1, fillOpacity: 0.2 }).addTo(drawLayer.current);
-  }, [drawing]);
+    const vIcon = Lf.divIcon({ className: 'zone-vertex', iconSize: [14, 14] }); const mIcon = Lf.divIcon({ className: 'zone-midpoint', iconSize: [10, 10] });
+    drawing.forEach((p, i) => {
+      const m = Lf.marker(p, { icon: vIcon, draggable: true, title: labels.vertexHint }).addTo(drawLayer.current);
+      m.on('dragend', (e: any) => { const ll = e.target.getLatLng(); setDrawing(d => d.map((q, k) => k === i ? [ll.lat, ll.lng] : q)); });
+      m.on('click', (e: any) => { Lf.DomEvent.stopPropagation(e); setDrawing(d => d.length > 3 || d.length <= 3 ? d.filter((_, k) => k !== i) : d); });
+    });
+    if (drawing.length >= 2) drawing.forEach((p, i) => {
+      const q = drawing[(i + 1) % drawing.length]; if (drawing.length < 3 && i === drawing.length - 1) return;
+      const mid: [number, number] = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      const m = Lf.marker(mid, { icon: mIcon, title: labels.midpointHint }).addTo(drawLayer.current);
+      m.on('click', (e: any) => { Lf.DomEvent.stopPropagation(e); setDrawing(d => [...d.slice(0, i + 1), mid, ...d.slice(i + 1)]); });
+    });
+  }, [drawing, labels.vertexHint, labels.midpointHint]);
 
   function startEdit(z: Zone | null) {
     setEditing(z ?? ({ id: '', name: {}, fee_usd: 0, eta_minutes: null, is_active: true, sort_order: zones.length + 1, geojson: null } as Zone));
     setDraft({ name_ar: z?.name.ar ?? '', name_en: z?.name.en ?? '', fee: z ? String(z.fee_usd) : '', eta: z?.eta_minutes == null ? '' : String(z.eta_minutes), active: z?.is_active ?? true });
-    setDrawing([]); setMsg(null);
+    // existing area → its vertices become editable (drag to move, click to remove, click a midpoint to add)
+    const ring: [number, number][] = z?.geojson ? ringOf(z.geojson) : [];
+    setDrawing(ring); setMsg(null);
+    if (ring.length >= 3 && map.current && window.L) map.current.fitBounds(window.L.latLngBounds(ring).pad(0.3));
   }
 
   async function save() {
@@ -92,7 +119,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
       <div ref={el} className="map" style={{ height: 380 }} />
       {editing && (
         <section className="card stack">
-          <div className="muted" style={{ fontSize: 13 }}>{labels.drawZone} ({drawing.length})
+          <div className="muted" style={{ fontSize: 13 }}>{editing.id ? labels.editHint : labels.drawZone} ({drawing.length})
             <button className="btn ghost" style={{ minHeight: 30, padding: '2px 8px' }} onClick={() => setDrawing([])}>{labels.clearDrawing}</button></div>
           <div className="row" style={{ alignItems: 'stretch' }}>
             <div style={{ flex: 1 }}><label className="label">{labels.nameAr}</label><input className="input" dir="rtl" value={draft.name_ar} onChange={e => setDraft({ ...draft, name_ar: e.target.value })} /></div>

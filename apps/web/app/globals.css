@@ -236,3 +236,7 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .dlg .cat-row.active { background: #eef6f5; }
 .actions-cell { white-space: nowrap; }
 .actions-cell .btn.ghost { padding: 4px 6px; min-height: 0; font-size: 16px; }
+
+/* delivery-zone editor handles */
+.zone-vertex { width: 14px; height: 14px; border-radius: 50%; background: #F59E0B; border: 2px solid #fff; box-shadow: 0 0 0 1px #b45309; cursor: grab; }
+.zone-midpoint { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid #F59E0B; opacity: .8; cursor: copy; }

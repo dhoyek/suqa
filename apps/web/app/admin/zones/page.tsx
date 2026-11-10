@@ -12,8 +12,8 @@ export default async function AdminZones() {
   const L = tenant.default_locale;
   // Polygons come as GeoJSON through an RPC (PostgREST would return WKB hex otherwise).
   const { data: zones } = await sb.rpc('tenant_zones_geojson', { p_tenant: tenant.id });
-  const center = pointFromEwkb((tenant as any).center) ?? { lat: 34.2553, lng: 35.6581 };
+  const center = pointFromEwkb((tenant as any).center) ?? { lat: 34.1865, lng: 35.6770 };   // حصارات (Hsarat) — the pilot area
   const keys = ['zones', 'newZone', 'zoneName', 'nameAr', 'nameEn', 'deliveryFee', 'etaMinutes', 'active', 'drawZone', 'finish', 'clearDrawing', 'save', 'saved', 'cancel', 'remove'] as const;
-  const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
+  const labels = { ...(Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>), vertexHint: ui('vertexHint', L), midpointHint: ui('midpointHint', L), editHint: ui('editZoneHint', L) };
   return <ZonesEditor tenantId={tenant.id} locale={L} center={center} initial={(zones as any[]) ?? []} labels={labels} />;
 }

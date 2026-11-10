@@ -109,6 +109,7 @@ const T = {
   setPassword: { en: 'Set a password', ar: 'تعيين كلمة مرور' }, sendReset: { en: 'Send reset link', ar: 'إرسال رابط إعادة تعيين' }, passwordHint: { en: 'Email + password is for people who sign in from a laptop; WhatsApp OTP keeps working on the phone. A password you set here is not stored anywhere else — tell it to the person directly.', ar: 'البريد وكلمة المرور لمن يدخل من حاسوب؛ رمز واتساب يبقى شغّالاً على الهاتف. كلمة المرور التي تضعها هنا لا تُحفظ في مكان آخر — أبلغها للشخص مباشرة.' },
   emailTaken: { en: 'This email already belongs to another account', ar: 'هذا البريد مستخدم في حساب آخر' }, credSaved: { en: 'Sign-in details updated', ar: 'تم تحديث بيانات الدخول' },
   verifyPhoneTitle: { en: 'Verify your WhatsApp number', ar: 'تحقّق من رقم واتساب' }, verifyPhoneHint: { en: 'We sent a code to', ar: 'أرسلنا رمزاً إلى' }, skipForNow: { en: 'Skip for now', ar: 'تخطّي الآن' },
+  adminViewing: { en: 'Admin view — you are not a registered courier; actions here count as the association admin.', ar: 'عرض الإدارة — لست موصّلاً مسجّلاً؛ أي إجراء هنا يُسجَّل باسم إدارة الجمعية.' },
   goTo: { en: 'Go to', ar: 'انتقل إلى' }, okBtn: { en: 'OK', ar: 'حسناً' },
   purchaseHistory: { en: 'Purchase history', ar: 'سجلّ مشترياتي' },
   guest: { en: 'Not signed in', ar: 'غير مسجّل الدخول' },

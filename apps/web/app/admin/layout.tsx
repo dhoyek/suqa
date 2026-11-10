@@ -36,7 +36,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         </div>
       </header>
       <main className="container">
-        {role ? children : <div className="card muted">{ui('notAllowed', L)}</div>}
+        {role ? children : (
+          <div className="card stack">
+            <p className="muted" style={{ margin: 0 }}>{ui('notAllowed', L)}</p>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <Link href="/" className="btn">🏠 {ui('home', L)}</Link>
+              <Link href="/account" className="btn">👤 {ui('myAccount', L)}</Link>
+              <form action="/auth/signout" method="post"><button className="btn ghost" type="submit">⎋ {ui('signOut', L)}</button></form>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

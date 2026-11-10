@@ -57,8 +57,8 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
           </nav>
         )}
         {sheet && (
-          <div className="sheet-backdrop" onClick={e => { if (e.target === e.currentTarget) setSheet(false); }}>
-            <div className="sheet card" role="dialog" aria-label={labels.categories}>
+          <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setSheet(false); }}>
+            <div className="dlg card" role="dialog" aria-label={labels.categories}>
               <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.categories}{secs.size ? ` (${secs.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
               <input className="input" placeholder={labels.typeToFilter} value={secQ} onChange={e => setSecQ(e.target.value)} />
               <div className="cat-list">

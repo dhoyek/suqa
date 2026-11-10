@@ -48,4 +48,5 @@ source of truth.
 | 44_admin_accounts.sql | `admin_account_update(tenant, user, name, phone)` — association admin edits an account's name / number from Admin → Accounts (number must be free; nothing merged). |
 | 45_account_admin.sql | Admin → Accounts as the one user-management place: `admin_account_block/_delete/_merge/_set_shop_role/_set_tenant_role`, `tenant_shops_brief`; `tenant_accounts` re-created with `blocked`/`deleted`. Delete = anonymise + block (history kept). |
 | 46_account_ops.sql | Account ops: `admin_account_signout` (all sessions), `admin_account_reset_pin`, `admin_account_activity` (+ `admin_account_view_log`), `admin_account_invite` / `_invites` / `_invite_cancel` + `account_invites` table (tenant-level pre-registration, claimed on first sign-in), `tenant_accounts_export` (CSV). |
+| 47_account_merge_fix.sql | Merge completes (`_account_delete_impl` without the membership check); kept account inherits the missing sign-in method (email identity + password, or phone) so the person can sign in either way; devices re-attributed. |
 | ../seed/batroun.sql | first tenant |

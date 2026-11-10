@@ -18,7 +18,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
       <div className="card stack">
         <div><div className="brand">{tenant.brand_name}</div><h1 style={{ margin: '4px 0 0', fontSize: 20 }}>{ui('createAccount', L)}</h1></div>
         <SignupForm next={next} tenantId={tenant.id} locale={L}
-          labels={{ fullName: ui('fullName', L), phone: ui('phone', L), email: ui('email', L), password: ui('password', L), createAccount: ui('createAccount', L), failed: ui('signupFailed', L), checkEmail: ui('checkEmail', L) }} />
+          labels={{ fullName: ui('fullName', L), phone: ui('phone', L), email: ui('email', L), password: ui('password', L), createAccount: ui('createAccount', L), failed: ui('signupFailed', L), checkEmail: ui('checkEmail', L), verifyPhoneTitle: ui('verifyPhoneTitle', L), verifyPhoneHint: ui('verifyPhoneHint', L), enterCode: ui('enterCode', L), verifyCode: ui('verifyCode', L), skipForNow: ui('skipForNow', L), invalidCode: ui('invalidCode', L) }} />
         <SocialSignIn next={next} labels={{ or: ui('orContinueWith', L), google: ui('continueGoogle', L), facebook: ui('continueFacebook', L), apple: ui('continueApple', L) }} />
         <Link href={`/login?next=${encodeURIComponent(next)}`} className="muted" style={{ fontSize: 14, textAlign: 'center' }}>{ui('haveAccount', L)}</Link>
       </div>

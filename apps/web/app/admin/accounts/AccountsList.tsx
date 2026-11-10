@@ -12,7 +12,8 @@ export type Account = {
 export type ShopBrief = { id: string; name: LocalizedText; pos: boolean };
 type Labels = Record<'accounts' | 'search' | 'all' | 'admins' | 'staff' | 'drivers' | 'customers' | 'lastSeen' | 'orders' | 'pending' | 'noRole' | 'count' | 'edit' | 'name' | 'phone' | 'save' | 'cancel' | 'phoneTaken' | 'saved'
   | 'roles' | 'assocRole' | 'none' | 'tenantAdmin' | 'tenantOps' | 'block' | 'unblock' | 'blocked' | 'deleted' | 'delete' | 'merge' | 'mergeInto' | 'confirmDelete' | 'confirmMerge' | 'confirmBlock' | 'roleOwner' | 'roleCashier' | 'roleStock' | 'shopRoles' | 'mergeHint' | 'deleteHint'
-  | 'signoutAll' | 'resetPin' | 'activity' | 'exportCsv' | 'inviteAccount' | 'inviteHint' | 'pendingInvites' | 'invited' | 'applied' | 'confirmSignout' | 'confirmResetPin' | 'add', string>;
+  | 'signoutAll' | 'resetPin' | 'activity' | 'exportCsv' | 'inviteAccount' | 'inviteHint' | 'pendingInvites' | 'invited' | 'applied' | 'confirmSignout' | 'confirmResetPin' | 'add'
+  | 'email' | 'setPassword' | 'sendReset' | 'passwordHint' | 'emailTaken' | 'credSaved', string>;
 type Kind = 'all' | 'admins' | 'staff' | 'drivers' | 'customers';
 
 type Invite = { id: string; kind: 'tenant' | 'shop'; phone: string; name: string | null; role: string; shop?: LocalizedText; created_at: string };
@@ -25,7 +26,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
   const [q, setQ] = useState(''); const [kind, setKind] = useState<Kind>('all');
   const [edit, setEdit] = useState<Account | null>(null); const [eName, setEName] = useState(''); const [ePhone, setEPhone] = useState(''); const [eErr, setEErr] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
   const [mergeFrom, setMergeFrom] = useState<Account | null>(null); const [mergeTo, setMergeTo] = useState<string>('');
-  const [confirm, setConfirm] = useState<{ text: string; run: () => Promise<void> } | null>(null);
+  const [confirm, setConfirm] = useState<{ text: string; run: () => Promise<boolean | void> } | null>(null);
   const reload = async () => { const { data } = await sb.rpc('tenant_accounts', { p_tenant: tenantId }); if (data) setList(data as Account[]); };
   const call = async (fn: string, args: Record<string, unknown>) => { setBusy(true); setEErr(null); const { error } = await sb.rpc(fn, args); setBusy(false); if (error) { setMsg(null); setEErr(error.message); return false; } await reload(); setMsg(labels.saved); setTimeout(() => setMsg(null), 2500); return true; };
   const reloadInvites = async () => { const { data } = await sb.rpc('admin_account_invites', { p_tenant: tenantId }); if (data) setInvites(data as Invite[]); };
@@ -37,12 +38,21 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
     setIMsg((data as { status: string }).status === 'applied' ? labels.applied : labels.invited); setIPhone(''); setIName(''); setITenant(''); setIShop('');
     await Promise.all([reload(), reloadInvites()]);
   };
-  const signout = (a: Account) => setConfirm({ text: `${labels.signoutAll}: ${a.name || a.phone || ''}? ${labels.confirmSignout}`, run: async () => { await call('admin_account_signout', { p_tenant: tenantId, p_user: a.id }); } });
-  const resetPin = (a: Account) => setConfirm({ text: `${labels.resetPin}: ${a.name || a.phone || ''}? ${labels.confirmResetPin}`, run: async () => { await call('admin_account_reset_pin', { p_tenant: tenantId, p_user: a.id }); } });
-  const block = (a: Account) => setConfirm({ text: `${a.blocked ? labels.unblock : labels.block}: ${a.name || a.phone || ''}?${a.blocked ? '' : ' ' + labels.confirmBlock}`, run: async () => { await call('admin_account_block', { p_tenant: tenantId, p_user: a.id, p_block: !a.blocked }); } });
-  const del = (a: Account) => setConfirm({ text: `${labels.delete}: ${a.name || a.phone || ''}? ${labels.confirmDelete}`, run: async () => { await call('admin_account_delete', { p_tenant: tenantId, p_user: a.id }); } });
-  const doMerge = () => { if (!mergeFrom || !mergeTo) return; const keep = list.find(x => x.id === mergeTo); setConfirm({ text: `${labels.merge}: ${mergeFrom.name || mergeFrom.phone} → ${keep?.name || keep?.phone}? ${labels.confirmMerge}`, run: async () => { if (await call('admin_account_merge', { p_tenant: tenantId, p_keep: mergeTo, p_dup: mergeFrom.id })) { setMergeFrom(null); setMergeTo(''); } } }); };
-  const openEdit = (a: Account) => { setEdit(a); setEName(a.name ?? ''); setEPhone(a.phone ? `+${a.phone.replace(/^\+/, '')}` : ''); setEErr(null); };
+  const signout = (a: Account) => setConfirm({ text: `${labels.signoutAll}: ${a.name || a.phone || ''}? ${labels.confirmSignout}`, run: () => call('admin_account_signout', { p_tenant: tenantId, p_user: a.id }) });
+  const resetPin = (a: Account) => setConfirm({ text: `${labels.resetPin}: ${a.name || a.phone || ''}? ${labels.confirmResetPin}`, run: () => call('admin_account_reset_pin', { p_tenant: tenantId, p_user: a.id }) });
+  const block = (a: Account) => setConfirm({ text: `${a.blocked ? labels.unblock : labels.block}: ${a.name || a.phone || ''}?${a.blocked ? '' : ' ' + labels.confirmBlock}`, run: () => call('admin_account_block', { p_tenant: tenantId, p_user: a.id, p_block: !a.blocked }) });
+  const del = (a: Account) => setConfirm({ text: `${labels.delete}: ${a.name || a.phone || ''}? ${labels.confirmDelete}`, run: () => call('admin_account_delete', { p_tenant: tenantId, p_user: a.id }) });
+  const doMerge = () => { if (!mergeFrom || !mergeTo) return; const keep = list.find(x => x.id === mergeTo); setConfirm({ text: `${labels.merge}: ${mergeFrom.name || mergeFrom.phone} → ${keep?.name || keep?.phone}? ${labels.confirmMerge}`, run: async () => { const ok = await call('admin_account_merge', { p_tenant: tenantId, p_keep: mergeTo, p_dup: mergeFrom.id }); if (ok) { setMergeFrom(null); setMergeTo(''); } return ok; } }); };
+  const [eEmail, setEEmail] = useState(''); const [ePass, setEPass] = useState('');
+  const openEdit = (a: Account) => { setEdit(a); setEName(a.name ?? ''); setEPhone(a.phone ? `+${a.phone.replace(/^\+/, '')}` : ''); setEEmail(a.email ?? ''); setEPass(''); setEErr(null); };
+  const cred = async (body: Record<string, unknown>) => {
+    if (!edit) return; setBusy(true); setEErr(null);
+    const r = await fetch(`/api/admin/accounts/${edit.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})); setBusy(false);
+    if (!r.ok) { setEErr(j.error === 'email_taken' ? labels.emailTaken : (j.error ?? r.statusText)); return; }
+    if (body.email !== undefined) setList(l => l.map(a => a.id === edit.id ? { ...a, email: String(body.email) } : a));
+    setEPass(''); setMsg(labels.credSaved); setTimeout(() => setMsg(null), 2500);
+  };
   const save = async () => {
     if (!edit || busy) return; setBusy(true); setEErr(null);
     const phoneChanged = ePhone.replace(/\D/g, '') !== (edit.phone ?? '').replace(/\D/g, '');
@@ -123,7 +133,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
                 </td>
                 <td className="num">{a.orders || ''}</td>
                 <td className="muted" style={{ textAlign: 'center' }}>{when(a.last_sign_in_at)}</td>
-                {canEdit && <td style={{ whiteSpace: 'nowrap' }}>{!a.deleted && <>
+                {canEdit && <td className="actions-cell">{!a.deleted && <>
                   <button type="button" className="btn ghost" title={labels.edit} onClick={() => openEdit(a)}>✎</button>
                   <Link href={`/admin/accounts/${a.id}`} className="btn ghost" title={labels.activity}>📋</Link>
                   <button type="button" className="btn ghost" title={labels.roles} onClick={() => setRoles(a)}>🎖️</button>
@@ -142,8 +152,8 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
       {msg && <p className="muted" style={{ margin: 0 }}>✓ {msg}</p>}
       {eErr && !edit && <p className="bad" style={{ margin: 0 }}>{eErr}</p>}
       {roles && (
-        <div className="sheet-backdrop" onClick={e => { if (e.target === e.currentTarget) setRoles(null); }}>
-          <div className="sheet card" role="dialog">
+        <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setRoles(null); }}>
+          <div className="dlg card" role="dialog">
             <div className="row spread" style={{ alignItems: 'center' }}><strong>🎖️ {labels.roles} — {roles.name || roles.phone}</strong><button type="button" className="btn ghost" onClick={() => setRoles(null)}>✕</button></div>
             <label className="label">{labels.assocRole}
               <select className="input" value={roles.tenant_role ?? ''} disabled={busy} onChange={async e => { const v = e.target.value || null; if (await call('admin_account_set_tenant_role', { p_tenant: tenantId, p_user: roles.id, p_role: v })) setRoles(r => r && { ...r, tenant_role: v }); }}>
@@ -164,8 +174,8 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
         </div>
       )}
       {mergeFrom && (
-        <div className="sheet-backdrop" onClick={e => { if (e.target === e.currentTarget) setMergeFrom(null); }}>
-          <div className="sheet card" role="dialog">
+        <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setMergeFrom(null); }}>
+          <div className="dlg card" role="dialog">
             <div className="row spread" style={{ alignItems: 'center' }}><strong>⇄ {labels.merge}: {mergeFrom.name || mergeFrom.phone}</strong><button type="button" className="btn ghost" onClick={() => setMergeFrom(null)}>✕</button></div>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>{labels.mergeHint}</p>
             <label className="label">{labels.mergeInto}
@@ -178,20 +188,30 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
         </div>
       )}
       {confirm && (
-        <div className="sheet-backdrop" onClick={e => { if (e.target === e.currentTarget) setConfirm(null); }}>
-          <div className="sheet card" role="dialog">
+        <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setConfirm(null); }}>
+          <div className="dlg card" role="dialog">
             <p style={{ margin: 0 }}>{confirm.text}</p>
-            <div className="row spread"><button type="button" className="btn" onClick={() => setConfirm(null)}>{labels.cancel}</button><button type="button" className="btn primary" disabled={busy} onClick={async () => { await confirm.run(); setConfirm(null); }}>{labels.save}</button></div>
+            {eErr && <p className="bad" style={{ margin: 0 }}>{eErr}</p>}
+            <div className="row spread"><button type="button" className="btn" onClick={() => { setConfirm(null); setEErr(null); }}>{labels.cancel}</button><button type="button" className="btn primary" disabled={busy} onClick={async () => { const ok = await confirm.run(); if (ok !== false) setConfirm(null); }}>{labels.save}</button></div>
           </div>
         </div>
       )}
       {edit && (
-        <div className="sheet-backdrop" onClick={e => { if (e.target === e.currentTarget) setEdit(null); }}>
-          <div className="sheet card" role="dialog">
+        <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setEdit(null); }}>
+          <div className="dlg card" role="dialog">
             <div className="row spread" style={{ alignItems: 'center' }}><strong>✎ {edit.name || edit.phone || ''}</strong><button type="button" className="btn ghost" onClick={() => setEdit(null)}>✕</button></div>
             <label className="label">{labels.name}<input className="input" value={eName} onChange={e => setEName(e.target.value)} autoFocus /></label>
             <label className="label">{labels.phone}<input className="input" dir="ltr" inputMode="tel" value={ePhone} onChange={e => setEPhone(e.target.value)} placeholder="+961 70 000 000" /></label>
-            {edit.email && <p className="muted" dir="ltr" style={{ margin: 0, fontSize: 12 }}>{edit.email}</p>}
+            <div className="row spread" style={{ alignItems: 'flex-end', gap: 8 }}>
+              <label className="label" style={{ flex: 1 }}>{labels.email}<input className="input" dir="ltr" type="email" value={eEmail} onChange={e => setEEmail(e.target.value)} placeholder="name@example.com" /></label>
+              <button type="button" className="btn" disabled={busy || !eEmail.trim() || eEmail.trim().toLowerCase() === (edit.email ?? '').toLowerCase()} onClick={() => cred({ email: eEmail })}>{labels.save}</button>
+            </div>
+            <div className="row spread" style={{ alignItems: 'flex-end', gap: 8 }}>
+              <label className="label" style={{ flex: 1 }}>{labels.setPassword}<input className="input" dir="ltr" type="text" autoComplete="off" value={ePass} onChange={e => setEPass(e.target.value)} placeholder="••••••••" /></label>
+              <button type="button" className="btn" disabled={busy || ePass.length < 8} onClick={() => cred({ password: ePass })}>{labels.save}</button>
+              {edit.email && <button type="button" className="btn" disabled={busy} onClick={() => cred({ reset: true })}>✉️ {labels.sendReset}</button>}
+            </div>
+            <p className="muted" style={{ margin: 0, fontSize: 12 }}>{labels.passwordHint}</p>
             {eErr && <p className="bad" style={{ margin: 0 }}>{eErr}</p>}
             <div className="row spread"><button type="button" className="btn" onClick={() => setEdit(null)}>{labels.cancel}</button><button type="button" className="btn primary" disabled={busy || (!eName.trim() && !ePhone.trim())} onClick={save}>{labels.save}</button></div>
           </div>

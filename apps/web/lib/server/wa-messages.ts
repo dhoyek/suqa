@@ -147,19 +147,23 @@ export function driverDispatch(e: OrderEvent, origin: string): string {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order; const shop = e.shop ? t(e.shop.name, L) : '';
   const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' ');
   const cod = o.total_usd; // POS marks COD orders unpaid until handover; the amount due is the order total
+  const shopPhone = e.shop?.whatsapp || e.shop?.phone || '';
   return [
     ar ? `🛵 *طلب للتوصيل ${o.number}* — ${shop}` : `🛵 *Delivery ${o.number}* — ${shop}`,
+    shopPhone ? `${ar ? 'المحل' : 'Shop'}: ${shopPhone} ${waMe(shopPhone)}` : null,
     `${ar ? 'الزبون' : 'Customer'}: ${o.customer_name || ''} ${o.customer_phone} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
     dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,
     `${ar ? 'الطلب' : 'Items'}: ${itemsOneLine(e, L)}`,
+    `${ar ? 'قيمة الطلب' : 'Order'}: ${money(e, o.subtotal_usd)} · ${ar ? 'التوصيل' : 'Delivery'}: ${money(e, o.delivery_fee_usd)}`,
     `${ar ? 'المطلوب تحصيله' : 'Collect'}: ${money(e, cod)}`,
     o.customer_notes ? `${ar ? 'ملاحظات' : 'Notes'}: ${o.customer_notes}` : null,
-    `${ar ? 'عند التسليم' : 'On delivery'}: ${origin}/t/${o.id}`,
+    `${ar ? 'كل التفاصيل والخريطة' : 'Full details & map'}: ${origin}/d/${o.id}`,
   ].filter(Boolean).join('\n');
 }
 export function driverDispatchTpl(e: OrderEvent, origin: string): Tpl {
-  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
+  const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order;
   const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ');
-  return { name: 'driver_dispatch', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`)], button: o.id,
-    fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/t/${o.id}`)] } };
+  const shopPhone = e.shop?.whatsapp || e.shop?.phone || '';
+  return { name: 'driver_dispatch', lang: 'ar', params: [P(`${e.shop ? t(e.shop.name, L) : e.tenant?.brand_name}${shopPhone ? ` ${shopPhone}` : ''}`), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)} (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})`)], button: `d-${o.id}`,
+    fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${o.customer_phone} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/d/${o.id}`)] } };
 }

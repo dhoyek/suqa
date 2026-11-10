@@ -25,5 +25,6 @@ export default async function AdminAccounts() {
       delete: ui('deleteAccount', L), merge: ui('merge', L), mergeInto: ui('mergeInto', L), confirmDelete: ui('confirmDelete', L), confirmMerge: ui('confirmMerge', L), confirmBlock: ui('confirmBlock', L),
       roleOwner: ui('roleOwner', L), roleCashier: ui('roleCashier', L), roleStock: ui('roleStock', L), shopRoles: ui('shopRoles', L), mergeHint: ui('mergeHint', L), deleteHint: ui('deleteHint', L),
       signoutAll: ui('signoutAll', L), resetPin: ui('resetPin', L), activity: ui('activity', L), exportCsv: ui('exportCsv', L), inviteAccount: ui('inviteAccount', L), inviteHint: ui('inviteHint', L), pendingInvites: ui('pendingInvites', L),
-      invited: ui('invited', L), applied: ui('applied', L), confirmSignout: ui('confirmSignout', L), confirmResetPin: ui('confirmResetPin', L), add: ui('add', L) }} />;
+      invited: ui('invited', L), applied: ui('applied', L), confirmSignout: ui('confirmSignout', L), confirmResetPin: ui('confirmResetPin', L), add: ui('add', L),
+      email: ui('email', L), setPassword: ui('setPassword', L), sendReset: ui('sendReset', L), passwordHint: ui('passwordHint', L), emailTaken: ui('emailTaken', L), credSaved: ui('credSaved', L) }} />;
 }

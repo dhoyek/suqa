@@ -50,4 +50,5 @@ source of truth.
 | 46_account_ops.sql | Account ops: `admin_account_signout` (all sessions), `admin_account_reset_pin`, `admin_account_activity` (+ `admin_account_view_log`), `admin_account_invite` / `_invites` / `_invite_cancel` + `account_invites` table (tenant-level pre-registration, claimed on first sign-in), `tenant_accounts_export` (CSV). |
 | 47_account_merge_fix.sql | Merge completes (`_account_delete_impl` without the membership check); kept account inherits the missing sign-in method (email identity + password, or phone) so the person can sign in either way; devices re-attributed. |
 | 48_pos_driver_delete.sql | `driver.delete` op (`_pos_driver_delete`: hard delete if never used on an order, else deactivate); `pos_push` re-created. |
+| 49_order_history.sql | `pos_order_history(order)` — read-only: order events + thread notes, POS audit (edits/pay/status/driver), payments, debt settlements, returns, stock moves, WhatsApp messages, customer context. Feeds the POS order detail sheet. |
 | ../seed/batroun.sql | first tenant |

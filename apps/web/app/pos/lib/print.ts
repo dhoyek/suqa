@@ -58,6 +58,21 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
     <div class="ft">${esc(shop.receipt_footer || pt('thanks', L))}</div>${cutBlock(st)}</div>`;
 }
 
+/** Order sheet for the packer / kitchen: big items with notes, no prices. */
+export function orderSheetHtml(o: Order, lines: OrderLine[], shop: Shop, L: L, st: PrintSettings): string {
+  const rows = lines.filter(l => !l.voided).map(l => `<tr><td class="q">${num(l.quantity)}${l.unit ? esc(l.unit) : '×'}</td><td>${esc(text(l.name, L))}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}</td><td class="a">☐</td></tr>`).join('');
+  const a = (o.address ?? {}) as Record<string, unknown>;
+  const addr = [a.line1, a.line2, a.area, a.city].filter(Boolean).map(String).join(', ');
+  return `<div class="vch">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="ev">${esc(pt('printSheet', L))}</div><hr>
+    <div class="no">${esc(o.number ?? o.local_number ?? '')}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${o.needed_at ? ' · ⏰ ' + esc(fmtDT(o.needed_at, L)) : ''}</div>
+    <div class="kiosk">${o.fulfillment === 'pickup' ? '🛍 ' + esc(pt('pickupBadge', L)) : '🛵 ' + esc(pt('deliveryBadge', L))}</div>
+    <div class="ev">${esc(o.customer_name || '')} ${ltr(esc(o.customer_phone || ''))}</div>${addr ? `<div class="ev">📍 ${esc(addr)}</div>` : ''}<hr>
+    <table>${rows}</table><hr>
+    ${o.customer_notes ? `<div class="ft">📝 ${esc(o.customer_notes)}</div>` : ''}
+    <div class="ft">${lines.filter(l => !l.voided).length} ${esc(pt('itemsCount', L))}</div>${cutBlock(st)}</div>`;
+}
+
 /** Z report for a shift (open or closed). */
 export function zReportHtml(s: ShiftSummary, shop: Shop, L: L, st: PrintSettings, names: { opened?: string; closed?: string } = {}): string {
   const sh: Shift = s.shift;

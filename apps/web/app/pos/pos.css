@@ -389,3 +389,15 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .r-unpaid { margin: 6px 0; padding: 6px 8px; border: 2px dashed #991b1b; color: #991b1b; font-weight: 800; text-align: center; border-radius: 6px; }
 .r-change { font-weight: 700; }
 .receipt-actions kbd { font-size: 10px; opacity: .6; margin-inline-start: 4px; }
+
+/* orders board: ⋯ menu, detail sheet */
+.order-menu { position: absolute; inset-inline-end: 0; top: 100%; z-index: 20; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 200px; display: flex; flex-direction: column; padding: 4px; }
+.order-menu button, .order-menu label { text-align: start; border: 0; background: none; padding: 9px 10px; border-radius: 8px; font-family: inherit; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.order-menu button:hover, .order-menu label:hover { background: #f3f4f6; }
+.order-menu button.danger { color: var(--bad); }
+.detail-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.detail-customer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; background: #f6f7f9; border-radius: 10px; padding: 6px 10px; }
+.detail-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.timeline li { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; background: #fafafa; font-size: 14px; }
+.timeline li > span:nth-child(2) { flex: 1; }

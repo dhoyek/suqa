@@ -13,6 +13,9 @@ import PayDialog from '../components/PayDialog';
 import ReturnDialog from '../components/ReturnDialog';
 import OwnerPin from '../components/OwnerPin';
 import { useConfirm } from '@/components/ConfirmProvider';
+import OrderDetailSheet from '../components/OrderDetailSheet';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { orderSheetHtml } from '../lib/print';
 
 type Col = 'new' | 'active' | 'onway' | 'done' | 'cancelled';
 const COLS: Col[] = ['new', 'active', 'onway', 'done', 'cancelled'];
@@ -25,16 +28,19 @@ const loadCols = (): Set<Col> => { try { const v = JSON.parse(localStorage.getIt
  * Reads the local mirror (works offline); every action queues an op; the feed brings other devices' actions back within seconds.
  * Handover: pickup → pay dialog; courier delivery → cash on delivery recorded automatically; already-paid orders just close.
  */
-export default function OrdersView({ boot, locale, index, tick, staff, status, onNewOrder }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; status?: SyncStatus | null; onNewOrder: () => void }) {
+export default function OrdersView({ boot, sb, locale, index, tick, staff, status, onNewOrder, onCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status?: SyncStatus | null; onNewOrder: () => void; onCustomer?: (phone: string, name: string) => void }) {
   const online = status?.online ?? (typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order } | { k: 'detail'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [menu, setMenu] = useState<string | null>(null);
+  const [, setClock] = useState(0); useEffect(() => { const t = setInterval(() => setClock(c => c + 1), 30_000); return () => clearInterval(t); }, []);   // ages tick every 30 s
   const reload = async () => {
-    const since = new Date(Date.now() - 36 * 3600_000).toISOString();
+    const since = new Date(Date.now() - (range === '7d' || range === 'all' ? 8 * 24 : 48) * 3600_000).toISOString();
     const all = (await boot.db.orders.toArray()).filter(o => o.channel !== 'walkin' && !o.parked && (!o.closed_at || o.closed_at > since));
     // open orders: the ones wanted soonest first (scheduled ones by their time, ASAP ones by when they came in); closed ones newest first
     const open = (o: Order) => !o.closed_at; const k = (o: Order) => o.needed_at ?? o.placed_at;
@@ -46,8 +52,28 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
     const pm: Record<string, Payment[]> = {}; for (const p of ps) (pm[p.order_id] ??= []).push(p); setPayments(pm);
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
   };
-  useEffect(() => { void reload(); }, [boot, tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cols = useMemo(() => { const c: Record<Col, Order[]> = { new: [], active: [], onway: [], done: [], cancelled: [] }; for (const o of orders) c[COL_OF[o.status]].push(o); return c; }, [orders]);
+  useEffect(() => { void reload(); }, [boot, tick, range]); // eslint-disable-line react-hooks/exhaustive-deps
+  const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
+  const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
+  const cols = useMemo(() => {
+    const c: Record<Col, Order[]> = { new: [], active: [], onway: [], done: [], cancelled: [] };
+    const needle = q.trim().toLowerCase(); const digits = needle.replace(/\D/g, '');
+    const dayStart = (d: number) => { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - d); return x.toISOString(); };
+    const from = range === 'today' ? dayStart(0) : range === 'yesterday' ? dayStart(1) : range === '7d' ? dayStart(6) : ''; const to = range === 'yesterday' ? dayStart(0) : '';
+    for (const o of orders) {
+      const col = COL_OF[o.status];
+      // open orders always show; the date range only trims the finished columns
+      if ((col === 'done' || col === 'cancelled') && ((from && o.placed_at < from) || (to && o.placed_at >= to))) continue;
+      if (unpaidOnly && isPaid(o)) continue;
+      if (needle) {
+        const hay = [o.number, o.local_number, o.customer_name, o.customer_phone, o.courier_name, ...(lines[o.id] ?? []).map(l => text(l.name, locale))].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(needle) && !(digits.length >= 3 && (o.customer_phone ?? '').replace(/\D/g, '').includes(digits))) continue;
+      }
+      c[col].push(o);
+    }
+    c.new.sort((a, b) => (a.needed_at ?? a.placed_at) < (b.needed_at ?? b.placed_at) ? -1 : 1);   // waiting longest first
+    return c;
+  }, [orders, q, range, unpaidOnly, lines, payments, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [show, setShow] = useState<Set<Col>>(loadCols);
   const toggleCol = (c: Col) => setShow(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); if (!n.size) n.add(c); try { localStorage.setItem(LS_COLS, JSON.stringify([...n])); } catch {} return n; });
   const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
@@ -59,8 +85,6 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
     if (!(await confirm(pt('deleteOrderConfirm', locale), { danger: true }))) return;
     if (staff.role === 'owner') await removeOrder(o, staff.user_id); else setGate(o);
   };
-  const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
-  const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
 
   const act = async (o: Order, status: OrderStatus) => {
     if (status === 'rejected') return setDialog({ k: 'reject', o });
@@ -81,20 +105,25 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
         <button className="btn primary" onClick={onNewOrder}>＋ {pt('newOrder', locale)}</button>
       </div>
       <div className="row" style={{ gap: 6, padding: '8px 12px 0', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input className="input" style={{ flex: '1 1 220px', minHeight: 36 }} placeholder={pt('searchOrders', locale)} value={q} onChange={e => setQ(e.target.value)} />
+        <div className="seg">{(['today', 'yesterday', '7d', 'all'] as const).map(r => <button key={r} className={range === r ? 'active' : ''} onClick={() => setRange(r)}>{pt(`range_${r}` as Key, locale)}</button>)}</div>
+        <button className={`chip ${unpaidOnly ? 'active' : ''}`} onClick={() => setUnpaidOnly(v => !v)}>💵 {pt('unpaidOnly', locale)}</button>
+      </div>
+      <div className="row" style={{ gap: 6, padding: '6px 12px 0', alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13 }}>{pt('showColumns', locale)}:</span>
         {COLS.map(c => <button key={c} className={`chip ${show.has(c) ? 'active' : ''}`} onClick={() => toggleCol(c)}>{colLabel(c)} <span className="muted">{cols[c].length}</span></button>)}
       </div>
       <div className="orders-cols" style={{ ['--cols' as string]: Math.min(4, show.size) }}>
         {COLS.filter(c => show.has(c)).map(c => (
           <section key={c} className={`orders-col ${c}`}>
-            <h4>{colLabel(c)} <span className="muted">{cols[c].length}</span></h4>
+            <h4 className="row spread"><span>{colLabel(c)} <span className="muted">{cols[c].length}</span></span>{!!cols[c].length && <span className="muted num" style={{ fontWeight: 400, fontSize: 12 }}>{fmtUsd(cols[c].reduce((s, o) => s + num(o.total_cents), 0))}{c === 'done' ? ` · ${cols[c].filter(o => !isPaid(o)).length} ${pt('unpaidOrder', locale)}` : ''}</span>}</h4>
             {!cols[c].length && <p className="muted" style={{ fontSize: 13 }}>{pt('noOrders', locale)}</p>}
             {cols[c].map(o => {
               const ls = (lines[o.id] ?? []).filter(l => !l.voided); const open = sel === o.id; const pickup = o.fulfillment === 'pickup';
               return (
                 <article key={o.id} className={`order-card ${open ? 'open' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
                   <div className="row spread" style={{ alignItems: 'center' }}>
-                    <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}</strong>
+                    <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}{!o.closed_at && <AgePill o={o} prep={num((boot.shop as unknown as { prep_minutes?: number }).prep_minutes) || 30} locale={locale} />}</strong>
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <span className="row" style={{ gap: 6, display: 'inline-flex', alignItems: 'center' }}><span dir="ltr">{o.customer_phone}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(o.customer_phone)}`} title={pt('call', locale)} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(o.customer_phone)}`} target="_blank" rel="noreferrer" title="WhatsApp" onClick={e => e.stopPropagation()}>💬</a></span>}</div>
@@ -105,19 +134,28 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
                   {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered') && <DriverLine o={o} boot={boot} locale={locale} />}
                   {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
-                    <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(num(o.total_lbp), locale)}</span></strong>
+                    <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(num(o.total_lbp), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
                   {open && (
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
-                      {NEXT[o.status].map(n => <button key={n} className={`btn ${n === 'rejected' || n === 'cancelled' ? 'danger' : n === 'delivered' ? 'primary' : ''}`} onClick={() => act(o, n)}>
+                      {NEXT[o.status].filter(n => n !== 'rejected' && n !== 'cancelled').map(n => <button key={n} className={`btn ${n === 'delivered' ? 'primary' : ''}`} onClick={() => act(o, n)}>
                         {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codSettle', locale)) : ''}
                       </button>)}
                       {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
-                      {o.status === 'delivered' && <button className="btn" onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
-                      {(o.status === 'cancelled' || o.status === 'rejected') && <button className="btn danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
-                      <button className="btn icon" title={pt('print', locale)} onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨</button>
-                      <label className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={o.notify_customer !== false} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
+                      <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>
+                      <span style={{ position: 'relative' }}>
+                        <button className="btn icon" title={pt('moreActions', locale)} onClick={() => setMenu(menu === o.id ? null : o.id)}>⋯</button>
+                        {menu === o.id && <div className="order-menu" onClick={() => setMenu(null)}>
+                          <button onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨 {pt('print', locale)}</button>
+                          <button onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
+                          <label><input type="checkbox" checked={o.notify_customer !== false} onClick={e => e.stopPropagation()} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
+                          {o.status === 'delivered' && <button onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
+                          {NEXT[o.status].includes('rejected') && <button className="danger" onClick={() => act(o, 'rejected')}>✕ {pt('act_rejected', locale)}</button>}
+                          {NEXT[o.status].includes('cancelled') && <button className="danger" onClick={() => act(o, 'cancelled')}>✕ {pt('act_cancelled', locale)}</button>}
+                          {(o.status === 'cancelled' || o.status === 'rejected') && <button className="danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
+                        </div>}
+                      </span>
                     </div>
                   )}
                 </article>
@@ -143,6 +181,7 @@ export default function OrdersView({ boot, locale, index, tick, staff, status, o
           if (extra && extra.fee_amount > 0 && shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`, user_id: staff.user_id });
           boot.engine.poke(); setDialog(null); await reload();
         }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'detail' && <OrderDetailSheet sb={sb} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} payments={payments[dialog.o.id] ?? []} online={online} onCustomer={onCustomer} onClose={() => setDialog(null)} />}
       {dialog?.k === 'return' && <ReturnDialog boot={boot} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} staff={staff} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
     </div>
   );
@@ -241,6 +280,16 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
       </>}
     </Modal>
   );
+}
+
+/** How long the order has been waiting: grey, amber past the shop's prep time, red past twice that. For accepted orders the promised ETA counts. */
+function AgePill({ o, prep, locale }: { o: Order; prep: number; locale: L }) {
+  const since = o.status === 'pending' ? o.placed_at : (o.accepted_at ?? o.placed_at);
+  const mins = Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 60000));
+  const limit = o.status === 'pending' ? 5 : (o.eta_minutes ?? prep);
+  const cls = mins > limit * 2 ? 'bad' : mins > limit ? 'warn' : '';
+  const label = mins < 60 ? `${mins} ${pt('min', locale)}` : `${Math.floor(mins / 60)} ${pt('hour', locale)} ${mins % 60} ${pt('min', locale)}`;
+  return <span className={`pill ${cls}`} style={{ marginInlineStart: 6, fontWeight: 400 }} title={o.status === 'pending' ? pt('waitingSince', locale) : pt('sinceAccepted', locale)}>⏱ {label}{o.status !== 'pending' && o.eta_minutes ? ` / ${o.eta_minutes}` : ''}</span>;
 }
 
 /** "⏰ 17:30 · بعد 40 د" / "متأخر 10 د"; shows the date when it is not today. */

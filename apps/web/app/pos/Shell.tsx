@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type MutableRefObject } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CatalogIndex, Staff, SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
@@ -7,6 +7,7 @@ import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import AccountMenu from './components/AccountMenu';
 import { roleOf, viewsFor } from './lib/perm';
+import { newOrderChime } from './lib/chime';
 import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 import ShiftView from './views/ShiftView';
@@ -33,7 +34,15 @@ export default function Shell(props: {
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
   useEffect(() => { document.documentElement.lang = locale; document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr'; }, [locale]);
   const [pendingCount, setPendingCount] = useState(0);
-  useEffect(() => { boot.db.orders.where('status').equals('pending').count().then(setPendingCount); }, [boot, props.tick]);
+  // new online/WhatsApp orders: badge on the nav + a chime when the pending count grows (any view, any tab)
+  const seenPending = useRef<Set<string> | null>(null);
+  useEffect(() => { boot.db.orders.where('status').equals('pending').toArray().then(os => {
+    setPendingCount(os.length);
+    const ids = new Set(os.map(o => o.id));
+    if (seenPending.current && [...ids].some(id => !seenPending.current!.has(id))) { newOrderChime(); document.title = `(${os.length}) ${document.title.replace(/^\(\d+\) /, '')}`; }
+    else if (!os.length) document.title = document.title.replace(/^\(\d+\) /, '');
+    seenPending.current = ids;
+  }); }, [boot, props.tick]);
   const online = status?.online ?? true;
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
@@ -67,7 +76,7 @@ export default function Shell(props: {
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} newOrderRequest={newOrderReq} presetCustomer={preset} />}
-        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} />}
+        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}
         {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
         {view === 'items' && <ItemsView {...props} />}

@@ -114,8 +114,10 @@ export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const o = e.order; const L = e.tenant?.default_locale ?? 'ar';
   const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/r/${o.id}`;
   const shop = P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name);
+  // the template already says "طلبك رقم {{2}}" and ends with "شكراً لتعاملك معنا" → drop the number and the thanks from the status line
+  const line = text.split('\n')[0].split(` ${o.number}`).join('').replace(/\s*(شكراً!|Thank you!)\s*$/, '').trim();
   // compact template with a tracking button; the older order_status template is the fallback until v2 is approved
-  return { name: 'order_update_v2', lang: 'ar', params: [shop, P(o.number), P(text.split('\n')[0])], button: o.basket_id ?? o.id,
+  return { name: 'order_update_v2', lang: 'ar', params: [shop, P(o.number), P(line)], button: o.basket_id ?? o.id,
     fallback: { name: 'order_status', lang: 'ar', params: [shop, P(o.number), P(text.split('\n')[0]), P(link)] } };
 }
 /** Confirmation for an order the shop typed in from the POS (WhatsApp / phone): it is already accepted, so the customer gets the accepted line. */

@@ -241,3 +241,19 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .zone-vertex { width: 16px !important; height: 16px !important; border-radius: 50%; background: #F59E0B; border: 2px solid #fff; box-shadow: 0 0 0 1px #b45309; cursor: grab; pointer-events: auto; touch-action: none; }
 .zone-vertex.leaflet-drag-target, .zone-vertex:active { cursor: grabbing; }
 .zone-midpoint { width: 12px !important; height: 12px !important; border-radius: 50%; background: #fff; border: 2px solid #F59E0B; opacity: .85; cursor: copy; pointer-events: auto; }
+
+/* public order page (/r/<id>): status head, contacts, amount due */
+.track-page { display: flex; flex-direction: column; gap: 10px; }
+.track-head { display: flex; flex-direction: column; gap: 8px; }
+.track-status { font-size: 17px; font-weight: 700; padding: 8px 10px; border-radius: 10px; background: #eef6f8; }
+.track-status.done { background: #ecfdf5; color: #166534; }
+.track-status.stopped { background: #fee2e2; color: #991b1b; }
+.track-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.track-contact { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.track-actions { display: flex; gap: 6px; }
+.track-actions .btn { min-height: 40px; padding: 6px 12px; }
+.track-actions .btn.wa { background: #25d366; color: #fff; border-color: #25d366; }
+.track-pay { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.track-pay.due { background: #fff8e6; border-color: #fcd34d; }
+.track-pay.paid { background: #ecfdf5; color: #166534; }
+.money-stack small { display: block; font-weight: 400; font-size: .85em; opacity: .75; white-space: nowrap; }

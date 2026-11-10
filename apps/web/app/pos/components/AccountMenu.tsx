@@ -6,7 +6,7 @@ import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 
-type Staff = { display_name?: string | null; full_name?: string | null; role?: string };
+type Staff = { display_name?: string | null; full_name?: string | null; role?: 'owner' | 'cashier' | 'staff' | 'stock' };
 
 /** 👤 in the POS bar: who is signed in (account) and who is at the till (staff), language, links out, sign out. */
 export default function AccountMenu({ sb, boot, staff, locale, setLocale, onLock }: { sb: SupabaseClient; boot: Booted; staff: Staff; locale: L; setLocale: (l: L) => void; onLock: () => void }) {

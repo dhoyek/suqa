@@ -94,6 +94,7 @@ const T = {
   accounts: { en: 'Accounts', ar: 'الحسابات' }, searchAccounts: { en: 'Search by name, number or email…', ar: 'ابحث بالاسم أو الرقم أو البريد…' }, admins: { en: 'Admins', ar: 'الإدارة' }, staffRole: { en: 'Shop staff', ar: 'موظفو المحلات' },
   customers: { en: 'Customers', ar: 'الزبائن' }, drivers: { en: 'Drivers', ar: 'السائقون' }, lastSeen: { en: 'Last sign-in', ar: 'آخر دخول' }, accessPending: { en: 'access request pending', ar: 'طلب وصول معلّق' }, customerOnly: { en: 'customer account', ar: 'حساب زبون' }, accountsCount: { en: 'accounts', ar: 'حساب' },
   editAccount: { en: 'Edit', ar: 'تعديل' }, phoneTaken: { en: 'This number already belongs to another account', ar: 'هذا الرقم مستخدم في حساب آخر' },
+  myAccount: { en: 'My account', ar: 'حسابي' }, changeNumberBtn: { en: 'Change number', ar: 'تغيير الرقم' }, phoneChanged: { en: 'Phone number updated', ar: 'تم تحديث رقم الهاتف' }, phoneChangeHint: { en: 'We send a code to the new number; it becomes your sign-in number once verified.', ar: 'نرسل رمزاً إلى الرقم الجديد؛ يصبح رقم دخولك بعد التحقق.' },
   goTo: { en: 'Go to', ar: 'انتقل إلى' }, okBtn: { en: 'OK', ar: 'حسناً' },
   purchaseHistory: { en: 'Purchase history', ar: 'سجلّ مشترياتي' },
   guest: { en: 'Not signed in', ar: 'غير مسجّل الدخول' },

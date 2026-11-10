@@ -39,6 +39,7 @@ export default function AccountMenu({ sb, boot, staff, locale, setLocale, onLock
             </div>
           </label>
           <div className="stack" style={{ gap: 6 }}>
+            <a className="btn ghost" href="/account" style={{ justifyContent: 'flex-start' }}>👤 {pt('account', locale)}</a>
             <a className="btn ghost" href="/" style={{ justifyContent: 'flex-start' }}>🏠 {pt('backHome', locale)}</a>
             {boot.role === 'owner' && <a className="btn ghost" href="/shop/settings" style={{ justifyContent: 'flex-start' }}>🏪 {pt('backToShop', locale)}</a>}
             {admin && <a className="btn ghost" href="/admin" style={{ justifyContent: 'flex-start' }}>🛠️ {pt('adminArea', locale)}</a>}

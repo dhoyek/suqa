@@ -42,6 +42,7 @@ export default function StoreHeader({ brand, labels, user, staff = false, pos = 
                     {!user.phone && user.email && <div className="muted" dir="ltr">{user.email}</div>}
                   </div>
                 ) : <div className="who muted">{labels.guest}</div>}
+                {user && <Link href="/account" className="item" onClick={() => setOpen(false)}>👤 {labels.account}</Link>}
                 {user && <Link href="/orders" className="item" onClick={() => setOpen(false)}>🧾 {labels.purchaseHistory}</Link>}
                 {user && staff && <Link href="/shop/settings" className="item" onClick={() => setOpen(false)}>🏪 {labels.myShop}</Link>}
                 {user && staff && <a href="/pos" className="item">🖥️ {labels.pos}</a>}

@@ -3,7 +3,7 @@ import type { View } from '../Shell';
 
 /** The role that matters at the till is the one of the staff tile unlocked with the PIN ("staff" is the legacy name for cashier). */
 export type PosRole = 'owner' | 'cashier' | 'stock';
-export const roleOf = (s: Pick<Staff, 'role'> | null | undefined): PosRole => (s?.role === 'owner' ? 'owner' : s?.role === 'stock' ? 'stock' : 'cashier');
+export const roleOf = (s: { role?: Staff['role'] } | null | undefined): PosRole => (s?.role === 'owner' ? 'owner' : s?.role === 'stock' ? 'stock' : 'cashier');
 
 /**
  * "See what helps you sell, edit only what's yours."

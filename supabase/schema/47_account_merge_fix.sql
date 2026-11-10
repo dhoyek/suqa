@@ -54,7 +54,7 @@ begin
            email_confirmed_at = coalesce(email_confirmed_at, d.email_confirmed_at), updated_at = now() where id = p_keep;
     update auth.identities set user_id = p_keep, provider_id = p_keep::text, identity_data = identity_data || jsonb_build_object('sub', p_keep::text), updated_at = now()
      where user_id = p_dup and provider = 'email';
-    v_cred := v_cred || 'email';
+    v_cred := array_append(v_cred, 'email');
   end if;
   if k.phone is null and d.phone is not null then
     update auth.users set phone = null where id = p_dup;
@@ -62,7 +62,7 @@ begin
     update suqa.profiles set phone = d.phone where id = p_keep and phone is null;
     update auth.identities set user_id = p_keep, provider_id = p_keep::text, identity_data = identity_data || jsonb_build_object('sub', p_keep::text), updated_at = now()
      where user_id = p_dup and provider = 'phone';
-    v_cred := v_cred || 'phone';
+    v_cred := array_append(v_cred, 'phone');
   end if;
 
   -- history

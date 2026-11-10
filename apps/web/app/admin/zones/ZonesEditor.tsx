@@ -37,6 +37,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
   const [drawing, setDrawing] = useState<[number, number][]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const el = useRef<HTMLDivElement>(null); const map = useRef<any>(null); const layers = useRef<any>(null); const drawLayer = useRef<any>(null);
+  const [ready, setReady] = useState(false);          // the map is created asynchronously; effects below wait for it
   const drawingRef = useRef(drawing);
   drawingRef.current = drawing;
 
@@ -49,6 +50,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
       const pts: [number, number][] = [];
       initial.forEach(z => { try { Lf.geoJSON(z.geojson).getLayers().forEach((l: any) => l.getLatLngs?.().flat(2).forEach((ll: any) => pts.push([ll.lat, ll.lng]))); } catch { /* ignore */ } });
       if (pts.length >= 3) map.current.fitBounds(Lf.latLngBounds(pts).pad(0.25));
+      setReady(true);
       Lf.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current);
       layers.current = Lf.layerGroup().addTo(map.current);
       drawLayer.current = Lf.layerGroup().addTo(map.current);
@@ -65,7 +67,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
     layers.current.clearLayers();
     zones.forEach((z, i) => Lf.geoJSON(z.geojson, { style: { color: COLORS[i % COLORS.length], weight: 2, fillOpacity: z.is_active ? 0.15 : 0.04, dashArray: z.is_active ? undefined : '4 4' } })
       .bindTooltip(`${tr(z.name, L)} · $${Number(z.fee_usd).toFixed(2)}`).addTo(layers.current));
-  }, [zones, L, map.current]);
+  }, [zones, L, ready]);
 
   // in-progress drawing
   useEffect(() => {
@@ -91,7 +93,7 @@ export default function ZonesEditor({ tenantId, locale: L, center, initial, labe
       const m = Lf.marker(mid, { icon: mIcon, bubblingMouseEvents: false, title: labels.midpointHint }).addTo(drawLayer.current);
       m.on('click', (e: any) => { stop(e); setDrawing(d => [...d.slice(0, i + 1), mid, ...d.slice(i + 1)]); });
     });
-  }, [drawing, labels.vertexHint, labels.midpointHint]);
+  }, [drawing, ready, labels.vertexHint, labels.midpointHint]);
 
   function startEdit(z: Zone | null) {
     setEditing(z ?? ({ id: '', name: {}, fee_usd: 0, eta_minutes: null, is_active: true, sort_order: zones.length + 1, geojson: null } as Zone));

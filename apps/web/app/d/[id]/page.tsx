@@ -25,7 +25,9 @@ export default async function DriverSheet({ params }: { params: Promise<{ id: st
   const tenant = await getTenant(); const L = await getLocale(tenant); const ar = L === 'ar';
   const { data } = await admin.from('orders').select('id, number, status, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
   const o = data as unknown as Row | null; if (!o) notFound();
-  const money = (usd: number) => formatMoney(Number(usd), Number(o.fx_lbp_rate), tenant.display_currency ?? 'both', L);
+  // one currency per line, each kept on its own row so "ل.ل." never wraps away from its number
+  const money = (usd: number) => { const parts = formatMoney(Number(usd), Number(o.fx_lbp_rate), tenant.display_currency ?? 'both', L).split(' · ');
+    return <span className="money-stack">{parts.map((x, i) => <span key={i} dir="ltr" style={{ display: 'block', whiteSpace: 'nowrap', fontSize: i ? '0.85em' : undefined, opacity: i ? .75 : 1 }}>{x}</span>)}</span>; };
   const paidUsd = o.payments.filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Number(p.amount) / Number(o.fx_lbp_rate) : Number(p.amount) / 100), 0);
   const due = Math.max(0, Number(o.total_usd) - paidUsd);
   const shopPhone = o.shop?.whatsapp || o.shop?.phone || ''; const map = mapUrl(o.address); const address = addrText(o.address);

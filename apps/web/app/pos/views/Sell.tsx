@@ -10,6 +10,7 @@ import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
 import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
+import { can, roleOf } from '../lib/perm';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
@@ -76,7 +77,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const onScan = useCallback((code: string): string | void => {
     if (receipt) return;
     const hit = index.scanEx(code, scaleConfigs(shop));
-    if (!hit) { if (boot.role === 'owner' || boot.role === 'stock') setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`); return; }
+    if (!hit) { if (can(roleOf(staff), 'newItemOnScan')) setDialog({ k: 'newItem', code }); else flash(`${pt('unknownBarcode', locale)}: ${code}`); return; }
     if (!hit.pack && !hit.scale) { add(hit.product); return text(hit.product.name, locale); }
     // pack barcode or scale label → its own line (quantity / price come from the barcode)
     const base = lineFromProduct(hit.product, hit.qty);

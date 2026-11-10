@@ -6,6 +6,7 @@ import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import AccountMenu from './components/AccountMenu';
+import { roleOf, viewsFor } from './lib/perm';
 import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 import ShiftView from './views/ShiftView';
@@ -37,6 +38,8 @@ export default function Shell(props: {
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
   const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);
+  const allowed = viewsFor(roleOf(staff));
+  useEffect(() => { if (!allowed.includes(view)) setView('sell'); }, [allowed, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [custFocus, setCustFocus] = useState<{ phone: string; name: string; n: number } | null>(null);
   const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
@@ -50,7 +53,7 @@ export default function Shell(props: {
         <button className="btn icon pos-menu-btn" aria-label="menu" onClick={() => setMenu(m => !m)}>☰{pendingCount > 0 && view !== 'orders' && <span className="nav-badge">{pendingCount}</span>}</button>
         <span className="pos-menu-current">{ICON[view]} {pt(LABEL[view], locale)}</span>
         <nav className={`pos-nav ${menu ? 'open' : ''}`} onClick={e => { if (e.target === e.currentTarget) setMenu(false); }}>
-          {VIEWS.map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
+          {viewsFor(roleOf(staff)).map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
           <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>

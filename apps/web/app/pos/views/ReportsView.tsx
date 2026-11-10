@@ -4,6 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, num, shiftSummary, text, todaySummary, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
+import { can, roleOf } from '../lib/perm';
+import type { Staff } from '@suqa/pos-core';
 import { fmtTime } from '../lib/boot';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { downloadCsv, downloadXlsx, flat, usd, type Row } from '../lib/export';
@@ -22,8 +24,8 @@ function presetRange(p: Preset): [string, string] {
 }
 
 /** Today (always local, works offline) + period reports (server for owners when online, mirror otherwise) + exports. */
-export default function ReportsView({ boot, sb, locale, tick, status }: { boot: Booted; sb: SupabaseClient; locale: L; tick: number; status: SyncStatus | null }) {
-  const owner = boot.role === 'owner';
+export default function ReportsView({ boot, sb, locale, tick, status, staff }: { boot: Booted; sb: SupabaseClient; locale: L; tick: number; status: SyncStatus | null; staff: Staff }) {
+  const owner = can(roleOf(staff), 'reports.profit');
   const online = status?.online ?? true;
   const [t, setT] = useState<Today | null>(null);
   const [shift, setShift] = useState<ShiftSummary | null>(null);

@@ -2,11 +2,13 @@
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hashPin, isValidPin, type Conflict, type Device, type OutboxOp, type Staff, type SyncStatus } from '@suqa/pos-core';
+import Modal from '../components/Modal';
 import StaffPanel from '../components/StaffPanel';
 import DriversPanel from '../components/DriversPanel';
 import ShopSettings from '../components/ShopSettings';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
+import { can, roleOf } from '../lib/perm';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type PrintSettings } from '../lib/print';
 
@@ -20,7 +22,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
   const [ps, setPs] = useState<PrintSettings>(() => loadPrintSettings());
   const upd = (patch: Partial<PrintSettings>) => { const n = { ...ps, ...patch }; setPs(n); savePrintSettings(n); };
   const confirm = useConfirm();
-  const owner = boot.role === 'owner';
+  const role = roleOf(staff); const owner = can(role, 'settings.shop'); const seeDevices = can(role, 'settings.devices'); const seeOps = can(role, 'settings.ops');
   const online = status?.online ?? true;
   const [conflicts, setConflicts] = useState<Conflict[]>([]); const [rejected, setRejected] = useState<OutboxOp[]>([]);
   const loadRejected = () => boot.db.outbox.where('state').equals('rejected').toArray().then(r => setRejected(r.sort((a, b) => b.created_at.localeCompare(a.created_at))));
@@ -46,20 +48,22 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
     const { error } = await sb.rpc('pos_revoke_device', { p_id: d.id });
     if (error) alert(error.message); else boot.engine.poke();
   };
-  const changePin = async () => {
-    const a = prompt(pt('setPin', locale)); if (a === null) return;
+  const [pinDlg, setPinDlg] = useState(false); const [pinA, setPinA] = useState(''); const [pinB, setPinB] = useState('');
+  const changePin = () => { setPinA(''); setPinB(''); setPinMsg(null); setPinDlg(true); };
+  const savePin = async () => {
+    const a = pinA.trim(), b = pinB.trim();
     if (!isValidPin(a)) { setPinMsg(pt('enterPin', locale)); return; }
-    const b = prompt(pt('confirmPin', locale)); if (b !== a) { setPinMsg(pt('pinMismatch', locale)); return; }
+    if (b !== a) { setPinMsg(pt('pinMismatch', locale)); return; }
     const { hash, salt } = await hashPin(a);
     const { error } = await sb.rpc('pos_set_pin', { p_shop: boot.shop.id, p_user: staff.user_id, p_hash: hash, p_salt: salt });
     if (error) { setPinMsg(error.message); return; }
     await boot.db.staff.update(staff.user_id, { pin_hash: hash, pin_salt: salt });
-    setPinMsg(pt('pinSaved', locale));
+    setPinMsg(pt('pinSaved', locale)); setPinDlg(false);
   };
 
   return (
     <div className="stack" style={{ padding: 16, maxWidth: 760 }}>
-      <section className="card">
+      {seeDevices && <section className="card">
         <h3 style={{ marginTop: 0 }}>{pt('devices', locale)}</h3>
         <table className="table">
           <tbody>
@@ -73,14 +77,19 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
             ))}
           </tbody>
         </table>
-      </section>
+      </section>}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>{pt('staff', locale)}</h3>
         {owner ? <StaffPanel boot={boot} sb={sb} locale={locale} staff={staff} online={online} /> : <ul style={{ margin: 0, paddingInlineStart: 18 }}>
           {members.filter(m => m.active).map(m => <li key={m.user_id}>{m.display_name || m.full_name || m.user_id.slice(0, 8)} <span className="muted">· {pt((`role_${m.role}` as 'role_owner'), locale)}</span></li>)}
         </ul>}
         <div className="row" style={{ marginTop: 10, gap: 10, alignItems: 'center' }}>
-          <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && <span className="muted">{pinMsg}</span>}
+          <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && !pinDlg && <span className="muted">{pinMsg}</span>}
+          {pinDlg && <Modal open onClose={() => setPinDlg(false)} title={pt('changePin', locale)} footer={<><button className="btn ghost" onClick={() => setPinDlg(false)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={pinA.length < 4} onClick={savePin}>{pt('save', locale)}</button></>}>
+            <label className="label">{pt('setPin', locale)}<input className="input" dir="ltr" inputMode="numeric" type="password" maxLength={4} autoFocus value={pinA} onChange={e => setPinA(e.target.value.replace(/\D/g, ''))} /></label>
+            <label className="label">{pt('confirmPin', locale)}<input className="input" dir="ltr" inputMode="numeric" type="password" maxLength={4} value={pinB} onChange={e => setPinB(e.target.value.replace(/\D/g, ''))} /></label>
+            {pinMsg && <div className="bad">{pinMsg}</div>}
+          </Modal>}
         </div>
       </section>
       {owner && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
@@ -116,13 +125,13 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('printerHint', locale)}</p>
         </div>
       </section>
-      <section className="card" id="rejected-ops">
+      {seeOps && <section className="card" id="rejected-ops">
         <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('rejectedOps', locale)}{rejected.length ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{rejected.length}</span> : null}</h3>{rejected.length > 0 && <button className="btn ghost" onClick={() => dropRejected()}>{pt('clearAll', locale)}</button>}</div>
         <p className="muted" style={{ fontSize: 13 }}>{pt('rejectedOpsHint', locale)}</p>
         {rejected.length ? <table className="table"><tbody>
           {rejected.map(op => <tr key={op.seq}><td className="muted">{fmtTime(op.created_at, locale)}</td><td>{pt(`a_${op.kind.replace('.', '_')}` as Key, locale)}</td><td className="muted" style={{ whiteSpace: 'normal' }}>{op.last_error}</td><td><button className="btn ghost" onClick={() => dropRejected(op.seq)}>✕</button></td></tr>)}
         </tbody></table> : <p className="muted">—</p>}
-      </section>
+      </section>}
       {owner && <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('conflicts', locale)}{conflicts.some(c => !c.seen) ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{conflicts.filter(c => !c.seen).length}</span> : null}</h3>{conflicts.some(c => !c.seen) && <button className="btn ghost" onClick={markSeen}>{pt('markSeen', locale)}</button>}</div>
         <p className="muted" style={{ fontSize: 12 }}>{pt('conflictHint', locale)}</p>

@@ -50,7 +50,10 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   useEffect(() => { if (newOrderRequest && presetCustomer) { setReceipt(null); setDraft(d => ({ ...(d.lines.length ? d : newDraft('whatsapp')), channel: 'whatsapp', customer_phone: presetCustomer.phone, customer_name: presetCustomer.name })); setDialog({ k: 'customer' }); return; } if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'pickup' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
-  useEffect(() => { busyRef.current = draft.lines.length > 0 || !!dialog; const t = setTimeout(() => { if (draft.lines.length) void saveDraft(boot.db, draft); }, 400); return () => clearTimeout(t); }, [draft, dialog, boot.db, busyRef]);
+  // A sold / saved cart must never be written back: the autosave below used to fire again when the pay dialog closed, so the
+  // sold items came back as the "current cart" after leaving the receipt for another view or reloading.
+  const committed = useRef<Set<string>>(new Set());
+  useEffect(() => { busyRef.current = draft.lines.length > 0 || !!dialog; const t = setTimeout(() => { if (draft.lines.length && !committed.current.has(draft.id)) void saveDraft(boot.db, draft); }, 400); return () => clearTimeout(t); }, [draft, dialog, boot.db, busyRef]);
   // the sold order's server number arrives through the feed
   useEffect(() => { if (receipt) boot.db.orders.get(receipt.order.id).then(o => { if (o?.number) setServerNo(o.number); }); }, [tick, receipt, boot.db]);
 
@@ -116,11 +119,13 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const startNew = useCallback(async () => { setReceipt(r => { if (r) setLastSale({ r, no: serverNo }); return null; }); setReopened(false); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, [serverNo]);
   const park = async (label: string) => { await saveDraft(boot.db, draft, true, label); setParked(await listParked(boot.db)); await startNew(); };
   const resume = async (id: string) => { const row = parked.find(p => p.id === id); if (!row) return; if (live.length) await saveDraft(boot.db, draft, true); await dropDraft(boot.db, id); setDraft(row.draft); setParked(await listParked(boot.db)); setDialog(null); };
-  const cancel = async (reason: string) => { await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
+  const cancel = async (reason: string) => { committed.current.add(draft.id); await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
 
   const confirmPay = async (payments: Parameters<typeof commitSale>[1]['payments'], changeIn: Currency) => {
-    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: isOrder ? 'accepted' : undefined });
+    committed.current.add(draft.id);
+    const r = await commitSale(boot.db, { draft, payments, rate, lbpStep, changeIn, staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: isOrder ? 'accepted' : undefined }).catch(e => { committed.current.delete(draft.id); throw e; });
     await dropDraft(boot.db, draft.id);
+    setDraft(newDraft('walkin'));                  // the receipt shows the sold order; the cart behind it is empty from here on
     setDialog(null); setReceipt(r); boot.engine.poke();
     const ps = loadPrintSettings();
     if (ps.autoPrint) doPrint(receiptHtml(r.order, r.lines, r.payments, shop, locale, ps, { cashier: staff.display_name || staff.full_name || '' }));
@@ -129,7 +134,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const saveToOrders = async () => {
     if (!live.length || !isOrder) return;
     if (!draft.customer_phone) { setDialog({ k: 'customer' }); return; }
-    await commitSale(boot.db, { draft, payments: [], rate, lbpStep, changeIn: 'usd', staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: 'accepted' });
+    committed.current.add(draft.id);
+    await commitSale(boot.db, { draft, payments: [], rate, lbpStep, changeIn: 'usd', staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: 'accepted' }).catch(e => { committed.current.delete(draft.id); throw e; });
     await dropDraft(boot.db, draft.id); boot.engine.poke(); flash(pt('orderSaved', locale)); await startNew(); onGo('orders');
   };
   useShortcuts({

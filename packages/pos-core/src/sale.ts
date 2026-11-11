@@ -140,7 +140,10 @@ export async function loadCurrentDraft(db: PosDb): Promise<Draft | null> {
   const id = (await db.meta.get(META.currentDraft))?.value as string | undefined;
   if (!id) return null;
   const row = await db.drafts.get(id);
-  return row && !row.parked ? (row.draft as Draft) : null;
+  if (!row || row.parked) return null;
+  // the order id is the draft id: a draft that already became an order was sold / saved — drop it, never show it again
+  if (await db.orders.get(id)) { await dropDraft(db, id); return null; }
+  return row.draft as Draft;
 }
 export async function listParked(db: PosDb): Promise<Array<{ id: string; label?: string; updated_at: string; draft: Draft }>> {
   const rows = await db.drafts.where('parked').equals(1).reverse().sortBy('updated_at');

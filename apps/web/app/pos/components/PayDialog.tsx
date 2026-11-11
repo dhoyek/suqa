@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender , debtLines, findCustomer, normPhone } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender , debtLines, findCustomer, normPhone, searchCustomers, type ShopCustomer } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import Modal, { NumPad } from './Modal';
@@ -32,6 +32,16 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
   const [changeIn, setChangeIn] = useState<Currency>('lbp');
   const [ref, setRef] = useState(''); const [uName, setUName] = useState(customer?.name ?? ''); const [uPhone, setUPhone] = useState(customer?.phone ?? '');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  // debt: pick the person from the shop's customers (typing in either field suggests matches; 📇 opens the full search)
+  const [sugg, setSugg] = useState<ShopCustomer[]>([]); const [suggOpen, setSuggOpen] = useState(false); const [pickOpen, setPickOpen] = useState(false); const [pq, setPq] = useState('');
+  const [pickList, setPickList] = useState<ShopCustomer[]>([]);
+  useEffect(() => {
+    if (!boot || tender !== 'unpaid' || !suggOpen) { setSugg([]); return; }
+    const q = (uPhone.trim().length >= 3 ? uPhone : uName).trim(); if (q.length < 2) { setSugg([]); return; }
+    let on = true; searchCustomers(boot.db, q, 6).then(r => { if (on) setSugg(r.filter(c => !(normPhone(c.phone) === normPhone(uPhone) && c.name === uName))); }); return () => { on = false; };
+  }, [boot, tender, uName, uPhone, suggOpen]);
+  useEffect(() => { if (!boot || !pickOpen) return; let on = true; searchCustomers(boot.db, pq, 20).then(r => { if (on) setPickList(r); }); return () => { on = false; }; }, [boot, pickOpen, pq]);
+  const pickCustomer = (c: ShopCustomer) => { setUName(c.name || ''); setUPhone(c.phone); setSuggOpen(false); setPickOpen(false); setErr(null); };
 
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const committed = useMemo(() => settle(totalCents, rows, rate, lbpStep, changeIn), [totalCents, rows, rate, lbpStep, changeIn]);
@@ -130,7 +140,14 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           </div>
           <div className="tender-extra">
             {(tender === 'card' || tender === 'wallet') && <input className="input" placeholder={pt('reference', locale)} value={ref} onChange={e => setRef(e.target.value)} />}
-            {tender === 'unpaid' && <div className="row" style={{ gap: 8 }}><input className="input" placeholder={pt('customerName', locale)} value={uName} onChange={e => setUName(e.target.value)} /><input className="input" placeholder={pt('customerPhone', locale)} inputMode="tel" value={uPhone} onChange={e => setUPhone(e.target.value)} /></div>}
+            {tender === 'unpaid' && <div style={{ position: 'relative' }}>
+              <div className="row" style={{ gap: 8 }}>
+                <input className="input" placeholder={pt('customerName', locale)} value={uName} onFocus={() => setSuggOpen(true)} onChange={e => { setUName(e.target.value); setSuggOpen(true); }} />
+                <input className="input" placeholder={pt('customerPhone', locale)} inputMode="tel" value={uPhone} onFocus={() => setSuggOpen(true)} onChange={e => { setUPhone(e.target.value); setSuggOpen(true); }} />
+                {boot && <button type="button" className="btn" title={pt('pickCustomer', locale)} onClick={() => { setPq(uName || uPhone); setPickOpen(true); }}>📇</button>}
+              </div>
+              {suggOpen && sugg.length > 0 && <ul className="pay-sugg">{sugg.map(c => <li key={c.id}><button type="button" onMouseDown={e => e.preventDefault()} onClick={() => pickCustomer(c)}><span>👤 {c.name || '—'}</span><span className="muted" dir="ltr">{c.phone}</span></button></li>)}</ul>}
+            </div>}
             {tender === 'unpaid' && credit && <small className={overLimit ? 'bad' : 'muted'}>{pt('creditLimit', locale)} {fmtUsd(credit.limit)} · {pt('outstanding', locale)} {fmtUsd(credit.outstanding)}{overLimit ? ` — ${pt(isOwner ? 'creditLimitOwner' : 'creditLimitExceeded', locale)}` : ''}</small>}
           </div>
           <ul className="tender-list">
@@ -147,6 +164,11 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           <NumPad value={pristine ? '' : amount} onChange={v => type(v)} decimal={cur === 'usd'} onEnter={() => (canConfirm ? void confirm() : addRow())} big />
         </div>
       </div>
+      {pickOpen && <Modal open onClose={() => setPickOpen(false)} title={`📇 ${pt('pickCustomer', locale)}`}>
+        <input className="input" autoFocus placeholder={pt('searchCustomer', locale)} value={pq} onChange={e => setPq(e.target.value)} />
+        <ul className="tender-list" style={{ marginTop: 8 }}>{pickList.map(c => <li key={c.id}><span>👤 {c.name || '—'} <span className="muted" dir="ltr">{c.phone}</span></span><button className="btn" onClick={() => pickCustomer(c)}>✓</button></li>)}</ul>
+        {!pickList.length && <p className="muted">{pt('noResults', locale)}</p>}
+      </Modal>}
     </Modal>
   );
 }

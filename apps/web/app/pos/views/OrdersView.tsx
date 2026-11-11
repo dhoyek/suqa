@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
@@ -14,6 +14,7 @@ import ReturnDialog from '../components/ReturnDialog';
 import OwnerPin from '../components/OwnerPin';
 import { useConfirm } from '@/components/ConfirmProvider';
 import OrderDetailSheet from '../components/OrderDetailSheet';
+import { newOrderChime } from '../lib/chime';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { orderSheetHtml } from '../lib/print';
 
@@ -39,12 +40,17 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [, setClock] = useState(0); useEffect(() => { const t = setInterval(() => setClock(c => c + 1), 30_000); return () => clearInterval(t); }, []);   // ages tick every 30 s
+  const ackSeen = useRef<Set<string> | null>(null); const [ackToast, setAckToast] = useState<string | null>(null);
   const reload = async () => {
     const since = new Date(Date.now() - (range === '7d' || range === 'all' ? 8 * 24 : 48) * 3600_000).toISOString();
     const all = (await boot.db.orders.toArray()).filter(o => o.channel !== 'walkin' && !o.parked && (!o.closed_at || o.closed_at > since));
     // open orders: the ones wanted soonest first (scheduled ones by their time, ASAP ones by when they came in); closed ones newest first
     const open = (o: Order) => !o.closed_at; const k = (o: Order) => o.needed_at ?? o.placed_at;
     all.sort((a, b) => open(a) && open(b) ? (k(a) < k(b) ? -1 : 1) : (a.placed_at < b.placed_at ? 1 : -1));
+    // a driver just confirmed one of our orders → chime + toast (only for confirmations that arrive while the board is open)
+    const acked = new Set(all.filter(o => o.driver_ack_at).map(o => o.id));
+    if (ackSeen.current) { const fresh = all.find(o => o.driver_ack_at && !ackSeen.current!.has(o.id)); if (fresh) { newOrderChime(); setAckToast(`🛵✅ ${fresh.courier_name ?? ''} — ${fresh.number ?? fresh.local_number ?? ''} ${pt('driverAcked', locale)}`); setTimeout(() => setAckToast(null), 6000); } }
+    ackSeen.current = acked;
     setOrders(all);
     const ids = all.map(o => o.id);
     const ls = await boot.db.orderLines.where('order_id').anyOf(ids).toArray(); const ps = await boot.db.payments.where('order_id').anyOf(ids).toArray();
@@ -181,6 +187,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
           if (extra && extra.fee_amount > 0 && shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`, user_id: staff.user_id });
           boot.engine.poke(); setDialog(null); await reload();
         }} onClose={() => setDialog(null)} />}
+      {ackToast && <div className="toast">{ackToast}</div>}
       {dialog?.k === 'detail' && <OrderDetailSheet sb={sb} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} payments={payments[dialog.o.id] ?? []} online={online} onCustomer={onCustomer} onClose={() => setDialog(null)} />}
       {dialog?.k === 'return' && <ReturnDialog boot={boot} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} staff={staff} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
     </div>
@@ -312,10 +319,16 @@ function mapHref(a: Record<string, unknown>): string | null {
   const p = (a.lat != null && a.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a.location as string | null | undefined);
   return p ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : null;
 }
+const fmtClock = (iso: string, locale: L) => new Date(iso).toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
 
 /** "🛵 Abou Ali 📞 💬" on an order that left the shop — or "المحل" when the shop delivered it itself. */
 function DriverLine({ o, boot, locale }: { o: Order; boot: Booted; locale: L }) {
   const [d, setD] = useState<Driver | null>(null);
   useEffect(() => { if (o.driver_id) boot.db.drivers.get(o.driver_id).then(x => setD(x ?? null)); else setD(null); }, [boot, o.driver_id]);
-  return <div className="muted" style={{ fontSize: 12 }}>🛵 {d ? <>{d.name} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>💬</a></> : (o.courier_name || pt('shopDelivers', locale))}</div>;
+  const ack = o.driver_id && o.status === 'out_for_delivery'
+    ? (o.driver_ack_at
+      ? <span className="pill ok" style={{ marginInlineStart: 4 }} title={pt('driverAckHint', locale)}>✓ {pt('driverAcked', locale)} {fmtClock(o.driver_ack_at, locale)}</span>
+      : <span className={`pill ${o.updated_at && Date.now() - new Date(o.updated_at).getTime() > 5 * 60000 ? 'warn' : ''}`} style={{ marginInlineStart: 4 }} title={pt('driverAckHint', locale)}>⏳ {pt('driverAckWaiting', locale)}</span>)
+    : null;
+  return <div className="muted" style={{ fontSize: 12 }}>🛵 {d ? <>{d.name}{ack} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>💬</a></> : (o.courier_name || pt('shopDelivers', locale))}</div>;
 }

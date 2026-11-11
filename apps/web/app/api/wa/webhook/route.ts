@@ -66,6 +66,14 @@ async function handleInbound(m: Msg, phoneNumberId?: string) {
     } catch (e) { console.error('[wa location]', e); }
   }
 
+  // A shop driver answering his dispatch message ("ok", 👍, "جايي"…) confirms his latest unconfirmed order (52_driver_ack)
+  if (m.type !== 'location') {
+    try {
+      const { data: acked } = await sb.rpc('driver_ack_by_phone', { p_phone: from });
+      if (acked) { await logWaMessage({ wamid: m.id, order_id: acked as string, direction: 'in', party: 'courier', phone: from, phone_number_id: phoneNumberId, body: text }); return; }
+    } catch (e) { console.error('[wa driver ack]', (e as Error).message); }
+  }
+
   const { data: match } = await sb.rpc('wa_match_order', { p_phone: from, p_context_wamid: m.context?.id ?? null, p_phone_number_id: phoneNumberId ?? null });
   const hit = (Array.isArray(match) ? match[0] : match) as { order_id: string; party: Party } | undefined;
   await logWaMessage({ wamid: m.id, order_id: hit?.order_id ?? null, direction: 'in', party: hit?.party ?? 'unknown', phone: from, phone_number_id: phoneNumberId, body: text });

@@ -7,7 +7,7 @@ import { formatMoney, pointFromEwkb, t as tr, type LocalizedText } from '@suqa/s
 export const dynamic = 'force-dynamic';
 
 type Row = {
-  id: string; number: string; status: string; placed_at: string; needed_at: string | null; fx_lbp_rate: number; subtotal_usd: number; delivery_fee_usd: number; total_usd: number;
+  id: string; number: string; status: string; driver_id: string | null; driver_ack_at: string | null; placed_at: string; needed_at: string | null; fx_lbp_rate: number; subtotal_usd: number; delivery_fee_usd: number; total_usd: number;
   courier_fee_cents: number; paid_usd_cents: number; paid_lbp: number; customer_name: string; customer_phone: string; customer_notes: string | null; address: Record<string, unknown> | null;
   shop: { name: LocalizedText; phone: string | null; whatsapp: string | null; address_text: string | null } | null;
   items: { name: LocalizedText; quantity: number; unit: string | null; notes: string | null; voided: boolean | null }[];
@@ -19,11 +19,11 @@ const mapUrl = (a: Record<string, unknown> | null) => { if (!a) return ''; if (a
 
 /** /d/<order id> — the driver's sheet for one delivery: who to call (shop + customer), where, what, and what to collect.
  *  Public by unguessable id, like the receipt page; shows only what a driver needs. */
-export default async function DriverSheet({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function DriverSheet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ack?: string }> }) {
+  const { id } = await params; const { ack } = await searchParams;
   const admin = supabaseAdmin(); if (!admin || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tenant = await getTenant(); const L = await getLocale(tenant); const ar = L === 'ar';
-  const { data } = await admin.from('orders').select('id, number, status, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
+  const { data } = await admin.from('orders').select('id, number, status, driver_id, driver_ack_at, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
   const o = data as unknown as Row | null; if (!o) notFound();
   // one currency per line, each kept on its own row so "ل.ل." never wraps away from its number
   const money = (usd: number) => { const parts = formatMoney(Number(usd), Number(o.fx_lbp_rate), tenant.display_currency ?? 'both', L).split(' · ');
@@ -37,6 +37,15 @@ export default async function DriverSheet({ params }: { params: Promise<{ id: st
     <main className="container narrow stack" style={{ paddingBottom: 24 }}>
       <h1 style={{ margin: '8px 0 0' }}>🛵 {ar ? 'توصيل' : 'Delivery'} {o.number}</h1>
       <div className="muted">{tr(o.shop?.name ?? {}, L)} · {when(o.placed_at)}{o.needed_at ? ` · ⏰ ${when(o.needed_at)}` : ''}</div>
+
+      {/* one tap so the shop knows he got it and is coming for the bag */}
+      {o.driver_id && ['accepted', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && (o.driver_ack_at
+        ? <div className="card" style={{ background: '#ecfdf5', borderColor: '#86efac', fontWeight: 700 }}>✓ {ar ? 'أكّدت استلام الطلب' : 'You confirmed this order'} · {new Date(o.driver_ack_at).toLocaleTimeString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })} — {ar ? 'المحل يعلم أنك قادم.' : 'the shop knows you are coming.'}</div>
+        : <form method="post" action={`/api/d/${o.id}/ack`} className="stack" style={{ gap: 6 }}>
+            <button className="btn primary big" type="submit" style={{ minHeight: 64, fontSize: 20 }}>✅ {ar ? 'استلمت الطلب — أنا قادم' : 'Got it — on my way'}</button>
+            <small className="muted">{ar ? 'اضغط ليعرف المحل أنك رأيت الطلب وستأتي لاستلامه.' : 'Tap so the shop knows you saw it and are coming to pick it up.'}</small>
+          </form>)}
+      {ack === 'err' && <div className="card bad">{ar ? 'تعذّر التأكيد — الطلب لم يعد مفتوحاً. اتصل بالمحل.' : 'Could not confirm — the order is no longer open. Call the shop.'}</div>}
 
       <section className="card stack">
         <strong>🏪 {ar ? 'المحل' : 'Shop'}: {tr(o.shop?.name ?? {}, L)}</strong>

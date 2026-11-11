@@ -41,7 +41,7 @@ export interface Order {
   rate_lbp_per_usd: number; subtotal_cents: number; discount_cents: number; discount_reason?: string | null; total_cents: number; total_lbp: number;
   delivery_fee_usd?: number | string; total_usd?: number | string; courier_fee_cents?: number; courier_name?: string | null;
   paid_usd_cents: number; paid_lbp: number; change_usd_cents: number; change_lbp: number;
-  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null; driver_id?: string | null; driver_ack_at?: string | null; driver_picked_at?: string | null;
+  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null; driver_id?: string | null; driver_ack_at?: string | null; driver_picked_at?: string | null; driver_delivered_at?: string | null;
   placed_at: string; accepted_at?: string | null; delivered_at?: string | null; closed_at?: string | null; updated_at?: string;
 }
 export interface OrderLine {

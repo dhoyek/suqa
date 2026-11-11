@@ -257,3 +257,7 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .track-pay.due { background: #fff8e6; border-color: #fcd34d; }
 .track-pay.paid { background: #ecfdf5; color: #166534; }
 .money-stack small { display: block; font-weight: 400; font-size: .85em; opacity: .75; white-space: nowrap; }
+/* driver sheet: confirm → picked up → delivered */
+.dsteps { display: flex; gap: 6px; flex-wrap: wrap; }
+.dstep { flex: 1; text-align: center; padding: 6px 4px; border-radius: 8px; background: #f3f4f6; color: #6b7280; font-size: 13px; white-space: nowrap; }
+.dstep.done { background: #ecfdf5; color: #166534; font-weight: 700; }

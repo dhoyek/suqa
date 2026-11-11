@@ -48,8 +48,15 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     const open = (o: Order) => !o.closed_at; const k = (o: Order) => o.needed_at ?? o.placed_at;
     all.sort((a, b) => open(a) && open(b) ? (k(a) < k(b) ? -1 : 1) : (a.placed_at < b.placed_at ? 1 : -1));
     // a driver just confirmed one of our orders → chime + toast (only for confirmations that arrive while the board is open)
-    const acked = new Set(all.filter(o => o.driver_ack_at).map(o => o.id));
-    if (ackSeen.current) { const fresh = all.find(o => o.driver_ack_at && !ackSeen.current!.has(o.id)); if (fresh) { newOrderChime(); setAckToast(`🛵✅ ${fresh.courier_name ?? ''} — ${fresh.number ?? fresh.local_number ?? ''} ${pt('driverAcked', locale)}`); setTimeout(() => setAckToast(null), 6000); } }
+    const stepKey = (o: Order) => `${o.id}:${o.driver_ack_at ? 1 : 0}${o.driver_picked_at ? 1 : 0}${o.driver_delivered_at ? 1 : 0}`;
+    const acked = new Set(all.filter(o => o.driver_ack_at).map(stepKey));
+    if (ackSeen.current) {
+      const fresh = all.find(o => o.driver_ack_at && !ackSeen.current!.has(stepKey(o)));
+      if (fresh) {
+        const what = fresh.driver_delivered_at ? `🏠 ${pt('driverDelivered', locale)} — ${pt('driverDeliveredHint', locale)}` : fresh.driver_picked_at ? `📦 ${pt('driverPicked', locale)}` : `✅ ${pt('driverAcked', locale)}`;
+        newOrderChime(); setAckToast(`🛵 ${fresh.courier_name ?? ''} · ${fresh.number ?? fresh.local_number ?? ''} — ${what}`); setTimeout(() => setAckToast(null), 7000);
+      }
+    }
     ackSeen.current = acked;
     setOrders(all);
     const ids = all.map(o => o.id);
@@ -326,7 +333,11 @@ function DriverLine({ o, boot, locale }: { o: Order; boot: Booted; locale: L }) 
   const [d, setD] = useState<Driver | null>(null);
   useEffect(() => { if (o.driver_id) boot.db.drivers.get(o.driver_id).then(x => setD(x ?? null)); else setD(null); }, [boot, o.driver_id]);
   const ack = o.driver_id && o.status === 'out_for_delivery'
-    ? (o.driver_ack_at
+    ? (o.driver_delivered_at
+      ? <span className="pill warn" style={{ marginInlineStart: 4 }} title={pt('driverDeliveredHint', locale)}>🏠 {pt('driverDelivered', locale)} {fmtClock(o.driver_delivered_at, locale)}</span>
+      : o.driver_picked_at
+      ? <span className="pill ok" style={{ marginInlineStart: 4 }}>📦 {pt('driverPicked', locale)} {fmtClock(o.driver_picked_at, locale)}</span>
+      : o.driver_ack_at
       ? <span className="pill ok" style={{ marginInlineStart: 4 }} title={pt('driverAckHint', locale)}>✓ {pt('driverAcked', locale)} {fmtClock(o.driver_ack_at, locale)}</span>
       : <span className={`pill ${o.updated_at && Date.now() - new Date(o.updated_at).getTime() > 5 * 60000 ? 'warn' : ''}`} style={{ marginInlineStart: 4 }} title={pt('driverAckHint', locale)}>⏳ {pt('driverAckWaiting', locale)}</span>)
     : null;

@@ -17,8 +17,10 @@ const LBP_NOTES = [50000, 100000, 500000, 1000000];
  * customer would hand over for what remains. The layout never reflows when switching tender or currency.
  */
 export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number };
-export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, courier, title, boot, isOwner }: {
+export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, onCustomer, courier, title, boot, isOwner }: {
   totalCents: number; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
+  /** sale in progress: the customer shown here IS the cart's customer — picking / clearing it here changes the cart (one field, two places to reach it) */
+  onCustomer?: (c: { name: string; phone: string } | null) => void;
   /** delivery handover: ask who delivered and the driver's fee (recorded as cash out of the drawer) */
   courier?: { name?: string | null } | null; title?: string; boot?: Booted; isOwner?: boolean;
   onConfirm: (payments: TenderRow[], changeIn: Currency, extra?: CourierExtra) => Promise<void>; onClose: () => void;
@@ -41,7 +43,11 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
     let on = true; searchCustomers(boot.db, q, 6).then(r => { if (on) setSugg(r.filter(c => !(normPhone(c.phone) === normPhone(uPhone) && c.name === uName))); }); return () => { on = false; };
   }, [boot, tender, uName, uPhone, suggOpen]);
   useEffect(() => { if (!boot || !pickOpen) return; let on = true; searchCustomers(boot.db, pq, 20).then(r => { if (on) setPickList(r); }); return () => { on = false; }; }, [boot, pickOpen, pq]);
-  const pickCustomer = (c: ShopCustomer) => { setUName(c.name || ''); setUPhone(c.phone); setSuggOpen(false); setPickOpen(false); setErr(null); };
+  const [cust, setCust] = useState<{ name: string; phone: string } | null>(customer?.phone ? { name: customer.name ?? '', phone: customer.phone } : null);
+  const [custDebt, setCustDebt] = useState(0);
+  useEffect(() => { if (!boot || !cust?.phone) { setCustDebt(0); return; } let on = true; debtLines(boot.db, { openOnly: true, phones: [cust.phone] }).then(ls => { if (on) setCustDebt(ls.reduce((a, l) => a + l.outstanding_cents, 0)); }); return () => { on = false; }; }, [boot, cust?.phone]);
+  const pickCustomer = (c: ShopCustomer) => { setUName(c.name || ''); setUPhone(c.phone); setSuggOpen(false); setPickOpen(false); setErr(null); if (onCustomer) { const v = { name: c.name || '', phone: c.phone }; setCust(v); onCustomer(v); } };
+  const clearCustomer = () => { setCust(null); setUName(''); setUPhone(''); onCustomer?.(null); };
 
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const committed = useMemo(() => settle(totalCents, rows, rate, lbpStep, changeIn), [totalCents, rows, rate, lbpStep, changeIn]);
@@ -112,6 +118,15 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
         <span style={{ flex: 1 }} />
         <button className="btn primary big" style={{ width: 'auto', minWidth: 220 }} disabled={!canConfirm || busy} onClick={confirm}>{pt('confirmPay', locale)} ↵</button>
       </>}>
+      {onCustomer && boot && <div className="pay-customer">
+        {cust
+          ? <><span>👤 <strong>{cust.name || '—'}</strong> <span className="muted" dir="ltr">{cust.phone}</span></span>
+              {custDebt > 0 && <span className="pill bad">{pt('debtShort', locale)} {fmtUsd(custDebt)}</span>}
+              <span style={{ flex: 1 }} />
+              <button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
+              <button type="button" className="btn icon" title={pt('removeCustomer', locale)} onClick={clearCustomer}>✕</button></>
+          : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('pickCustomer', locale)}</button></>}
+      </div>}
       <div className="pay-grid">
         <div className="stack">
           <div className="pay-due">

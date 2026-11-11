@@ -24,7 +24,7 @@ begin
                           email_change_token_new, email_change, is_sso_user)
   values ('00000000-0000-0000-0000-000000000000', p_id, 'authenticated', 'authenticated', p_email,
           crypt('Suqa-dev-2026!', gen_salt('bf')), now(),
-          p_phone, case when p_phone is null then null else now() end,
+          regexp_replace(p_phone, '\D', '', 'g'), case when p_phone is null then null else now() end,   -- digits only, as phone sign-in stores it
           '{"provider":"email","providers":["email"]}'::jsonb,
           jsonb_build_object('full_name', p_name, 'tenant_id', p_tenant, 'locale', 'ar'),
           now(), now(), '', '', '', '', false)

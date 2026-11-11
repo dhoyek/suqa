@@ -23,7 +23,10 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
   const { id } = await params; const { ack } = await searchParams;
   const admin = supabaseAdmin(); if (!admin || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tenant = await getTenant(); const L = await getLocale(tenant); const ar = L === 'ar';
-  const { data } = await admin.from('orders').select('id, number, status, driver_id, driver_ack_at, driver_picked_at, driver_delivered_at, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
+  // driver_* step columns come from schemas 52/53; until a database has them, read the sheet without them (no buttons)
+  const SEL = 'id, number, status, driver_id, driver_ack_at, driver_picked_at, driver_delivered_at, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)';
+  let { data, error } = await admin.from('orders').select(SEL).eq('id', id).maybeSingle();
+  if (error && /driver_/.test(error.message)) ({ data, error } = await admin.from('orders').select(SEL.replace(/driver_(ack|picked|delivered)_at, /g, '')).eq('id', id).maybeSingle());
   const o = data as unknown as Row | null; if (!o) notFound();
   // one currency per line, each kept on its own row so "ل.ل." never wraps away from its number
   const money = (usd: number) => { const parts = formatMoney(Number(usd), Number(o.fx_lbp_rate), tenant.display_currency ?? 'both', L).split(' · ');

@@ -7,6 +7,7 @@ import { fmtTime } from '../lib/boot';
 import { debtReceiptHtml, debtStatementHtml, doPrint, loadPrintSettings } from '../lib/print';
 import Modal, { NumPad } from '../components/Modal';
 import OrderDetail from '../components/OrderDetail';
+import { useOrderItems } from '../lib/useOrderItems';
 import { PickChips, PickFilter, type PickItem } from '../components/CategoryFilter';
 
 type Mode = 'date' | 'person';
@@ -19,6 +20,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   const [history, setHistory] = useState<DebtSettlement[]>([]);
   const [mode, setMode] = useState<Mode>('person');
   const [openOnly, setOpenOnly] = useState(true);
+  const [showItems, setShowItems] = useState<boolean>(() => { try { return localStorage.getItem('suqa-pos-debt-items') !== '0'; } catch { return true; } });
   const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const [q, setQ] = useState(''); const [sel, setSel] = useState<Set<string>>(new Set());
   const [rate, setRate] = useState(89500);
@@ -49,7 +51,9 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   const Who = ({ name, phone }: { name: string; phone: string }) => onCustomer && phone
     ? <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', font: 'inherit', fontWeight: 700 }} title={pt('customersNav', locale)} onClick={() => onCustomer(phone, name)}>{name || '—'}</button>
     : <strong>{name || '—'}</strong>;
-  const No = ({ l }: { l: DebtLine }) => <button className="btn ghost" style={{ minHeight: 0, padding: '0 6px', font: 'inherit' }} title={pt('orderDetails', locale)} onClick={() => setDetail(l)}>{l.number}</button>;
+  const items = useOrderItems(boot.db, lines.map(l => l.order.id), locale, showItems);
+  // order number = link to the full order; the items sit under it when "📋 الأصناف" is on
+  const No = ({ l }: { l: DebtLine }) => <><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(l)}>{l.number} ↗</button>{showItems && items.get(l.order.id) && <div className="order-items-line">{items.get(l.order.id)}</div>}</>;
   const printList = (person?: DebtPerson) => {
     const st = loadPrintSettings();
     doPrint(debtStatementHtml(person ? person.lines.filter(l => openOnly ? !l.closed : true) : lines, boot.shop, locale, st, { person: person ? { name: person.name, phone: person.phone } : undefined, rate, lbpStep: step }), st);
@@ -62,6 +66,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
           <h3 style={{ margin: 0 }}>{pt('debtBook', locale)}</h3>
           <div className="seg"><button className={mode === 'person' ? 'active' : ''} onClick={() => setMode('person')}>{pt('byPerson', locale)}</button><button className={mode === 'date' ? 'active' : ''} onClick={() => setMode('date')}>{pt('byDate', locale)}</button></div>
           <label className="row" style={{ gap: 6, alignItems: 'center' }}><input type="checkbox" checked={openOnly} onChange={e => setOpenOnly(e.target.checked)} /> {pt('openOnly', locale)}</label>
+          <button className={`chip ${showItems ? 'active' : ''}`} onClick={() => setShowItems(v => { try { localStorage.setItem('suqa-pos-debt-items', v ? '0' : '1'); } catch { /* ignore */ } return !v; })}>📋 {pt('showItems', locale)}</button>
           <input className="input" type="date" dir="ltr" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 150 }} title={pt('from', locale)} />
           <input className="input" type="date" dir="ltr" value={to} onChange={e => setTo(e.target.value)} style={{ width: 150 }} title={pt('to', locale)} />
           <input className="input" placeholder={pt('searchPerson', locale)} value={q} onChange={e => { setQ(e.target.value); setSel(new Set()); }} style={{ flex: 1, minWidth: 160 }} />

@@ -7,6 +7,8 @@ import { fmtTime } from '../lib/boot';
 import MapPicker from '../components/MapPicker';
 import Modal from '../components/Modal';
 import { useConfirm } from '@/components/ConfirmProvider';
+import OrderDetail from '../components/OrderDetail';
+import { useOrderItems } from '../lib/useOrderItems';
 
 /** الزبائن — everyone who ever ordered: search, edit (name / address / pin / notes), balance, order history, WhatsApp, new order. */
 export default function CustomersView({ boot, locale, tick, status, staff, onNewOrder, focus }: { boot: Booted; locale: L; tick: number; status: SyncStatus | null; staff: Staff; onNewOrder: (c: { phone: string; name: string }) => void; focus?: { phone: string; name: string; n: number } | null }) {
@@ -51,6 +53,8 @@ function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved,
   const [notes, setNotes] = useState(c.notes ?? ''); const [pickMap, setPickMap] = useState(false);
   const [limit, setLimit] = useState(c.credit_limit_cents != null ? String(c.credit_limit_cents / 100) : ''); const [disc, setDisc] = useState(String(Number(c.discount_pct) || '')); const [msg, setMsg] = useState<string | null>(null); const [asking, setAsking] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]); const [active, setActive] = useState(c.active !== false);
+  const [detail, setDetail] = useState<Order | null>(null); const [showItems, setShowItems] = useState(true);
+  const items = useOrderItems(boot.db, orders.map(o => o.id), locale, showItems);
   useEffect(() => { if (!c.phone_key) return; boot.db.orders.toArray().then(os => setOrders(os.filter(o => !o.parked && normPhone(o.customer_phone) === c.phone_key).sort((a, b) => b.placed_at.localeCompare(a.placed_at)).slice(0, 30))); }, [boot, c.phone_key]);
   const dirty = active !== (c.active !== false) || limit !== (c.credit_limit_cents != null ? String(c.credit_limit_cents / 100) : '') || disc !== String(Number(c.discount_pct) || '') || phone !== c.phone || name !== c.name || line1 !== (c.address?.line1 ?? '') || map !== (c.address?.map_url ?? '') || notes !== (c.notes ?? '') || JSON.stringify(coords) !== JSON.stringify(c.address?.lat != null ? { lat: c.address.lat, lng: c.address.lng } : null);
   const save = async () => {
@@ -104,11 +108,12 @@ function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved,
       </div>
       {c.id && owner && hasHistory && <small className="muted">{pt('hasHistoryHint', locale)}</small>}
       {!!orders.length && <div className="card">
-        <strong>{pt('history', locale)}</strong>
+        <div className="row spread" style={{ alignItems: 'center' }}><strong>{pt('history', locale)} <span className="muted">{orders.length}</span></strong><button className={`chip ${showItems ? 'active' : ''}`} onClick={() => setShowItems(v => !v)}>📋 {pt('showItems', locale)}</button></div>
         <table className="table" style={{ marginTop: 6 }}><tbody>
-          {orders.map(o => <tr key={o.id}><td className="muted">{fmtTime(o.placed_at, locale)}</td><td>{o.number ?? o.local_number}</td><td className="muted">{pt(o.channel as Key, locale)}</td><td><span className={`pill st-${o.status}`}>{pt(`st_${o.status}` as Key, locale)}</span></td><td className="num">{fmtUsd(num(o.total_cents))}</td></tr>)}
+          {orders.map(o => <tr key={o.id}><td className="muted" style={{ verticalAlign: 'top' }}>{fmtTime(o.placed_at, locale)}</td><td><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(o)}>{o.number ?? o.local_number} ↗</button>{showItems && items.get(o.id) && <div className="order-items-line">{items.get(o.id)}</div>}</td><td className="muted" style={{ verticalAlign: 'top' }}>{pt(o.channel as Key, locale)}</td><td style={{ verticalAlign: 'top' }}><span className={`pill st-${o.status}`}>{pt(`st_${o.status}` as Key, locale)}</span></td><td className="num" style={{ verticalAlign: 'top' }}>{fmtUsd(num(o.total_cents))}</td></tr>)}
         </tbody></table>
       </div>}
+      {detail && <OrderDetail boot={boot} locale={locale} order={detail} onClose={() => setDetail(null)} />}
       {pickMap && <MapPicker locale={locale} initial={coords} onDone={p => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); }} onClose={() => setPickMap(false)} />}
       {merge && <MergeDialog locale={locale} keep={c} candidates={all.filter(x => x.id !== c.id)} label={x => `${x.name || '—'} · ${fmtPhone(x.phone)} · ${x.orders_count} ${pt('ordersNav', locale)}`} onClose={() => setMerge(false)}
         onPick={async drop => { if (!(await confirm(pt('mergeConfirm', locale).replace('{drop}', drop.name || fmtPhone(drop.phone)).replace('{keep}', c.name || fmtPhone(c.phone)), { danger: true }))) return; await mergeCustomers(boot.db, c, drop); boot.engine.poke(); setMerge(false); onGone(); }} />}

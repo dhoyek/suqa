@@ -45,7 +45,7 @@ select suqa._policy('tenant_members','tm_admin_write','all','authenticated','suq
 select suqa._policy('shops','shops_public_read','select','anon, authenticated',
   'status = ''active'' or suqa.is_shop_member(id) or suqa.is_tenant_member(tenant_id)');
 select suqa._policy('shops','shops_tenant_write','all','authenticated','suqa.is_tenant_member(tenant_id)','suqa.is_tenant_member(tenant_id)');
-select suqa._policy('shops','shops_member_update','update','authenticated','suqa.is_shop_member(id)','suqa.is_shop_member(id) and status in (''active'',''paused'')');
+select suqa._policy('shops','shops_member_update','update','authenticated','suqa.is_shop_owner(id)','suqa.is_shop_owner(id) and status in (''active'',''paused'')');   -- 61: owner only (was any member)
 
 -- shop_members
 select suqa._policy('shop_members','sm_read','select','authenticated','user_id = auth.uid() or suqa.is_shop_member(shop_id) or suqa.is_tenant_member((select tenant_id from suqa.shops s where s.id = shop_id))');
@@ -61,9 +61,10 @@ select suqa._policy('categories','cat_write','all','authenticated','suqa.is_tena
 select suqa._policy('products','prod_public_read','select','anon, authenticated',
   '(is_active and exists (select 1 from suqa.shops s where s.id = shop_id and s.status = ''active''))
    or suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)');
+-- 61: owner or stock role (was any member); pos_role is created in 21 — this policy is (re)created by 61 once it exists
 select suqa._policy('products','prod_write','all','authenticated',
-  'suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)',
-  '(suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id))
+  'suqa.is_shop_owner(shop_id) or suqa.is_tenant_member(tenant_id)',
+  '(suqa.is_shop_owner(shop_id) or suqa.is_tenant_member(tenant_id))
    and tenant_id = (select tenant_id from suqa.shops s where s.id = shop_id)');
 
 -- delivery zones

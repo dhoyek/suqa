@@ -54,13 +54,13 @@ $$;
 create or replace function suqa.is_shop_member(p_shop uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from suqa.shop_members
-                  where shop_id = p_shop and user_id = auth.uid())
+                  where shop_id = p_shop and user_id = auth.uid() and active)   -- 61: a switched-off member has no access
 $$;
 
 create or replace function suqa.is_shop_owner(p_shop uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from suqa.shop_members
-                  where shop_id = p_shop and user_id = auth.uid() and role = 'owner')
+                  where shop_id = p_shop and user_id = auth.uid() and role = 'owner' and active)
 $$;
 
 -- ---------- order numbering ------------------------------------------------

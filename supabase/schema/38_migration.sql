@@ -27,6 +27,8 @@ create table if not exists suqa.migration_map (
   primary key (shop_id, kind, old_key)
 );
 create index if not exists migration_map_new_idx on suqa.migration_map (new_id);
+alter table suqa.migration_map enable row level security;                    -- 61: no policies — service key / migrate_apply only
+revoke all on table suqa.migration_map from public, anon, authenticated;
 
 create or replace function suqa.migrate_apply(p_shop uuid, p_kind text, p_rows jsonb, p_dry boolean default false) returns jsonb
 language plpgsql security definer set search_path = public as $$

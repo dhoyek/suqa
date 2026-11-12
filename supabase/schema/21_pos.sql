@@ -889,7 +889,11 @@ end $$;
 
 -- shop members read everything of their shop; writes go through pos_push (security definer) except where noted
 select suqa._policy('product_barcodes','pb_read','select','authenticated','suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)');
-select suqa._policy('product_barcodes','pb_write','all','authenticated','suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)','suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)');
+select suqa._policy('product_barcodes','pb_write','all','authenticated','suqa.pos_role(shop_id) in (''owner'',''stock'') or suqa.is_tenant_member(tenant_id)','suqa.pos_role(shop_id) in (''owner'',''stock'') or suqa.is_tenant_member(tenant_id)');   -- 61: owner / stock (was any member)
+select suqa._policy('products','prod_write','all','authenticated',
+  'suqa.pos_role(shop_id) in (''owner'',''stock'') or suqa.is_tenant_member(tenant_id)',
+  '(suqa.pos_role(shop_id) in (''owner'',''stock'') or suqa.is_tenant_member(tenant_id))
+   and tenant_id = (select tenant_id from suqa.shops s where s.id = shop_id)');   -- 61
 select suqa._policy('quick_buttons','qb_read','select','authenticated','suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)');
 select suqa._policy('quick_buttons','qb_write','all','authenticated','suqa.is_shop_owner(shop_id) or suqa.is_tenant_member(tenant_id)','suqa.is_shop_owner(shop_id) or suqa.is_tenant_member(tenant_id)');
 select suqa._policy('devices','dev_read','select','authenticated','suqa.is_shop_member(shop_id) or suqa.is_tenant_member(tenant_id)');

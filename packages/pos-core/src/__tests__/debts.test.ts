@@ -39,3 +39,23 @@ describe('debt book', () => {
     expect(a.engine.status.pending).toBe(0); expect(a.engine.status.rejected).toBe(0);
   });
 });
+
+describe('undo a collection', () => {
+  it('removes the settlement and its allocations so the debt is owed again', async () => {
+    const server = new FakeServer();
+    const p = server.addProduct({ id: 'p1', price_usd: 10, on_hand: 10 });
+    const a = await makeDevice(server, 'A');
+    const { addToDraft, newDraft, commitSale } = await import('../sale');
+    const { debtLines, settleDebt, unsettleDebt } = await import('../debts');
+    const d = addToDraft(newDraft('walkin'), p, 2);
+    await commitSale(a.db, { draft: d, rate: RATE, lbpStep: 5000, changeIn: 'usd', payments: [{ tender: 'unpaid', amount: 2000, currency: 'usd', unpaid_name: 'x', unpaid_phone: '70000000' }] });
+    const before = await debtLines(a.db, { openOnly: true });
+    expect(before[0].outstanding_cents).toBe(2000);
+    const r = await settleDebt(a.db, { phone: '70000000', name: 'x', tender: 'cash_usd', currency: 'usd', amount: 500, rate: RATE, lbpStep: 5000, lines: before, shift: null, user_id: 'u1' });
+    expect((await debtLines(a.db, { openOnly: true }))[0].outstanding_cents).toBe(1500);
+    await unsettleDebt(a.db, r.settlement, { shift: null, user_id: 'u1', reason: 'mistake' });
+    expect((await debtLines(a.db, { openOnly: true }))[0].outstanding_cents).toBe(2000);
+    expect(await a.db.debtSettlements.count()).toBe(0);
+    expect((await a.db.outbox.toArray()).some(o => o.kind === 'debt.unsettle')).toBe(true);
+  });
+});

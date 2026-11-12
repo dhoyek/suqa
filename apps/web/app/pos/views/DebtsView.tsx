@@ -1,17 +1,30 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { allocate, currentShift, debtLines, fmtLbp, fmtUsd, groupByPerson, lbpToCents, normPhone, num, roundLbp, settleDebt, usdToLbp, type Currency, type DebtLine, type DebtPerson, type DebtSettlement, type Rate, type Staff, type Tender } from '@suqa/pos-core';
+import { allocate, currentShift, debtLines, unsettleDebt, fmtPhone, waDigits, text, fmtLbp, fmtUsd, groupByPerson, lbpToCents, normPhone, num, roundLbp, settleDebt, usdToLbp, type Currency, type DebtLine, type DebtPerson, type DebtSettlement, type Rate, type Staff, type Tender } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { debtReceiptHtml, debtStatementHtml, doPrint, loadPrintSettings } from '../lib/print';
 import Modal, { NumPad } from '../components/Modal';
 import OrderDetail from '../components/OrderDetail';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useOrderItems } from '../lib/useOrderItems';
 import { PickChips, PickFilter, type PickItem } from '../components/CategoryFilter';
 
 type Mode = 'date' | 'person';
 const TENDERS: Array<Exclude<Tender, 'unpaid'>> = ['cash_usd', 'cash_lbp', 'card', 'wallet'];
+
+/** Plain-text statement of what a customer still owes (for WhatsApp). */
+export function statementText(p: DebtPerson, shop: string, locale: L, rate: number, step: number): string {
+  const ar = locale === 'ar'; const open = p.lines.filter(l => !l.closed);
+  const d = (iso: string) => new Date(iso).toLocaleDateString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' });
+  return [
+    ar ? `مرحباً ${p.name || ''}، كشف حسابك لدى ${shop}:` : `Hello ${p.name || ''}, your account at ${shop}:`,
+    ...open.map(l => `• ${d(l.at)} — ${l.number}: ${fmtUsd(l.outstanding_cents)}`),
+    ar ? `الإجمالي المتبقي: ${fmtUsd(p.outstanding_cents)} (${fmtLbp(roundLbp(usdToLbp(p.outstanding_cents, rate), step), locale)})` : `Total due: ${fmtUsd(p.outstanding_cents)} (${fmtLbp(roundLbp(usdToLbp(p.outstanding_cents, rate), step), locale)})`,
+    ar ? 'شكراً لك.' : 'Thank you.',
+  ].join('\n');
+}
 
 /** الدين — who owes what. List by date or grouped by person; filter by period and person(s); print a statement; collect (oldest-first). */
 export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { boot: Booted; locale: L; tick: number; staff: Staff; onCustomer?: (phone: string, name: string) => void }) {
@@ -27,12 +40,22 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   const [collect, setCollect] = useState<DebtPerson | null>(null);
   const [done, setDone] = useState<{ s: DebtSettlement; allocs: Array<{ number: string; amount_cents: number; closed: boolean }>; remaining: number } | null>(null);
   const step = boot.shop.lbp_rounding_step ?? 5000;
+  const [bump, setBump] = useState(0); const confirmDlg = useConfirm(); const owner = staff.role === 'owner';
+  // 4. undo a collection recorded by mistake (owner): the orders are owed again, cash leaves the open shift again
+  const undo = async (s: DebtSettlement) => {
+    const amt = s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount));
+    if (!await confirmDlg(`${pt('undoCollectAsk', locale)} ${amt} · ${s.name || s.phone}`, { danger: true })) return;
+    await unsettleDebt(boot.db, s, { shift: await currentShift(boot.db), user_id: staff.user_id, reason: 'mistake', label: `${pt('undoCollect', locale)} · ${s.name || s.phone}` });
+    boot.engine.poke(); setDone(null); setBump(n => n + 1);
+  };
+  // 5. open balance as a WhatsApp message the shop sends itself (opens WhatsApp with the text ready)
+  const waStatement = (p: DebtPerson) => window.open(`https://wa.me/${waDigits(p.phone)}?text=${encodeURIComponent(statementText(p, text(boot.shop.name, locale), locale, rate, step))}`, '_blank');
 
   useEffect(() => {
     (async () => { const ls = await debtLines(boot.db); const cs = await boot.db.shopCustomers.toArray(); const byKey = new Map(cs.map(c => [c.phone_key, c.name])); setAll(ls.map(l => ({ ...l, name: l.name || byKey.get(l.phone) || '' }))); })();
     boot.db.debtSettlements.orderBy('at').reverse().limit(50).toArray().then(setHistory);
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
-  }, [boot, tick, done]);
+  }, [boot, tick, done, bump]);
 
   const people = useMemo(() => groupByPerson(all), [all]);
   const lines = useMemo(() => {
@@ -85,10 +108,11 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
       {mode === 'person' && grouped.map(p => (
         <section className="card" key={keyOf(p)}>
           <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ fontSize: 17 }}><Who name={p.name} phone={p.phone} /> <span className="muted" dir="ltr" style={{ fontSize: 13 }}>{p.phone}</span></div>
+            <div style={{ fontSize: 17 }}><Who name={p.name} phone={p.phone} /> <span className="muted" dir="ltr" style={{ fontSize: 13 }}>{fmtPhone(p.phone)}</span></div>
             <div className="row" style={{ gap: 8, alignItems: 'center' }}>
               <strong className={p.outstanding_cents ? 'bad' : 'ok'} style={{ fontSize: 18 }}>{fmtUsd(p.outstanding_cents)}</strong>
               <button className="btn icon" title={pt('printStatement', locale)} onClick={() => printList(p)}>🖨</button>
+              {p.outstanding_cents > 0 && p.phone && <button className="btn icon" title={pt('waStatement', locale)} onClick={() => waStatement(p)}>💬</button>}
               {p.outstanding_cents > 0 && <button className="btn primary" onClick={() => setCollect(p)}>💵 {pt('collect', locale)}</button>}
             </div>
           </div>
@@ -102,7 +126,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
         <section className="card">
           <table className="table"><tbody>
             <tr><th style={{ textAlign: 'start' }}>{pt('when', locale)}</th><th style={{ textAlign: 'start' }}>{pt('orderNo', locale)}</th><th style={{ textAlign: 'start' }}>{pt('person', locale)}</th><th>{pt('original', locale)}</th><th>{pt('paidSoFar', locale)}</th><th>{pt('outstanding', locale)}</th></tr>
-            {[...lines].sort((a, b) => b.at.localeCompare(a.at)).map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td><No l={l} /></td><td><Who name={l.name} phone={l.phone} /> <span className="muted" dir="ltr">{l.phone}</span></td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
+            {[...lines].sort((a, b) => b.at.localeCompare(a.at)).map(l => <tr key={l.order.id} className={l.closed ? 'muted' : ''}><td className="muted">{fmtTime(l.at, locale)}</td><td><No l={l} /></td><td><Who name={l.name} phone={l.phone} /> <span className="muted" dir="ltr">{fmtPhone(l.phone)}</span></td><td className="num muted">{fmtUsd(l.original_cents)}</td><td className="num muted">{l.paid_cents ? fmtUsd(l.paid_cents) : ''}</td><td className="num"><strong>{l.closed ? '✓' : fmtUsd(l.outstanding_cents)}</strong></td></tr>)}
           </tbody></table>
         </section>
       )}
@@ -111,7 +135,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
         <section className="card">
           <h4 style={{ marginTop: 0 }}>{pt('settlementsHistory', locale)}</h4>
           <table className="table"><tbody>
-            {history.map(s => <tr key={s.id}><td className="muted">{fmtTime(s.at, locale)}</td><td>{s.name} <span className="muted" dir="ltr">{s.phone}</span></td><td className="muted">{pt(s.tender, locale)}</td><td className="num">{s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount))}</td></tr>)}
+            {history.map(s => <tr key={s.id}><td className="muted">{fmtTime(s.at, locale)}</td><td>{s.name} <span className="muted" dir="ltr">{fmtPhone(s.phone)}</span></td><td className="muted">{pt(s.tender, locale)}</td><td className="num">{s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount))}</td>{owner && <td style={{ textAlign: 'end' }}><button className="link-btn" style={{ color: '#991b1b' }} onClick={() => undo(s)}>↶ {pt('undoCollect', locale)}</button></td>}</tr>)}
           </tbody></table>
         </section>
       )}
@@ -119,7 +143,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
       {detail && <OrderDetail boot={boot} locale={locale} order={detail.order} onClose={() => setDetail(null)} onCustomer={onCustomer ? (ph, nm) => { setDetail(null); onCustomer(ph, nm); } : undefined} />}
       {collect && <CollectDialog boot={boot} locale={locale} person={collect} rate={rate} step={step} staff={staff} onClose={() => setCollect(null)}
         onDone={d => { setCollect(null); setDone(d); }} />}
-      {done && <Modal open onClose={() => setDone(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(done.s, done.allocs, done.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDone(null)}>{pt('ok', locale)}</button></>}>
+      {done && <Modal open onClose={() => setDone(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(done.s, done.allocs, done.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button>{owner && <button className="btn ghost" style={{ color: '#991b1b' }} onClick={() => undo(done.s)}>↶ {pt('undoCollect', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDone(null)}>{pt('ok', locale)}</button></>}>
         <div className="stack">
           <div className="row spread"><strong>{done.s.name}</strong><strong>{done.s.currency === 'lbp' ? fmtLbp(num(done.s.amount), locale) : fmtUsd(num(done.s.amount))}</strong></div>
           {done.allocs.map(a => <div className="row spread" key={a.number}><span>{a.number}{a.closed ? ' ✓ ' + pt('fullyPaid', locale) : ''}</span><span>{fmtUsd(a.amount_cents)}</span></div>)}
@@ -130,7 +154,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   );
 }
 
-function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDone }: { boot: Booted; locale: L; person: DebtPerson; rate: number; step: number; staff: Staff; onClose: () => void; onDone: (d: { s: DebtSettlement; allocs: Array<{ number: string; amount_cents: number; closed: boolean }>; remaining: number }) => void }) {
+export function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDone }: { boot: Booted; locale: L; person: DebtPerson; rate: number; step: number; staff: Staff; onClose: () => void; onDone: (d: { s: DebtSettlement; allocs: Array<{ number: string; amount_cents: number; closed: boolean }>; remaining: number }) => void }) {
   const [tender, setTender] = useState<Exclude<Tender, 'unpaid'>>('cash_usd');
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const owed = person.outstanding_cents;

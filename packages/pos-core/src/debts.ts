@@ -83,4 +83,19 @@ export async function settleDebt(db: PosDb, input: {
   return { settlement, allocations, unallocated_cents: amount_cents - allocations.reduce((s, a) => s + a.amount_cents, 0) };
 }
 
+/**
+ * Undo a collection recorded by mistake: the settlement and its allocations are removed (the orders are owed again) and, for cash on an
+ * open shift, the same amount leaves the drawer again. Owner only on the server (a cashier passes approved_by).
+ */
+export async function unsettleDebt(db: PosDb, s: DebtSettlement, opts: { shift: Shift | null; user_id: string; reason?: string; approved_by?: string | null; label?: string }): Promise<void> {
+  await db.transaction('rw', [db.debtSettlements, db.debtAllocations, db.outbox], async () => {
+    await db.debtAllocations.where('settlement_id').equals(s.id).delete();
+    await db.debtSettlements.delete(s.id);
+    await enqueue(db, 'debt.unsettle', { id: s.id, reason: opts.reason ?? null, approved_by: opts.approved_by ?? null });
+  });
+  if (opts.shift && (s.tender === 'cash_usd' || s.tender === 'cash_lbp')) {
+    await cashMove(db, opts.shift, { kind: 'out', amount: num(s.amount), currency: s.currency, reason: opts.label ?? `debt undo · ${s.name || s.phone}`, user_id: opts.user_id });
+  }
+}
+
 export const debtLbp = (cents: number, rate: number, step: number) => roundLbp(usdToLbp(cents, rate), step);

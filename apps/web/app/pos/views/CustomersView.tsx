@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { coordsFrom, customerHasHistory, debtLines, deleteCustomer, fmtPhone, fmtUsd, mapUrlFor, mergeCustomers, normPhone, num, searchCustomers, upsertCustomer, type CustomerAddress, type Order, type ShopCustomer, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { coordsFrom, customerHasHistory, debtLines, groupByPerson, fmtLbp, waDigits, text, type DebtLine, type DebtPerson, type Rate, deleteCustomer, fmtPhone, fmtUsd, mapUrlFor, mergeCustomers, normPhone, num, searchCustomers, upsertCustomer, type CustomerAddress, type Order, type ShopCustomer, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -9,6 +9,8 @@ import Modal from '../components/Modal';
 import { useConfirm } from '@/components/ConfirmProvider';
 import OrderDetail from '../components/OrderDetail';
 import { useOrderItems } from '../lib/useOrderItems';
+import { CollectDialog, statementText } from './DebtsView';
+import { debtReceiptHtml, debtStatementHtml, doPrint, loadPrintSettings } from '../lib/print';
 
 /** الزبائن — everyone who ever ordered: search, edit (name / address / pin / notes), balance, order history, WhatsApp, new order. */
 export default function CustomersView({ boot, locale, tick, status, staff, onNewOrder, focus }: { boot: Booted; locale: L; tick: number; status: SyncStatus | null; staff: Staff; onNewOrder: (c: { phone: string; name: string }) => void; focus?: { phone: string; name: string; n: number } | null }) {
@@ -38,14 +40,14 @@ export default function CustomersView({ boot, locale, tick, status, staff, onNew
         </div>
       </section>
       <section className="cust-main">
-        {sel ? <CustomerCard key={sel.id || 'new'} boot={boot} locale={locale} c={sel} all={all} owner={staff.role === 'owner'} online={online} debtCents={debt.get(sel.phone_key) ?? 0} onSaved={c => setSel(c)} onGone={() => { setSel(null); setReload(n => n + 1); }} onNewOrder={() => onNewOrder({ phone: sel.phone, name: sel.name })} />
+        {sel ? <CustomerCard key={sel.id || 'new'} boot={boot} locale={locale} c={sel} all={all} owner={staff.role === 'owner'} online={online} debtCents={debt.get(sel.phone_key) ?? 0} staff={staff} onDebtChanged={() => setReload(n => n + 1)} onSaved={c => setSel(c)} onGone={() => { setSel(null); setReload(n => n + 1); }} onNewOrder={() => onNewOrder({ phone: sel.phone, name: sel.name })} />
           : <p className="muted" style={{ padding: 16 }}>{pt('customersNav', locale)}</p>}
       </section>
     </div>
   );
 }
 
-function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved, onGone, onNewOrder }: { boot: Booted; locale: L; c: ShopCustomer; all: ShopCustomer[]; owner: boolean; online: boolean; debtCents: number; onSaved: (c: ShopCustomer) => void; onGone: () => void; onNewOrder: () => void }) {
+function CustomerCard({ boot, locale, c, all, owner, online, debtCents, staff, onDebtChanged, onSaved, onGone, onNewOrder }: { boot: Booted; locale: L; c: ShopCustomer; all: ShopCustomer[]; owner: boolean; online: boolean; debtCents: number; staff: Staff; onDebtChanged: () => void; onSaved: (c: ShopCustomer) => void; onGone: () => void; onNewOrder: () => void }) {
   const confirm = useConfirm(); const [merge, setMerge] = useState(false); const [hasHistory, setHasHistory] = useState(true);
   useEffect(() => { if (c.id) customerHasHistory(boot.db, c).then(setHasHistory); }, [boot, c]);
   const [phone, setPhone] = useState(c.phone); const [name, setName] = useState(c.name); const [line1, setLine1] = useState(c.address?.line1 ?? ''); const [map, setMap] = useState(c.address?.map_url ?? '');
@@ -55,6 +57,12 @@ function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved,
   const [orders, setOrders] = useState<Order[]>([]); const [active, setActive] = useState(c.active !== false);
   const [detail, setDetail] = useState<Order | null>(null); const [showItems, setShowItems] = useState(true);
   const items = useOrderItems(boot.db, orders.map(o => o.id), locale, showItems);
+  // this customer's debt lines (open and settled): what is still owed per order, and the person to collect from
+  const [dl, setDl] = useState<DebtLine[]>([]); const [rate, setRate] = useState(89500); const [collect, setCollect] = useState(false); const [collected, setCollected] = useState<Parameters<Parameters<typeof CollectDialog>[0]['onDone']>[0] | null>(null);
+  const step = boot.shop.lbp_rounding_step ?? 5000;
+  useEffect(() => { if (!c.phone_key) { setDl([]); return; } debtLines(boot.db, { phones: [c.phone] }).then(ls => setDl(ls.map(l => ({ ...l, name: l.name || c.name })))); boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); }, [boot, c.phone_key, c.phone, c.name, debtCents, collected]);
+  const person: DebtPerson | null = useMemo(() => groupByPerson(dl.filter(l => !l.closed))[0] ?? null, [dl]);
+  const owedOf = useMemo(() => new Map(dl.map(l => [l.order.id, l])), [dl]);
   useEffect(() => { if (!c.phone_key) return; boot.db.orders.toArray().then(os => setOrders(os.filter(o => !o.parked && normPhone(o.customer_phone) === c.phone_key).sort((a, b) => b.placed_at.localeCompare(a.placed_at)).slice(0, 30))); }, [boot, c.phone_key]);
   const dirty = active !== (c.active !== false) || limit !== (c.credit_limit_cents != null ? String(c.credit_limit_cents / 100) : '') || disc !== String(Number(c.discount_pct) || '') || phone !== c.phone || name !== c.name || line1 !== (c.address?.line1 ?? '') || map !== (c.address?.map_url ?? '') || notes !== (c.notes ?? '') || JSON.stringify(coords) !== JSON.stringify(c.address?.lat != null ? { lat: c.address.lat, lng: c.address.lng } : null);
   const save = async () => {
@@ -74,6 +82,9 @@ function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved,
         <h3 style={{ margin: 0 }}>{c.id ? (c.name || fmtPhone(c.phone)) : pt('newCustomer', locale)}</h3>
         <div className="row" style={{ gap: 6 }}>
           {wa && <a className="btn" href={wa} target="_blank" rel="noreferrer">💬 WhatsApp</a>}
+          {person && <button className="btn" title={pt('printStatement', locale)} onClick={() => doPrint(debtStatementHtml(person.lines, boot.shop, locale, loadPrintSettings(), { person: { name: person.name, phone: person.phone }, rate, lbpStep: step }))}>🖨 {pt('statementBtn', locale)}</button>}
+          {person && <button className="btn" title={pt('waStatement', locale)} onClick={() => window.open(`https://wa.me/${waDigits(person.phone)}?text=${encodeURIComponent(statementText(person, text(boot.shop.name, locale), locale, rate, step))}`, '_blank')}>💬 {pt('statementBtn', locale)}</button>}
+          {person && person.outstanding_cents > 0 && <button className="btn primary" onClick={() => setCollect(true)}>💵 {pt('collect', locale)} {fmtUsd(person.outstanding_cents)}</button>}
           {c.id && <button className="btn primary" onClick={onNewOrder}>＋ {pt('newOrderFor', locale)}</button>}
         </div>
       </div>
@@ -110,10 +121,15 @@ function CustomerCard({ boot, locale, c, all, owner, online, debtCents, onSaved,
       {!!orders.length && <div className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><strong>{pt('history', locale)} <span className="muted">{orders.length}</span></strong><button className={`chip ${showItems ? 'active' : ''}`} onClick={() => setShowItems(v => !v)}>📋 {pt('showItems', locale)}</button></div>
         <table className="table" style={{ marginTop: 6 }}><tbody>
-          {orders.map(o => <tr key={o.id}><td className="muted" style={{ verticalAlign: 'top' }}>{fmtTime(o.placed_at, locale)}</td><td><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(o)}>{o.number ?? o.local_number} ↗</button>{showItems && items.get(o.id) && <div className="order-items-line">{items.get(o.id)}</div>}</td><td className="muted" style={{ verticalAlign: 'top' }}>{pt(o.channel as Key, locale)}</td><td style={{ verticalAlign: 'top' }}><span className={`pill st-${o.status}`}>{pt(`st_${o.status}` as Key, locale)}</span></td><td className="num" style={{ verticalAlign: 'top' }}>{fmtUsd(num(o.total_cents))}</td></tr>)}
+          {orders.map(o => <tr key={o.id}><td className="muted" style={{ verticalAlign: 'top' }}>{fmtTime(o.placed_at, locale)}</td><td><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(o)}>{o.number ?? o.local_number} ↗</button>{showItems && items.get(o.id) && <div className="order-items-line">{items.get(o.id)}</div>}</td><td className="muted" style={{ verticalAlign: 'top' }}>{pt(o.channel as Key, locale)}</td><td style={{ verticalAlign: 'top' }}><span className={`pill st-${o.status}`}>{pt(`st_${o.status}` as Key, locale)}</span>{owedOf.get(o.id) && (owedOf.get(o.id)!.closed ? <span className="pill ok" style={{ marginInlineStart: 4 }}>✓ {pt('debtPaidPill', locale)}</span> : <span className="pill bad" style={{ marginInlineStart: 4 }}>{pt('debtShort', locale)} {fmtUsd(owedOf.get(o.id)!.outstanding_cents)}</span>)}</td><td className="num" style={{ verticalAlign: 'top' }}>{fmtUsd(num(o.total_cents))}</td></tr>)}
         </tbody></table>
       </div>}
       {detail && <OrderDetail boot={boot} locale={locale} order={detail} onClose={() => setDetail(null)} />}
+      {collect && person && <CollectDialog boot={boot} locale={locale} person={person} rate={rate} step={step} staff={staff} onClose={() => setCollect(false)} onDone={d => { setCollect(false); setCollected(d); onDebtChanged(); }} />}
+      {collected && <Modal open onClose={() => setCollected(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(collected.s, collected.allocs, collected.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setCollected(null)}>{pt('ok', locale)}</button></>}>
+        <div className="row spread"><strong>{collected.s.name}</strong><strong>{collected.s.currency === 'lbp' ? fmtLbp(num(collected.s.amount), locale) : fmtUsd(num(collected.s.amount))}</strong></div>
+        <div className="row spread"><span>{pt('outstanding', locale)}</span><strong>{fmtUsd(Math.max(0, collected.remaining))}</strong></div>
+      </Modal>}
       {pickMap && <MapPicker locale={locale} initial={coords} onDone={p => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); }} onClose={() => setPickMap(false)} />}
       {merge && <MergeDialog locale={locale} keep={c} candidates={all.filter(x => x.id !== c.id)} label={x => `${x.name || '—'} · ${fmtPhone(x.phone)} · ${x.orders_count} ${pt('ordersNav', locale)}`} onClose={() => setMerge(false)}
         onPick={async drop => { if (!(await confirm(pt('mergeConfirm', locale).replace('{drop}', drop.name || fmtPhone(drop.phone)).replace('{keep}', c.name || fmtPhone(c.phone)), { danger: true }))) return; await mergeCustomers(boot.db, c, drop); boot.engine.poke(); setMerge(false); onGone(); }} />}

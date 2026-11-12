@@ -55,4 +55,5 @@ source of truth.
 | 51_account_phone_format.sql | Login numbers stored digits-only in `auth.users.phone` (the phone sign-in format) by `pos_staff_phone` and `admin_account_update`; existing `+…` numbers normalised; `admin_account_merge` carries the phone sign-in for same-number duplicates. Fixes the duplicate account created at first phone sign-in. |
 | 52_driver_ack.sql | `orders.driver_ack_at` / `driver_picked_at`; `driver_ack(order)` (driver sheet button via service key) and `driver_ack_by_phone(phone)` (any WhatsApp reply from the driver); event in the order timeline. Service key only. |
 | 53_driver_steps.sql | `orders.driver_delivered_at`; `driver_step(order, 'picked'|'delivered')` — driver sheet buttons record times + timeline event only; status and payment stay with the shop. Service key only. |
+| 54_pos_debt_unsettle.sql | `debt.unsettle` op (`_pos_debt_unsettle`: owner-only undo of a debt collection; settlement + allocations removed, full record kept in the audit log); `pos_push` re-created. |
 | ../seed/batroun.sql | first tenant |

@@ -76,7 +76,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
     return list.filter(a => (kind === 'all' || kindOf(a).includes(kind))
       && (!n || (a.name ?? '').toLowerCase().includes(n) || (a.email ?? '').toLowerCase().includes(n) || (d.length >= 3 && (a.phone ?? '').includes(d))));
   }, [list, q, kind]);
-  const when = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(L === 'ar' ? 'ar-LB' : 'en-GB', { day: 'numeric', month: 'short' }) : '—';
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleDateString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }) : '—';
   const roleAr: Record<string, string> = { owner: L === 'ar' ? 'صاحب' : 'owner', cashier: L === 'ar' ? 'كاشير' : 'cashier', staff: L === 'ar' ? 'كاشير' : 'cashier', stock: L === 'ar' ? 'مخزون' : 'stock', admin: L === 'ar' ? 'مدير' : 'admin', viewer: L === 'ar' ? 'مشاهد' : 'viewer' };
   const KINDS: Kind[] = ['all', 'admins', 'staff', 'drivers', 'customers'];
   return (

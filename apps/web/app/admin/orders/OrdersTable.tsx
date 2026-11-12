@@ -44,7 +44,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
             <div className="product" style={{ borderBottom: 0, cursor: 'pointer' }} onClick={() => setOpen(open === o.id ? null : o.id)}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="name">{o.number} · {tr(o.shop?.name, L)}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleString(L === 'ar' ? 'ar-LB' : 'en-GB', { timeZone: timezone, dateStyle: 'short', timeStyle: 'short' })}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: timezone, dateStyle: 'short', timeStyle: 'short' })}</div>
               </div>
               <span className={`badge ${o.status}`}>{statusLabels[o.status]}</span>
               <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(o.total_usd)}</strong>

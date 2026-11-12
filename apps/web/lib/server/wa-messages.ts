@@ -103,7 +103,12 @@ export function courierReady(e: OrderEvent, origin: string): string {
 // Parameters: no newlines, no runs of 4+ spaces, ≤ 1024 chars (Meta rejects otherwise).
 export type Tpl = { name: string; lang: string; params: string[]; button?: string; fallback?: Tpl };
 const P = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 1000) || '-';
-const itemsOneLine = (e: OrderEvent, L: Locale) => e.items.map(i => `${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}`).join('، ');
+// Latin item names inside Arabic text drag the commas, quantities and the total into one left-to-right run ("… — $1.95 · 2×").
+// A right-to-left mark (U+200F) at every boundary keeps the Arabic reading order: 2× NAME، 1× NAME — total.
+const RLM = '\u200F';
+const itemsOneLine = (e: OrderEvent, L: Locale) => (L === 'ar'
+  ? e.items.map(i => `${RLM}${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}${RLM}`).join(`، `)
+  : e.items.map(i => `${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}`).join(', '));
 
 export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
@@ -132,7 +137,7 @@ export function customerEdited(e: OrderEvent, origin: string): string {
 export function customerEditedTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order;
   const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
-  const summary = `${ar ? '✏️ تم تعديل الطلب' : '✏️ Order updated'}${o.shop_notes ? ` (${o.shop_notes})` : ''}: ${itemsOneLine(e, L)} — ${money(e, o.total_usd)}`;
+  const summary = `${ar ? '✏️ تم تعديل الطلب' : '✏️ Order updated'}${o.shop_notes ? ` (${o.shop_notes})` : ''}: ${itemsOneLine(e, L)} ${ar ? RLM : ''}— ${ar ? RLM : ''}${money(e, o.total_usd)}`;
   const shop = P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name);
   return { name: 'order_update_v2', lang: 'ar', params: [shop, P(o.number), P(summary)], button: o.basket_id ?? o.id, fallback: { name: 'order_status', lang: 'ar', params: [shop, P(o.number), P(summary), P(link)] } };
 }

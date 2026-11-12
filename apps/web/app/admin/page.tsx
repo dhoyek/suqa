@@ -35,7 +35,7 @@ export default async function AdminHome() {
           <div className="product" key={o.id}>
             <div style={{ flex: 1 }}>
               <div className="name">{o.number} · {tr(o.shop?.name, L)}</div>
-              <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleTimeString(L === 'ar' ? 'ar-LB' : 'en-GB', { timeZone: tenant.timezone, hour: '2-digit', minute: '2-digit' })}</div>
+              <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleTimeString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: tenant.timezone, hour: '2-digit', minute: '2-digit' })}</div>
             </div>
             <span className={`badge ${o.status}`}>{(STATUS_LABEL[o.status as OrderStatus] as any)[L]}</span>
             <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(o.total_usd)}</strong>

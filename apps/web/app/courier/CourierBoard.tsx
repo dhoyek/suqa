@@ -62,7 +62,7 @@ export default function CourierBoard(props: { tenantId: string; me: string; init
       <section className="card stack courier-card">
         <div className="row spread">
           <strong>{a.basket_id ? `🧺 ${labels.basket} ${a.number.replace(/-[A-Z]$/, '')}` : a.number}</strong>
-          <span className="muted" style={{ fontSize: 13 }}>{new Date(a.placed_at).toLocaleTimeString(L === 'ar' ? 'ar-LB' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="muted" style={{ fontSize: 13 }}>{new Date(a.placed_at).toLocaleTimeString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         <div className="stack" style={{ gap: 6 }}>
           <div className="muted" style={{ fontSize: 12 }}>{labels.pickupFrom}</div>

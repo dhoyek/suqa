@@ -34,7 +34,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
   const paidUsd = o.payments.filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Number(p.amount) / Number(o.fx_lbp_rate) : Number(p.amount) / 100), 0);
   const due = Math.max(0, Number(o.total_usd) - paidUsd);
   const shopPhone = o.shop?.whatsapp || o.shop?.phone || ''; const map = mapUrl(o.address); const address = addrText(o.address);
-  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString(ar ? 'ar-LB' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
   const Btn = ({ href, children, primary = false }: { href: string; children: React.ReactNode; primary?: boolean }) => <a className={`btn ${primary ? 'primary' : ''}`} href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" style={{ flex: 1, justifyContent: 'center' }}>{children}</a>;
   return (
     <main className="container narrow stack" style={{ paddingBottom: 24 }}>

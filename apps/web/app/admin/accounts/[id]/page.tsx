@@ -30,7 +30,7 @@ export default async function AccountActivity({ params }: { params: Promise<{ id
   if (error) return <div className="card bad">{error.message}</div>;
   const a = data as Activity;
   await sb.rpc('admin_account_view_log', { p_tenant: tenant.id, p_user: id }).then(() => undefined, () => undefined);
-  const when = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleString(L === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const when = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
   const ua = (s: string | null) => { if (!s) return '—'; const m = /(iPhone|iPad|Android|Windows|Macintosh|Linux)/.exec(s); const b = /(Chrome|Safari|Firefox|Edg)\/[\d.]+/.exec(s); return `${m?.[1] ?? ''} ${b?.[0]?.split('/')[0] ?? ''}`.trim() || s.slice(0, 40); };
   return (
     <div className="stack">

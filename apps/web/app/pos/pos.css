@@ -419,3 +419,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* sell grid holds the whole catalog: rows keep their size, off-screen tiles are skipped by the browser */
 .grid-items { flex-shrink: 0; }
 .grid-items .item-tile { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+/* customer dialog: the shorter column must not stretch its fields to match the taller one */
+.cust-grid { align-items: start; }
+.cust-grid > .stack > * { flex: 0 0 auto; }

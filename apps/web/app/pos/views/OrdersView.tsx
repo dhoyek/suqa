@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -147,7 +147,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                   {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered') && <DriverLine o={o} boot={boot} locale={locale} />}
                   {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
-                    <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(num(o.total_lbp), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
+                    <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(num(o.total_lbp), boot.shop.lbp_rounding_step ?? 5000), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
                   {open && (
@@ -310,7 +310,7 @@ function AgePill({ o, prep, locale }: { o: Order; prep: number; locale: L }) {
 function neededLabel(iso: string, locale: L): string {
   const d = new Date(iso); const diff = Math.round((d.getTime() - Date.now()) / 60000);
   const sameDay = d.toDateString() === new Date().toDateString();
-  const t = d.toLocaleTimeString(locale === 'ar' ? 'ar-LB' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) + (sameDay ? '' : ' ' + d.toLocaleDateString(locale === 'ar' ? 'ar-LB' : 'en-GB', { day: 'numeric', month: 'short' }));
+  const t = d.toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) + (sameDay ? '' : ' ' + d.toLocaleDateString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }));
   const rel = Math.abs(diff) >= 120 ? `${Math.round(Math.abs(diff) / 60)} ${pt('hour', locale)}` : `${Math.abs(diff)} ${pt('min', locale)}`;
   return diff < 0 ? `${t} · ${pt('late', locale)} ${rel}` : `${t} · ${pt('inTime', locale)} ${rel}`;
 }

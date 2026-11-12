@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fmtLbp, fmtUsd, lbpToCents, searchCustomers, text, usdToLbp, type CommitResult, type Shop, type ShopCustomer, type Staff } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, lbpToCents, roundLbp, searchCustomers, text, usdToLbp, type CommitResult, type Shop, type ShopCustomer, type Staff } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
 import ReturnDialog from './ReturnDialog';
@@ -66,7 +66,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
           <div className="muted"><span>{live.length} {pt('itemsCount', locale)}</span><span>{order.discount_cents > 0 ? fmtUsd(order.subtotal_cents) : ''}</span></div>
           {order.discount_cents > 0 && <div><span>{pt('discount', locale)}{order.discount_reason ? ` · ${order.discount_reason}` : ''}</span><span>−{fmtUsd(order.discount_cents)}</span></div>}
           <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(order.total_cents)}</span></div>
-          <div className="big"><span></span><span>{fmtLbp(order.total_lbp, locale)}</span></div>
+          <div className="big"><span></span><span>{fmtLbp(roundLbp(order.total_lbp, shop.lbp_rounding_step ?? 5000), locale)}</span></div>
           <div className="muted"><span>{pt('rate', locale)}</span><span>$1 = {rate.toLocaleString('en-US')} ل.ل.</span></div>
           {payments.map(p => <div key={p.id}><span>{pt(p.tender, locale)}{p.unpaid_name ? ` · ${p.unpaid_name}` : ''}</span><span>{p.currency === 'lbp' ? fmtLbp(p.amount, locale) : fmtUsd(p.amount)}</span></div>)}
           {(changeUsd > 0 || changeLbp > 0) && <div className="r-change"><span>{pt('change', locale)}</span><span>{changeUsd ? <>{fmtUsd(changeUsd)} <small className="muted">≈ {fmtLbp(usdToLbp(changeUsd, rate), locale)}</small></> : <>{fmtLbp(changeLbp, locale)} <small className="muted">≈ {fmtUsd(lbpToCents(changeLbp, rate))}</small></>}</span></div>}

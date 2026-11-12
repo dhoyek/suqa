@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, text,
+import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, type ShopCustomer,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
@@ -127,7 +127,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const live = draft.lines.filter(l => !l.voided);
 
   const startNew = useCallback(async () => { setReceipt(r => { if (r) setLastSale({ r, no: serverNo }); return null; }); setReopened(false); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, [serverNo]);
-  const park = async (label: string) => { await saveDraft(boot.db, draft, true, label); setParked(await listParked(boot.db)); await startNew(); };
+  const park = async (label: string, c?: { name: string; phone: string } | null) => { const d = c === undefined ? draft : { ...draft, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }; await saveDraft(boot.db, d, true, label || d.customer_name || ''); setParked(await listParked(boot.db)); await startNew(); };
   const resume = async (id: string) => { const row = parked.find(p => p.id === id); if (!row) return; if (live.length) await saveDraft(boot.db, draft, true); await dropDraft(boot.db, id); setDraft(row.draft); setParked(await listParked(boot.db)); setDialog(null); };
   const cancel = async (reason: string) => { committed.current.add(draft.id); await cancelDraft(boot.db, draft, reason, staff.user_id); boot.engine.poke(); await startNew(); };
 
@@ -250,7 +250,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           <button className="btn" disabled={!live.length} onClick={() => setDialog({ k: 'discount' })}>{pt('discount', locale)} <kbd>F6</kbd></button>
           <button className="btn" disabled={!live.length && !parked.length} onClick={() => setDialog({ k: 'park' })}>{pt('park', locale)}{!!parked.length && <span className="badge">{parked.length}</span>} <kbd>F9</kbd></button>
           <button className="btn danger" disabled={!live.length} onClick={() => setDialog({ k: 'cancel' })}>✕</button>
-          {isOrder && <button className="btn primary pay" disabled={!live.length} onClick={saveToOrders}>📥 {pt('saveToOrders', locale)} · {fmtUsd(grand)} <span className="muted" style={{ fontSize: 11 }}>({pt('payAtHandover', locale)})</span></button>}
+          {isOrder && <button className="btn primary pay" disabled={!live.length} onClick={saveToOrders}>📥 {pt('saveToOrders', locale)} · {fmtUsd(grand)} <span style={{ fontSize: 12, opacity: .85, fontWeight: 400 }}>({pt('payAtHandover', locale)})</span></button>}
           <button className={`btn ${isOrder ? '' : 'primary'} pay`} disabled={!live.length} onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)} {fmtUsd(grand)} <kbd>F8</kbd></button>
         </div>
       </aside>
@@ -270,7 +270,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'park' && <ParkDialog locale={locale} parked={parked} canPark={!!live.length} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'park' && <ParkDialog boot={boot} locale={locale} parked={parked} canPark={!!live.length} customer={draft.customer_phone ? { name: draft.customer_name ?? '', phone: draft.customer_phone } : null} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
       {dialog?.k === 'customer' && <CustomerDialog boot={boot} sb={sb} locale={locale} draft={draft} fee={fee} online={status?.online ?? true} onDone={r => {
         setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = addToDraft(n, p, num(l.quantity)); } return n; });
@@ -298,14 +298,14 @@ function OpenItem({ locale, rate, onAdd, onClose }: { locale: L; rate: number; o
 }
 
 function OrderDiscount({ locale, draft, subtotal, maxPct, staff, me, onApply, onClose }: { locale: L; draft: Draft; subtotal: number; maxPct: number; staff: Staff[]; me: Staff; onApply: (cents: number, reason: string, approvedBy?: string | null) => void; onClose: () => void }) {
-  const [mode, setMode] = useState<'pct' | 'amt'>('pct'); const [v, setV] = useState(draft.discount_cents ? (draft.discount_cents / 100).toString() : ''); const [reason, setReason] = useState(draft.discount_reason ?? ''); const [gate, setGate] = useState(false);
+  const [mode, setMode] = useState<'pct' | 'amt'>(draft.discount_cents ? 'amt' : 'pct'); const [v, setV] = useState(draft.discount_cents ? (draft.discount_cents / 100).toString() : ''); const [reason, setReason] = useState(draft.discount_reason ?? ''); const [gate, setGate] = useState(false);
   const cents = mode === 'pct' ? Math.round((subtotal * Math.min(100, Number(v) || 0)) / 100) : Math.min(subtotal, Math.round((Number(v) || 0) * 100));
   const pct = subtotal ? (cents / subtotal) * 100 : 0;
   const needsOwner = me.role !== 'owner' && pct > maxPct && !draft.approved_by;
   const apply = (by?: string | null) => onApply(cents, reason.trim(), by);
   return (
     <>
-      <Modal open onClose={onClose} title={pt('orderDiscount', locale)} footer={<><button className="btn ghost" onClick={() => onApply(0, '', null)}>0</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!cents} onClick={() => (needsOwner ? setGate(true) : apply())}>{pt('ok', locale)}</button></>}>
+      <Modal open onClose={onClose} title={pt('orderDiscount', locale)} footer={<>{draft.discount_cents > 0 && <button className="btn ghost" onClick={() => onApply(0, '', null)}>✕ {pt('removeDiscount', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" disabled={!cents} onClick={() => (needsOwner ? setGate(true) : apply())}>{pt('ok', locale)}</button></>}>
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           <div className="seg"><button className={mode === 'pct' ? 'active' : ''} onClick={() => { setMode('pct'); setV(''); }}>%</button><button className={mode === 'amt' ? 'active' : ''} onClick={() => { setMode('amt'); setV(''); }}>$</button></div>
           <strong style={{ marginInlineStart: 'auto', fontSize: 22 }}>{v || '0'}{mode === 'pct' ? '%' : '$'}</strong>
@@ -319,13 +319,28 @@ function OrderDiscount({ locale, draft, subtotal, maxPct, staff, me, onApply, on
   );
 }
 
-function ParkDialog({ locale, parked, canPark, onPark, onResume, onClose }: { locale: L; parked: Awaited<ReturnType<typeof listParked>>; canPark: boolean; onPark: (label: string) => void; onResume: (id: string) => void; onClose: () => void }) {
-  const [label, setLabel] = useState('');
+function ParkDialog({ boot, locale, parked, canPark, customer, onCustomer, onPark, onResume, onClose }: { boot: Booted; locale: L; parked: Awaited<ReturnType<typeof listParked>>; canPark: boolean; customer: { name: string; phone: string } | null; onCustomer: (c: { name: string; phone: string } | null) => void; onPark: (label: string, c?: { name: string; phone: string } | null) => void; onResume: (id: string) => void; onClose: () => void }) {
+  // held under the cart's customer when there is one; otherwise pick a customer (📇) or just type a name for the ticket
+  const [cust, setCust] = useState(customer); const [label, setLabel] = useState('');
+  const [pick, setPick] = useState(false); const [q, setQ] = useState(''); const [list, setList] = useState<ShopCustomer[]>([]);
+  useEffect(() => { if (!pick) return; let on = true; searchCustomers(boot.db, q, 20).then(r => { if (on) setList(r); }); return () => { on = false; }; }, [pick, q, boot.db]);
+  const choose = (c: { name: string; phone: string } | null) => { setCust(c); onCustomer(c); setPick(false); };
+  const go = () => onPark(cust ? (cust.name || cust.phone) : label.trim(), cust);
   return (
     <Modal open onClose={onClose} title={pt('park', locale)}>
-      {canPark && <div className="row" style={{ gap: 8 }}><input className="input" placeholder={pt('customerName', locale)} value={label} onChange={e => setLabel(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') onPark(label); }} /><button className="btn primary" onClick={() => onPark(label)}>⏸ {pt('park', locale)}</button></div>}
+      {canPark && <div className="stack" style={{ gap: 8 }}>
+        {cust
+          ? <div className="pay-customer" style={{ marginBottom: 0 }}><span>👤 <strong>{cust.name || '—'}</strong> <span className="muted" dir="ltr">{cust.phone}</span></span><span style={{ flex: 1 }} /><button className="btn" onClick={() => { setQ(''); setPick(true); }}>📇 {pt('changeCustomer', locale)}</button><button className="btn icon" title={pt('removeCustomer', locale)} onClick={() => choose(null)}>✕</button></div>
+          : <div className="row" style={{ gap: 8 }}><input className="input" placeholder={pt('parkLabel', locale)} value={label} onChange={e => setLabel(e.target.value)} autoFocus onKeyDown={e => { if (e.key === 'Enter') go(); }} /><button className="btn" onClick={() => { setQ(label); setPick(true); }}>📇 {pt('pickCustomer', locale)}</button></div>}
+        <button className="btn primary" onClick={go}>⏸ {pt('park', locale)}</button>
+      </div>}
       {!!parked.length && <h4>{pt('parked', locale)}</h4>}
-      <ul className="tender-list">{parked.map(p => <li key={p.id}><span>{p.label || '—'} <span className="muted">· {p.draft.lines.filter(l => !l.voided).length} · {new Date(p.updated_at).toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}</span></span><button className="btn" onClick={() => onResume(p.id)}>{pt('resume', locale)}</button></li>)}</ul>
+      <ul className="tender-list">{parked.map(p => <li key={p.id}><span>{p.label || p.draft.customer_name || '—'} <span className="muted">· {p.draft.lines.filter(l => !l.voided).length} · {new Date(p.updated_at).toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}</span></span><button className="btn" onClick={() => onResume(p.id)}>{pt('resume', locale)}</button></li>)}</ul>
+      {pick && <Modal open onClose={() => setPick(false)} title={`📇 ${pt('pickCustomer', locale)}`}>
+        <input className="input" autoFocus placeholder={pt('searchCustomer', locale)} value={q} onChange={e => setQ(e.target.value)} />
+        <ul className="tender-list" style={{ marginTop: 8 }}>{list.map(c => <li key={c.id}><span>👤 {c.name || '—'} <span className="muted" dir="ltr">{c.phone}</span></span><button className="btn" onClick={() => choose({ name: c.name || '', phone: c.phone })}>✓</button></li>)}</ul>
+        {!list.length && <p className="muted">{pt('noResults', locale)}</p>}
+      </Modal>}
     </Modal>
   );
 }

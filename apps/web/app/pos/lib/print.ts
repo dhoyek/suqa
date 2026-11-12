@@ -1,5 +1,5 @@
 'use client';
-import { fmtLbp, fmtUsd, num, text, usdToLbp, type DebtLine, type DebtSettlement, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop, type Supplier } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, num, roundLbp, text, usdToLbp, type DebtLine, type DebtSettlement, type Order, type OrderLine, type Payment, type Shift, type ShiftSummary, type Shop, type Supplier } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 
 /**
@@ -51,7 +51,7 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
     ${o.customer_name || o.customer_phone ? `<div class="ev">${esc(o.customer_name || '')} ${ltr(esc(o.customer_phone || ''))}</div>` : ''}<hr>
     <table>${rows}</table><hr>
     ${num(o.discount_cents) ? `<div class="ft">${esc(pt('discount', L))}: ${ltr('−' + fmtUsd(num(o.discount_cents)))}</div>` : ''}
-    <div class="tot">${ltr(fmtUsd(num(o.total_cents)))}${st.showLbp ? '<span class="sep">·</span>' + ltr(fmtLbp(num(o.total_lbp) || usdToLbp(num(o.total_cents), rate), L)) : ''}</div>
+    <div class="tot">${ltr(fmtUsd(num(o.total_cents)))}${st.showLbp ? '<span class="sep">·</span>' + ltr(fmtLbp(roundLbp(num(o.total_lbp) || usdToLbp(num(o.total_cents), rate), shop.lbp_rounding_step ?? 5000), L)) : ''}</div>
     <div class="ev">${esc(pt('rate', L))} ${ltr(rate.toLocaleString('en-US'))} / $1</div><hr>
     ${pays}${change}
     ${opts.again ? `<div class="ft rp">${esc(pt('reprintMark', L))}</div>` : ''}

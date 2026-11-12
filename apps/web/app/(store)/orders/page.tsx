@@ -26,7 +26,7 @@ export default async function OrdersPage() {
     const g = list.find(x => x.kind === 'basket' && x.basket_id === o.basket_id);
     if (g) g.parts.push(o); else list.push({ kind: 'basket', basket_id: o.basket_id, number: basketById[o.basket_id]?.number ?? o.number.replace(/-[A-Z]$/, ''), placed_at: o.placed_at, total_usd: Number(basketById[o.basket_id]?.total_usd ?? o.total_usd), parts: [o] });
   }
-  const fmtDate = (d: string) => new Date(d).toLocaleString(L === 'ar' ? 'ar-LB' : 'en-GB', { timeZone: tenant.timezone, dateStyle: 'medium', timeStyle: 'short' });
+  const fmtDate = (d: string) => new Date(d).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: tenant.timezone, dateStyle: 'medium', timeStyle: 'short' });
   return (
     <div className="stack">
       <div className="row spread">

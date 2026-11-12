@@ -77,7 +77,7 @@ create table if not exists suqa.supplier_payments (
   tenant_id     uuid not null,
   supplier_id   uuid not null references suqa.suppliers(id) on delete restrict,
   purchase_id   uuid references suqa.purchases(id) on delete set null,
-  tender        text not null check (tender in ('cash_usd','cash_lbp','card','wallet','transfer')),
+  tender        text not null check (tender in ('cash_usd','cash_lbp','card','wallet','transfer','adjust')),   -- 'adjust' (59): owner's balance correction, amount may be negative
   currency      text not null check (currency in ('usd','lbp')),
   amount        bigint not null,                     -- in `currency` (USD cents / LBP)
   amount_cents  bigint not null,                     -- USD cents
@@ -197,6 +197,13 @@ language plpgsql security definer set search_path = public as $$
 begin
   if exists (select 1 from suqa.supplier_payments where id = (p->>'id')::uuid) then return jsonb_build_object('ok', true, 'replayed', true); end if;
   if not exists (select 1 from suqa.suppliers where id = (p->>'supplier_id')::uuid and shop_id = d.shop_id) then raise exception 'supplier_not_found'; end if;
+  -- 59: balance correction ("تصحيح الرصيد") — owner only, a reason is required, never touches the drawer; amount_cents may be negative (raises what we owe)
+  if p->>'tender' = 'adjust' then
+    if suqa.pos_role(d.shop_id) is distinct from 'owner' then raise exception 'owner_only' using errcode = 'insufficient_privilege'; end if;
+    if coalesce(trim(p->>'note'), '') = '' then raise exception 'reason_required'; end if;
+    if coalesce((p->>'from_drawer')::boolean, false) then raise exception 'adjust_not_cash'; end if;
+  elsif (p->>'amount_cents')::bigint <= 0 then raise exception 'bad_amount';
+  end if;
   insert into suqa.supplier_payments (id, shop_id, tenant_id, supplier_id, purchase_id, tender, currency, amount, amount_cents, rate, from_drawer, shift_id, note, user_id, device_id, at)
   values ((p->>'id')::uuid, d.shop_id, d.tenant_id, (p->>'supplier_id')::uuid, nullif(p->>'purchase_id', '')::uuid, p->>'tender', p->>'currency', (p->>'amount')::bigint,
           (p->>'amount_cents')::bigint, (p->>'rate')::int, coalesce((p->>'from_drawer')::boolean, false), nullif(p->>'shift_id', '')::uuid, p->>'note', p_user, d.id, coalesce((p->>'at')::timestamptz, now()));
@@ -353,7 +360,7 @@ begin
           'courier_fees_cents', coalesce(sum(courier_fee_cents), 0), 'delivery_fees_cents', coalesce(sum(round(delivery_fee_usd * 100)), 0),
           'cost_cents', (select coalesce(sum(round(coalesce(cost_cents, 0) * quantity)), 0) from li),
           'purchases_cents', (select coalesce(sum(case when kind = 'purchase' then total_cents else -total_cents end), 0) from suqa.purchases where shop_id = p_shop and status = 'posted' and at >= v_from and at < v_to),
-          'supplier_paid_cents', (select coalesce(sum(amount_cents), 0) from suqa.supplier_payments where shop_id = p_shop and at >= v_from and at < v_to),
+          'supplier_paid_cents', (select coalesce(sum(amount_cents), 0) from suqa.supplier_payments where shop_id = p_shop and tender <> 'adjust' and at >= v_from and at < v_to),   -- 59: a balance correction is not money paid
           'suppliers_balance_cents', (select coalesce(sum(balance_cents), 0) from suqa.suppliers where shop_id = p_shop),
           'debt_collected_cents', (select coalesce(sum(amount_cents), 0) from suqa.debt_settlements where shop_id = p_shop and at >= v_from and at < v_to),
           'returns_count', (select count(*) from r),

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getTenant } from '@/lib/tenant';
 import { getUser } from '@/lib/auth';
 import { getTenantRole } from '@/lib/admin';
-import { supabaseServer } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +19,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!me || (await getTenantRole(tenant.id)) !== 'admin') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const admin = supabaseAdmin(); if (!admin) return NextResponse.json({ error: 'service_role_missing' }, { status: 500 });
   // only accounts of this association (same rule as the Accounts list)
-  const sb = await supabaseServer();
-  const { data: inTenant } = await sb.rpc('_account_in_tenant', { p_tenant: tenant.id, p_user: id });
+  const { data: inTenant } = await admin.rpc('_account_in_tenant', { p_tenant: tenant.id, p_user: id });   // internal helper: service key only (schema 58)
   if (!inTenant) return NextResponse.json({ error: 'not_in_tenant' }, { status: 404 });
   const body = await req.json().catch(() => ({})) as { email?: string; password?: string; reset?: boolean };
   const did: string[] = [];

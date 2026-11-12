@@ -90,12 +90,31 @@ export async function paySupplier(db: PosDb, input: { supplier: Supplier; purcha
 }
 
 /** Statement lines for a supplier: purchases, returns and payments, newest first, with running balance (oldest→newest computed). */
-export async function supplierStatement(db: PosDb, supplier: Supplier): Promise<Array<{ at: string; kind: 'purchase' | 'return' | 'payment' | 'void'; ref: string; amount_cents: number; balance_cents: number; row: Purchase | SupplierPayment }>> {
+/**
+ * Owner's correction of a supplier balance ("تصحيح الرصيد"): sets what the shop owes to `new_balance_cents` and keeps the reason.
+ * Stored as a supplier payment with tender 'adjust' (amount = old − new, may be negative); no cash moves anywhere.
+ */
+export async function adjustSupplierBalance(db: PosDb, input: { supplier: Supplier; new_balance_cents: number; reason: string; rate: number; user_id: string }): Promise<SupplierPayment | null> {
+  const reason = input.reason.trim(); if (!reason) throw new Error('reason_required');
+  const fresh = (await db.suppliers.get(input.supplier.id)) ?? input.supplier;
+  const delta = num(fresh.balance_cents) - Math.round(input.new_balance_cents);
+  if (delta === 0) return null;
+  const deviceId = (await db.meta.get(META.deviceId))?.value as string | undefined; const now = new Date().toISOString();
+  const row: SupplierPayment = { id: newId(), shop_id: fresh.shop_id, supplier_id: fresh.id, purchase_id: null, tender: 'adjust', currency: 'usd', amount: delta, amount_cents: delta, rate: input.rate, from_drawer: false, shift_id: null, note: reason, user_id: input.user_id, at: now };
+  await db.transaction('rw', [db.supplierPayments, db.suppliers, db.outbox], async () => {
+    await db.supplierPayments.put(row);
+    await db.suppliers.put({ ...fresh, balance_cents: num(fresh.balance_cents) - delta });
+    await enqueue(db, 'supplier.pay', { ...row, device_id: deviceId ?? null });
+  });
+  return row;
+}
+
+export async function supplierStatement(db: PosDb, supplier: Supplier): Promise<Array<{ at: string; kind: 'purchase' | 'return' | 'payment' | 'adjust' | 'void'; ref: string; amount_cents: number; balance_cents: number; row: Purchase | SupplierPayment }>> {
   const ps = await db.purchases.where('supplier_id').equals(supplier.id).toArray();
   const pays = await db.supplierPayments.where('supplier_id').equals(supplier.id).toArray();
   const items = [
     ...ps.map(p => ({ at: p.at, kind: (p.status === 'void' ? 'void' : p.kind) as 'purchase' | 'return' | 'void', ref: p.number, amount_cents: p.status === 'void' ? 0 : p.kind === 'return' ? -p.total_cents : p.total_cents, row: p as Purchase | SupplierPayment })),
-    ...pays.map(p => ({ at: p.at, kind: 'payment' as const, ref: p.tender, amount_cents: -p.amount_cents, row: p as Purchase | SupplierPayment })),
+    ...pays.map(p => ({ at: p.at, kind: (p.tender === 'adjust' ? 'adjust' : 'payment') as 'payment' | 'adjust', ref: p.tender === 'adjust' ? (p.note ?? '') : p.tender, amount_cents: -p.amount_cents, row: p as Purchase | SupplierPayment })),
   ].sort((a, b) => a.at.localeCompare(b.at));
   let bal = num(supplier.balance_cents) - items.reduce((s, i) => s + i.amount_cents, 0);   // opening = current − everything we hold locally
   const out = items.map(i => { bal += i.amount_cents; return { ...i, balance_cents: bal }; });

@@ -132,7 +132,7 @@ export function debtReceiptHtml(s: DebtSettlement, allocs: Array<{ number: strin
 
 /** Supplier statement: purchases / returns / payments with running balance. */
 export function supplierStatementHtml(s: Supplier, rows: Array<{ at: string; kind: string; ref: string; amount_cents: number; balance_cents: number }>, shop: Shop, L: L, st: PrintSettings): string {
-  const lines = [...rows].reverse().map(r => `<div class="kv"><span>${esc(fmtDT(r.at, L).split(',')[0])} · ${esc(r.kind === 'payment' ? pt('paySupplier', L) : r.ref.replace('~', ''))}${r.kind === 'void' ? ' ✕' : ''}</span>${ltr((r.amount_cents < 0 ? '−' : '') + fmtUsd(Math.abs(r.amount_cents)))}</div>`).join('');
+  const lines = [...rows].reverse().map(r => `<div class="kv"><span>${esc(fmtDT(r.at, L).split(',')[0])} · ${esc(r.kind === 'payment' ? pt('paySupplier', L) : r.kind === 'adjust' ? `${pt('balanceFix', L)}${r.ref ? ' · ' + r.ref : ''}` : r.ref.replace('~', ''))}${r.kind === 'void' ? ' ✕' : ''}</span>${ltr((r.amount_cents < 0 ? '−' : '') + fmtUsd(Math.abs(r.amount_cents)))}</div>`).join('');
   return `<div class="vch">
     <div class="club">${esc(text(shop.name, L))}</div><div class="kiosk">${esc(pt('statementTitle', L))}</div>
     <div class="no">${esc(s.name)}</div><div class="ev">${ltr(esc(s.phone ?? ''))} · ${esc(fmtDT(new Date().toISOString(), L))}</div><hr>

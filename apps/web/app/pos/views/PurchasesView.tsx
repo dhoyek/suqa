@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
+import { adjustSupplierBalance, commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
 import { MergeDialog } from './CustomersView';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -171,26 +171,49 @@ function PurchaseDetail({ boot, locale, purchase, lines, supplier, staff, canEdi
 }
 
 function SupplierCard({ boot, locale, supplier, staff, rate, canEdit, onEdit, onClose, onChanged }: { boot: Booted; locale: L; supplier: Supplier; staff: Staff; rate: number; canEdit: boolean; onEdit: () => void; onClose: () => void; onChanged: () => void }) {
-  const [st, setSt] = useState<Awaited<ReturnType<typeof supplierStatement>>>([]); const [pay, setPay] = useState(false);
+  const [st, setSt] = useState<Awaited<ReturnType<typeof supplierStatement>>>([]); const [pay, setPay] = useState(false); const [fix, setFix] = useState(false);
   useEffect(() => { supplierStatement(boot.db, supplier).then(setSt); }, [boot, supplier]);
   const [merge, setMerge] = useState(false); const [hasHistory, setHasHistory] = useState(true); const [all, setAll] = useState<Supplier[]>([]); const confirmD = useConfirm();
   useEffect(() => { supplierHasHistory(boot.db, supplier).then(setHasHistory); boot.db.suppliers.toArray().then(setAll); }, [boot, supplier]);
   const owner = staff.role === 'owner';
   const step = boot.shop.lbp_rounding_step ?? 5000;
   return <>
-    <Modal open onClose={onClose} title={supplier.name} wide footer={<><button className="btn" onClick={() => doPrint(supplierStatementHtml(supplier, st, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('statementTitle', locale)}</button>{canEdit && <button className="btn ghost" onClick={onEdit}>✎</button>}{owner && <button className="btn" onClick={() => setMerge(true)}>⇄ {pt('mergeSupplier', locale)}</button>}{owner && <button className="btn danger" disabled={hasHistory} title={hasHistory ? pt('hasHistoryHintS', locale) : ''} onClick={async () => { if (!(await confirmD(`${pt('deleteSupplier', locale)}: ${supplier.name}?`, { danger: true }))) return; await deleteSupplier(boot.db, supplier); boot.engine.poke(); onChanged(); onClose(); }}>🗑</button>}<span style={{ flex: 1 }} />{canEdit && <button className="btn primary" onClick={() => setPay(true)}>💵 {pt('paySupplier', locale)}</button>}</>}>
+    <Modal open onClose={onClose} title={supplier.name} wide footer={<><button className="btn" onClick={() => doPrint(supplierStatementHtml(supplier, st, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('statementTitle', locale)}</button>{canEdit && <button className="btn ghost" onClick={onEdit}>✎</button>}{owner && <button className="btn" onClick={() => setMerge(true)}>⇄ {pt('mergeSupplier', locale)}</button>}{owner && <button className="btn" onClick={() => setFix(true)}>⚖ {pt('balanceFix', locale)}</button>}{owner && <button className="btn danger" disabled={hasHistory} title={hasHistory ? pt('hasHistoryHintS', locale) : ''} onClick={async () => { if (!(await confirmD(`${pt('deleteSupplier', locale)}: ${supplier.name}?`, { danger: true }))) return; await deleteSupplier(boot.db, supplier); boot.engine.poke(); onChanged(); onClose(); }}>🗑</button>}<span style={{ flex: 1 }} />{canEdit && <button className="btn primary" onClick={() => setPay(true)}>💵 {pt('paySupplier', locale)}</button>}</>}>
       <div className="kpis">
         <div className="kpi"><span>{pt('weOwe', locale)}</span><strong className={num(supplier.balance_cents) > 0 ? 'bad' : ''}>{fmtUsd(num(supplier.balance_cents))}</strong><small>{fmtLbp(roundLbp(usdToLbp(num(supplier.balance_cents), rate), step), locale)}</small></div>
         <div className="kpi"><span>{pt('customerPhone', locale)}</span><strong dir="ltr" style={{ fontSize: 15 }}>{supplier.phone ? fmtPhone(supplier.phone) : '—'}</strong><small>{supplier.contact ?? ''}</small></div>
       </div>
       <table className="table" style={{ marginTop: 10 }}><tbody>
-        {st.map((x, i) => <tr key={i} className={x.kind === 'void' ? 'muted' : ''}><td className="muted">{fmtTime(x.at, locale)}</td><td>{x.kind === 'payment' ? `${pt('paySupplier', locale)} · ${pt(x.ref as Key, locale)}` : x.ref.replace('~', '')}{x.kind === 'void' ? ` · ${pt('voided', locale)}` : ''}</td><td className={`num ${x.amount_cents < 0 ? 'ok' : ''}`}>{fmtUsd(x.amount_cents)}</td><td className="num muted">{fmtUsd(x.balance_cents)}</td></tr>)}
+        {st.map((x, i) => <tr key={i} className={x.kind === 'void' ? 'muted' : ''}><td className="muted">{fmtTime(x.at, locale)}</td><td>{x.kind === 'payment' ? `${pt('paySupplier', locale)} · ${pt(x.ref as Key, locale)}` : x.kind === 'adjust' ? <>⚖ {pt('balanceFix', locale)}{x.ref ? <span className="muted"> · {x.ref}</span> : null}</> : x.ref.replace('~', '')}{x.kind === 'void' ? ` · ${pt('voided', locale)}` : ''}</td><td className={`num ${x.amount_cents < 0 ? 'ok' : ''}`}>{fmtUsd(x.amount_cents)}</td><td className="num muted">{fmtUsd(x.balance_cents)}</td></tr>)}
         {!st.length && <tr><td className="muted">—</td></tr>}
       </tbody></table>
     </Modal>
+    {fix && <BalanceFix boot={boot} locale={locale} supplier={supplier} rate={rate} staff={staff} onClose={() => setFix(false)} onDone={() => { setFix(false); onChanged(); }} />}
     {pay && <PayDialogS boot={boot} locale={locale} supplier={supplier} rate={rate} staff={staff} onClose={() => setPay(false)} onDone={() => { setPay(false); onChanged(); supplierStatement(boot.db, supplier).then(setSt); }} />}
     {merge && <MergeDialog locale={locale} keep={supplier} candidates={all.filter(x => x.id !== supplier.id)} label={x => `${x.name}${x.phone ? ' · ' + fmtPhone(x.phone) : ''} · ${fmtUsd(num(x.balance_cents))}`} onClose={() => setMerge(false)} onPick={async drop => { if (!(await confirmD(pt('mergeConfirm', locale).replace('{drop}', drop.name).replace('{keep}', supplier.name), { danger: true }))) return; await mergeSuppliers(boot.db, supplier, drop); boot.engine.poke(); setMerge(false); onChanged(); onClose(); }} />}
   </>;
+}
+
+/** Owner only: set what the shop really owes this supplier, with a reason. No cash moves; the correction shows in the statement. */
+function BalanceFix({ boot, locale, supplier, rate, staff, onClose, onDone }: { boot: Booted; locale: L; supplier: Supplier; rate: number; staff: Staff; onClose: () => void; onDone: () => void }) {
+  const cur = num(supplier.balance_cents);
+  const [val, setVal] = useState((cur / 100).toFixed(2)); const [reason, setReason] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const target = Math.round(Number(val) * 100); const valid = val.trim() !== '' && !Number.isNaN(Number(val)); const delta = valid ? target - cur : 0;
+  const save = async () => {
+    if (!valid || !delta || !reason.trim() || busy) return; setBusy(true); setErr(null);
+    try { await adjustSupplierBalance(boot.db, { supplier, new_balance_cents: target, reason, rate, user_id: staff.user_id }); boot.engine.poke(); onDone(); } catch (e) { setErr((e as Error).message); setBusy(false); }
+  };
+  return <Modal open onClose={onClose} title={`⚖ ${pt('balanceFix', locale)} · ${supplier.name}`}
+    footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!valid || !delta || !reason.trim() || busy} onClick={save}>{pt('save', locale)}</button></>}>
+    <div className="stack" style={{ gap: 10 }}>
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>{pt('balanceFixHint', locale)}</p>
+      <div className="row spread"><span>{pt('balanceNow', locale)}</span><strong dir="ltr">{fmtUsd(cur)}</strong></div>
+      <label className="label">{pt('balanceReal', locale)}<input className="input" dir="ltr" inputMode="decimal" autoFocus value={val} onChange={e => setVal(e.target.value.replace(/[^0-9.\-]/g, ''))} onFocus={e => e.target.select()} /></label>
+      {valid && delta !== 0 && <div className={`pill ${delta > 0 ? 'bad' : 'ok'}`} style={{ alignSelf: 'flex-start' }} dir="ltr">{delta > 0 ? '+' : '−'}{fmtUsd(Math.abs(delta))}</div>}
+      <label className="label">{pt('balanceFixReason', locale)} *<input className="input" value={reason} maxLength={200} onChange={e => setReason(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void save(); }} /></label>
+      {err && <div className="bad">{err}</div>}
+    </div>
+  </Modal>;
 }
 
 function PayDialogS({ boot, locale, supplier, rate, staff, onClose, onDone }: { boot: Booted; locale: L; supplier: Supplier; rate: number; staff: Staff; onClose: () => void; onDone: () => void }) {

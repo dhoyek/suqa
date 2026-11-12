@@ -451,3 +451,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cust-pop-who .muted { font-size: 12px; text-align: start; }
 .cust-pop-hint { padding: 4px 8px; margin: 0; font-size: 12px; }
 .cust-pop-new { border: 0; border-top: 1px solid var(--line); background: none; font: inherit; font-weight: 700; color: var(--brand-primary, #0e7490); padding: 10px 8px 4px; text-align: start; cursor: pointer; }
+
+.reorder-group { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.reorder-group .btn { min-height: 34px; padding: 4px 10px; }

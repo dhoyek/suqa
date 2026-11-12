@@ -1,8 +1,9 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, num, shiftSummary, text, todaySummary, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
+import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, num, shiftSummary, text, todaySummary, type CatalogIndex, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
+import ApprovalsReport from '../components/ApprovalsReport';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 import type { Staff } from '@suqa/pos-core';
@@ -12,7 +13,7 @@ import { downloadCsv, downloadXlsx, flat, usd, type Row } from '../lib/export';
 
 type Today = Awaited<ReturnType<typeof todaySummary>>;
 type Preset = 'today' | 'yesterday' | 'week' | 'month' | 'lastMonth' | 'custom';
-type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stock' | 'unpaid' | 'shifts';
+type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stock' | 'unpaid' | 'shifts' | 'approvals';
 
 function presetRange(p: Preset): [string, string] {
   const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -24,7 +25,7 @@ function presetRange(p: Preset): [string, string] {
 }
 
 /** Today (always local, works offline) + period reports (server for owners when online, mirror otherwise) + exports. */
-export default function ReportsView({ boot, sb, locale, tick, status, staff }: { boot: Booted; sb: SupabaseClient; locale: L; tick: number; status: SyncStatus | null; staff: Staff }) {
+export default function ReportsView({ boot, sb, locale, tick, status, staff, index }: { boot: Booted; sb: SupabaseClient; locale: L; tick: number; status: SyncStatus | null; staff: Staff; index: CatalogIndex }) {
   const owner = can(roleOf(staff), 'reports.profit');
   const online = status?.online ?? true;
   const [t, setT] = useState<Today | null>(null);
@@ -142,7 +143,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff }: {
               <div className="kpi"><span>{pt('grossMargin', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.cost_cents)}</strong><small>{pt('cost', locale)} {N(rep.totals.cost_cents)}{rep.totals.total_cents ? ` · ${Math.round(((rep.totals.total_cents - rep.totals.cost_cents) / rep.totals.total_cents) * 100)}%` : ''}</small></div>
             </div>
             <div className="seg" style={{ marginTop: 12, flexWrap: 'wrap' }}>
-              {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts'] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList' } as const)[x], locale)}</button>)}
+              {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab' } as const)[x], locale)}</button>)}
             </div>
             <div style={{ marginTop: 10, overflowX: 'auto' }}>
               {tab === 'overview' && <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
@@ -179,6 +180,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff }: {
                 {rep.unpaid.map((u, n) => <tr key={n}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}
               </tbody></table>}
+              {tab === 'approvals' && <ApprovalsReport boot={boot} sb={sb} locale={locale} index={index} from={range[0]} to={range[1]} />}
               {tab === 'shifts' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('openedAt', locale)}</th><th>{pt('closedAt', locale)}</th><th>{pt('expected', locale)}</th><th>{pt('counted', locale)}</th><th>{pt('diff', locale)}</th></tr>
                 {rep.shifts.map(x => <tr key={x.id}><td className="muted">{fmtTime(x.opened_at, locale)}</td><td className="muted">{x.closed_at ? fmtTime(x.closed_at, locale) : pt('open', locale)}</td>

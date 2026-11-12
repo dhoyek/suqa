@@ -55,6 +55,7 @@ export default function Shell(props: {
   useEffect(() => { if (!allowed.includes(view)) setView('sell'); }, [allowed, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [custFocus, setCustFocus] = useState<{ phone: string; name: string; n: number } | null>(null);
   const [stockFocus, setStockFocus] = useState<{ id: string; n: number } | null>(null);
+  const [purPreset, setPurPreset] = useState<{ supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null>(null);
   const canStock = viewsFor(roleOf(staff)).includes('stock');
   const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
@@ -86,8 +87,8 @@ export default function Shell(props: {
         {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
         {view === 'items' && <ItemsView {...props} />}
-        {view === 'stock' && <StockView {...props} focus={stockFocus} />}
-        {view === 'purchases' && <PurchasesView {...props} />}
+        {view === 'stock' && <StockView {...props} focus={stockFocus} onReorder={allowed.includes('purchases') ? (supplierId, items) => { setPurPreset(p => ({ supplierId, items, n: (p?.n ?? 0) + 1 })); setView('purchases'); } : undefined} />}
+        {view === 'purchases' && <PurchasesView {...props} preset={purPreset} />}
         {view === 'shift' && <ShiftView {...props} />}
         {view === 'reports' && <ReportsView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}

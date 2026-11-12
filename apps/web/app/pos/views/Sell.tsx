@@ -146,7 +146,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   };
 
   const addCartToOrder = async (o: Order) => {
-    const adds = live.filter(l => l.product_id && index.byId.get(l.product_id)).map(l => ({ product: index.byId.get(l.product_id!)!, new_qty: l.quantity }));
+    const adds = live.filter(l => l.product_id && index.byId.get(l.product_id)).map(l => ({ product: index.byId.get(l.product_id!)!, new_qty: l.quantity, notes: l.notes ?? null, unit_price_cents: l.unit_price_cents, unit_price_lbp: l.unit_price_lbp, discount_cents: l.discount_cents }));   // the line goes over as it stands in the cart: note, changed price, discount
     if (!adds.length) { flash(pt('cartEmptyHint', locale)); return; }
     committed.current.add(draft.id);
     await editOrder(boot.db, o, adds, undefined, o.notify_customer !== false);
@@ -273,7 +273,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'line' && (() => { const l = draft.lines.find(x => x.id === dialog.id); return l ? (
         <LineEditor line={l} locale={locale} rate={rate} maxDiscountPct={maxDisc} staff={members} me={staff} initialField={dialog.field}
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
-      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} boot={boot} isOwner={staff.role === 'owner'} me={staff} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'oos' && <Modal open onClose={() => setDialog(null)} title={text(dialog.p.name, locale)}
         footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { const p = dialog.p; setDialog(null); add(p, 1, { weigh: true }); }}>＋ {pt('addAnyway', locale)}</button></>}>

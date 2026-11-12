@@ -69,7 +69,7 @@ begin
 end $$;
 
 -- ---------- order.edit ----------------------------------------------------------------------------------------
--- payload: { id, lines: [ {id, qty?, voided?, void_reason?} | {product_id, name, unit, qty, price_currency, unit_price_cents, unit_price_lbp, line_total_cents} ], note }
+-- payload: { id, lines: [ {id, qty?, voided?, void_reason?} | {product_id, name, unit, qty, price_currency, unit_price_cents, unit_price_lbp, discount_cents?, line_total_cents, notes?} ], note }
 create or replace function suqa._pos_order_edit(d suqa.devices, p jsonb, p_user uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_o suqa.orders; v_l jsonb; v_item suqa.order_items; v_delta numeric; v_track boolean;
@@ -107,7 +107,8 @@ begin
       insert into suqa.order_items (id, order_id, tenant_id, shop_id, product_id, name, unit, unit_price_usd, quantity, line_total_usd, notes, price_currency, unit_price_cents, unit_price_lbp, discount_cents, line_total_cents)
       values (coalesce(nullif(v_l->>'new_id', '')::uuid, gen_random_uuid()), v_o.id, v_o.tenant_id, v_o.shop_id, nullif(v_l->>'product_id', '')::uuid, coalesce(v_l->'name', '{}'::jsonb), v_l->>'unit',
               coalesce((v_l->>'unit_price_cents')::numeric, 0) / 100, (v_l->>'qty')::numeric, coalesce((v_l->>'line_total_cents')::numeric, 0) / 100, v_l->>'notes',
-              coalesce(v_l->>'price_currency', 'usd'), (v_l->>'unit_price_cents')::int, (v_l->>'unit_price_lbp')::bigint, 0, (v_l->>'line_total_cents')::int);
+              coalesce(v_l->>'price_currency', 'usd'), (v_l->>'unit_price_cents')::int, (v_l->>'unit_price_lbp')::bigint,
+              greatest(0, coalesce((v_l->>'discount_cents')::int, 0)), (v_l->>'line_total_cents')::int);   -- 57: an added line keeps its discount
     end if;
   end loop;
 

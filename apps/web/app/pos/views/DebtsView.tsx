@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { allocate, currentShift, debtLines, unsettleDebt, fmtPhone, waDigits, text, fmtLbp, fmtUsd, groupByPerson, lbpToCents, normPhone, num, roundLbp, settleDebt, usdToLbp, type Currency, type DebtLine, type DebtPerson, type DebtSettlement, type Rate, type Staff, type Tender } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
+import OwnerPin from '../components/OwnerPin';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { debtReceiptHtml, debtStatementHtml, doPrint, loadPrintSettings } from '../lib/print';
@@ -42,10 +43,14 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   const step = boot.shop.lbp_rounding_step ?? 5000;
   const [bump, setBump] = useState(0); const confirmDlg = useConfirm(); const owner = staff.role === 'owner';
   // 4. undo a collection recorded by mistake (owner): the orders are owed again, cash leaves the open shift again
-  const undo = async (s: DebtSettlement) => {
+  // the owner undoes directly; anyone else needs the approval PIN (OwnerPin resolves at once for an owner)
+  const [undoGate, setUndoGate] = useState<DebtSettlement | null>(null); const [members, setMembers] = useState<Staff[]>([]);
+  useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
+  const undo = async (s: DebtSettlement, approvedBy?: string | null) => {
+    if (!owner && !approvedBy) { setUndoGate(s); return; }
     const amt = s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount));
     if (!await confirmDlg(`${pt('undoCollectAsk', locale)} ${amt} · ${s.name || s.phone}`, { danger: true })) return;
-    await unsettleDebt(boot.db, s, { shift: await currentShift(boot.db), user_id: staff.user_id, reason: 'mistake', label: `${pt('undoCollect', locale)} · ${s.name || s.phone}` });
+    await unsettleDebt(boot.db, s, { shift: await currentShift(boot.db), user_id: staff.user_id, reason: 'mistake', approved_by: owner ? null : approvedBy, label: `${pt('undoCollect', locale)} · ${s.name || s.phone}` });
     boot.engine.poke(); setDone(null); setBump(n => n + 1);
   };
   // 5. open balance as a WhatsApp message the shop sends itself (opens WhatsApp with the text ready)
@@ -135,7 +140,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
         <section className="card">
           <h4 style={{ marginTop: 0 }}>{pt('settlementsHistory', locale)}</h4>
           <table className="table"><tbody>
-            {history.map(s => <tr key={s.id}><td className="muted">{fmtTime(s.at, locale)}</td><td>{s.name} <span className="muted" dir="ltr">{fmtPhone(s.phone)}</span></td><td className="muted">{pt(s.tender, locale)}</td><td className="num">{s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount))}</td>{owner && <td style={{ textAlign: 'end' }}><button className="link-btn" style={{ color: '#991b1b' }} onClick={() => undo(s)}>↶ {pt('undoCollect', locale)}</button></td>}</tr>)}
+            {history.map(s => <tr key={s.id}><td className="muted">{fmtTime(s.at, locale)}</td><td>{s.name} <span className="muted" dir="ltr">{fmtPhone(s.phone)}</span></td><td className="muted">{pt(s.tender, locale)}</td><td className="num">{s.currency === 'lbp' ? fmtLbp(num(s.amount), locale) : fmtUsd(num(s.amount))}</td><td style={{ textAlign: 'end' }}><button className="link-btn" style={{ color: '#991b1b' }} onClick={() => undo(s)}>↶ {pt('undoCollect', locale)}</button></td></tr>)}
           </tbody></table>
         </section>
       )}
@@ -143,7 +148,8 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
       {detail && <OrderDetail boot={boot} locale={locale} order={detail.order} onClose={() => setDetail(null)} onCustomer={onCustomer ? (ph, nm) => { setDetail(null); onCustomer(ph, nm); } : undefined} />}
       {collect && <CollectDialog boot={boot} locale={locale} person={collect} rate={rate} step={step} staff={staff} onClose={() => setCollect(null)}
         onDone={d => { setCollect(null); setDone(d); }} />}
-      {done && <Modal open onClose={() => setDone(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(done.s, done.allocs, done.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button>{owner && <button className="btn ghost" style={{ color: '#991b1b' }} onClick={() => undo(done.s)}>↶ {pt('undoCollect', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDone(null)}>{pt('ok', locale)}</button></>}>
+      {undoGate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('undoCollect', locale)} onDone={id => { const g = undoGate; setUndoGate(null); if (id) void undo(g, id); }} />}
+      {done && <Modal open onClose={() => setDone(null)} title={pt('collected', locale)} footer={<><button className="btn" onClick={() => doPrint(debtReceiptHtml(done.s, done.allocs, done.remaining, boot.shop, locale, loadPrintSettings()))}>🖨 {pt('printReceipt', locale)}</button>{<button className="btn ghost" style={{ color: '#991b1b' }} onClick={() => undo(done.s)}>↶ {pt('undoCollect', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDone(null)}>{pt('ok', locale)}</button></>}>
         <div className="stack">
           <div className="row spread"><strong>{done.s.name}</strong><strong>{done.s.currency === 'lbp' ? fmtLbp(num(done.s.amount), locale) : fmtUsd(num(done.s.amount))}</strong></div>
           {done.allocs.map(a => <div className="row spread" key={a.number}><span>{a.number}{a.closed ? ' ✓ ' + pt('fullyPaid', locale) : ''}</span><span>{fmtUsd(a.amount_cents)}</span></div>)}

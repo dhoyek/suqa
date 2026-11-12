@@ -14,13 +14,19 @@ import { useConfirm } from '@/components/ConfirmProvider';
 type Tab = 'invoices' | 'suppliers';
 
 /** المشتريات — suppliers with balances, purchase invoices (stock in at cost), returns, payments, statements. */
-export default function PurchasesView({ boot, locale, index, tick, staff, reindex }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
+export default function PurchasesView({ boot, locale, index, tick, staff, reindex, preset }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; /** from Stock → reorder list: open a purchase invoice for this supplier with these items */ preset?: { supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null }) {
   const [tab, setTab] = useState<Tab>('invoices'); const [supQ, setSupQ] = useState('');
   const supMatch = (s: Supplier) => { const n = supQ.trim().toLowerCase(); const d = supQ.replace(/\D/g, ''); return !n || s.name.toLowerCase().includes(n) || (s.contact ?? '').toLowerCase().includes(n) || (!!d && (s.phone_key ?? '').includes(d)); };
   const [suppliers, setSuppliers] = useState<Supplier[]>([]); const [purchases, setPurchases] = useState<Purchase[]>([]); const [rate, setRate] = useState(89500);
   const [entry, setEntry] = useState<{ kind: 'purchase' | 'return' } | null>(null); const [selSup, setSelSup] = useState<Supplier | null>(null); const [editSup, setEditSup] = useState<Supplier | 'new' | null>(null); const [lastSup, setLastSup] = useState<string | null>(null);
   const [openPur, setOpenPur] = useState<Purchase | null>(null); const [lines, setLines] = useState<PurchaseLine[]>([]);
   const canEdit = staff.role !== 'cashier';
+  const [initial, setInitial] = useState<{ product: Product; qty: number }[] | null>(null);
+  useEffect(() => {
+    if (!preset || !canEdit) return;
+    setInitial(preset.items.map(i => ({ product: index.byId.get(i.id)!, qty: i.qty })).filter(r => r.product));
+    setLastSup(preset.supplierId); setOpenPur(null); setSelSup(null); setEntry({ kind: 'purchase' });
+  }, [preset?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     boot.db.suppliers.orderBy('name').toArray().then(setSuppliers);
     boot.db.purchases.orderBy('at').reverse().limit(200).toArray().then(setPurchases);
@@ -60,7 +66,7 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
         </tbody></table>
       </section>}
 
-      {entry && <PurchaseEntry boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} onNewSupplier={() => setEditSup('new')} onClose={() => setEntry(null)} onDone={() => { setEntry(null); reindex(); }} />}
+      {entry && <PurchaseEntry key={initial ? `r${preset?.n}` : 'e'} boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} initial={initial} onNewSupplier={() => setEditSup('new')} onClose={() => { setEntry(null); setInitial(null); }} onDone={() => { setEntry(null); setInitial(null); reindex(); }} />}
       {editSup && <SupplierDialog boot={boot} locale={locale} supplier={editSup === 'new' ? null : editSup} onClose={() => setEditSup(null)} onDone={s => { setEditSup(null); setLastSup(s.id); setSuppliers(x => [...x.filter(y => y.id !== s.id), s].sort((a, b) => a.name.localeCompare(b.name))); }} />}
       {selSup && <SupplierCard boot={boot} locale={locale} supplier={suppliers.find(s => s.id === selSup.id) ?? selSup} staff={staff} rate={rate} canEdit={canEdit} onEdit={() => setEditSup(selSup)} onClose={() => setSelSup(null)} onChanged={() => boot.db.suppliers.orderBy('name').toArray().then(setSuppliers)} />}
       {openPur && <PurchaseDetail boot={boot} locale={locale} purchase={purchases.find(p => p.id === openPur.id) ?? openPur} lines={lines} supplier={supName(openPur.supplier_id)} staff={staff} canEdit={canEdit} onClose={() => setOpenPur(null)} onChanged={() => { boot.db.purchases.orderBy('at').reverse().limit(200).toArray().then(setPurchases); reindex(); }} />}
@@ -80,11 +86,11 @@ function SupplierDialog({ boot, locale, supplier, onClose, onDone }: { boot: Boo
   </Modal>;
 }
 
-function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, onNewSupplier, onClose, onDone }: { boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: () => void; onClose: () => void; onDone: () => void }) {
+function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: () => void; onClose: () => void; onDone: () => void }) {
   const [supplier, setSupplier] = useState<Supplier | null>(suppliers.length === 1 ? suppliers[0] : null);
   useEffect(() => { if (preferId) { const s = suppliers.find(x => x.id === preferId); if (s) setSupplier(s); } }, [preferId, suppliers]); // a supplier just created from ＋ becomes the selected one
   const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [note, setNote] = useState('');
-  const [rows, setRows] = useState<PurchaseDraftLine[]>([]); const [q, setQ] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState(false);
+  const [rows, setRows] = useState<PurchaseDraftLine[]>(() => (initial ?? []).map(r => ({ product: r.product, qty: r.qty, unit_cost: num(r.product.cost_cents) / 100 || 0 }))); const [q, setQ] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState(false);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
   const results = q.trim() ? index.search(q, 12) : [];
   const add = (p: Product) => {

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { fmtUsd, num, recordStockMove, text, type CatalogIndex, type Product, type Staff, type StockMove, type StockMoveKind } from '@suqa/pos-core';
+import { fmtUsd, num, recordStockMove, text, type CatalogIndex, type Product, type Staff, type StockMove, type StockMoveKind, type Supplier, waDigits } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -16,7 +16,7 @@ type Mode = 'receive' | 'count' | 'damaged' | 'adjust';
  * WhatsApp-shareable reorder list; negative-stock review; movement history per item. Everything offline (stock.move ops).
  * Cashiers need an owner PIN for adjustments (server enforces); stock role and owner work freely.
  */
-export default function StockView({ boot, locale, index, tick, staff, reindex, focus }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; focus?: { id: string; n: number } | null }) {
+export default function StockView({ boot, locale, index, tick, staff, reindex, focus, onReorder }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; focus?: { id: string; n: number } | null; onReorder?: (supplierId: string | null, items: { id: string; qty: number }[]) => void }) {
   const [mode, setMode] = useState<Mode>('receive');
   const [q, setQ] = useState(''); const [sel, setSel] = useState<Product | null>(null);
   const [members, setMembers] = useState<Staff[]>([]);
@@ -34,6 +34,18 @@ export default function StockView({ boot, locale, index, tick, staff, reindex, f
   const negative = useMemo(() => tracked.filter(p => p.needs_review || num(p.on_hand) < 0), [tracked]);
   const results = q.trim() ? index.search(q, 30) : [];
 
+  // reorder list grouped by supplier: suggested quantity brings the item back to twice its minimum (at least 1)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  useEffect(() => { boot.db.suppliers.toArray().then(setSuppliers); }, [boot, tick]);
+  const availOf = (p: Product) => num(p.on_hand) - num(p.reserved);
+  const suggest = (p: Product) => { const want = Math.max(num(p.min_stock) * 2, 1) - availOf(p); return Math.max(1, p.decimal_qty ? Math.round(want * 100) / 100 : Math.ceil(want)); };
+  const groups = useMemo(() => {
+    const m = new Map<string, Product[]>();
+    for (const p of low) { const k = p.supplier_id && suppliers.some(s => s.id === p.supplier_id) ? p.supplier_id : ''; m.set(k, [...(m.get(k) ?? []), p]); }
+    return [...m.entries()].map(([id, items]) => ({ supplier: suppliers.find(s => s.id === id) ?? null, items })).sort((a, b) => (a.supplier ? 0 : 1) - (b.supplier ? 0 : 1) || (a.supplier?.name ?? '').localeCompare(b.supplier?.name ?? ''));
+  }, [low, suppliers]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reorderText = (items: Product[], to?: string) => [`${pt('reorderRequest', locale)} — ${text(boot.shop.name, locale)}${to ? ` → ${to}` : ''} — ${new Date().toLocaleDateString('en-GB')}`, ...items.map(p => `• ${text(p.name, locale)} × ${suggest(p)}${p.unit ? ' ' + p.unit : ''}`)].join('\n');
+  const waSupplier = (g: { supplier: Supplier | null; items: Product[] }) => window.open(`https://wa.me/${g.supplier?.phone ? waDigits(g.supplier.phone) : ''}?text=${encodeURIComponent(reorderText(g.items, g.supplier?.name))}`, '_blank');
   const shareReorder = () => {
     const lines = low.map(p => `• ${text(p.name, locale)} — ${pt('available', locale)}: ${num(p.on_hand) - num(p.reserved)}${p.unit ? ' ' + p.unit : ''} (${pt('minStock', locale)} ${num(p.min_stock)})`);
     const txt = `${pt('lowStockList', locale)} — ${text(boot.shop.name, locale)} — ${new Date().toLocaleDateString('en-GB')}\n${lines.join('\n')}`;
@@ -63,10 +75,19 @@ export default function StockView({ boot, locale, index, tick, staff, reindex, f
       </section>}
       <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><strong>{pt('lowStockList', locale)} ({low.length})</strong>{!!low.length && <button className="btn" onClick={shareReorder}>💬 {pt('shareReorder', locale)}</button>}</div>
-        <table className="table"><tbody>
-          {low.map(p => <tr key={p.id}><td>{text(p.name, locale)}</td><td className="num bad">{num(p.on_hand) - num(p.reserved)}{p.unit ? ' ' + p.unit : ''}</td><td className="muted num">{pt('minStock', locale)} {num(p.min_stock)}</td><td><button className="btn" onClick={() => { setMode('receive'); setSel(p); }}>{pt('receive', locale)}</button></td></tr>)}
-          {!low.length && <tr><td className="muted">—</td></tr>}
-        </tbody></table>
+        {!low.length && <p className="muted" style={{ margin: 0 }}>—</p>}
+        {groups.map(g => <div key={g.supplier?.id ?? 'none'} className="reorder-group">
+          <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            <strong>🚚 {g.supplier?.name ?? pt('noSupplier', locale)} <span className="muted" style={{ fontWeight: 400 }}>· {g.items.length}</span></strong>
+            <span className="row" style={{ gap: 6 }}>
+              {g.supplier && <button className="btn" onClick={() => waSupplier(g)}>💬 {pt('askSupplier', locale)}</button>}
+              {onReorder && <button className="btn primary" onClick={() => onReorder(g.supplier?.id ?? null, g.items.map(p => ({ id: p.id, qty: suggest(p) })))}>🧾 {pt('newPurchase', locale)}</button>}
+            </span>
+          </div>
+          <table className="table"><tbody>
+            {g.items.map(p => <tr key={p.id}><td>{text(p.name, locale)}</td><td className="num bad">{availOf(p)}{p.unit ? ' ' + p.unit : ''}</td><td className="muted num">{pt('minStock', locale)} {num(p.min_stock)}</td><td className="num">{pt('suggested', locale)} <strong>{suggest(p)}</strong></td><td><button className="btn" onClick={() => { setMode('receive'); setSel(p); }}>{pt('receive', locale)}</button></td></tr>)}
+          </tbody></table>
+        </div>)}
       </section>
       <section className="card">
         <strong>{pt('trackStock', locale)} ({tracked.length})</strong>

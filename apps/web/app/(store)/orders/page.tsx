@@ -4,7 +4,7 @@ import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase-server';
 import { ui, STATUS_LABEL } from '@/lib/ui-text';
-import StatusTimeline from '@/components/StatusTimeline';
+import OrdersList, { type OrderCard } from './OrdersList';
 import { formatMoney, t as tr, type OrderStatus } from '@suqa/shared';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function OrdersPage() {
   // one query: the orders with their lines and shop (the baskets' own numbers/totals come from their parts)
   const { data } = await sb.from('orders')
     .select('id,number,status,fulfillment,total_usd,placed_at,accepted_at,delivered_at,eta_minutes,basket_id,shop:shops(name,slug),items:order_items(name,quantity)')
-    .eq('customer_id', user.id).order('placed_at', { ascending: false }).limit(40);
+    .eq('customer_id', user.id).order('placed_at', { ascending: false }).limit(100);
   const rows = ((data as unknown) as Row[]) ?? [];
 
   type Card = { key: string; href: string; basket: boolean; number: string; placed_at: string; total: number; parts: Row[] };
@@ -34,8 +34,6 @@ export default async function OrdersPage() {
     else cards.push({ key: o.basket_id, href: `/orders/b/${o.basket_id}`, basket: true, number: o.number.replace(/-[A-Z]$/, ''), placed_at: o.placed_at, total: Number(o.total_usd), parts: [o] });
   }
   const isOpen = (c: Card) => c.parts.some(p => OPEN.includes(p.status));
-  const active = cards.filter(isOpen), past = cards.filter(c => !isOpen(c));
-  const spent = past.filter(c => c.parts.some(p => p.status === 'delivered')).reduce((s, c) => s + c.total, 0);
 
   const loc = ar ? 'ar-LB-u-nu-latn' : 'en-GB';
   const dayKey = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: tenant.timezone });
@@ -56,27 +54,19 @@ export default async function OrdersPage() {
   };
   const eta = (o: Row) => o.eta_minutes && o.accepted_at ? new Date(new Date(o.accepted_at).getTime() + o.eta_minutes * 60000).toLocaleTimeString(loc, { timeZone: tenant.timezone, hour: '2-digit', minute: '2-digit' }) : null;
 
-  const card = (c: Card, open: boolean) => {
-    const o = c.parts[0]; const items = c.parts.flatMap(p => p.items ?? []);
-    return (
-      <Link key={c.key} href={c.href} className={`card shop-card order-card ${open ? 'open' : ''}`}>
-        <div className="row spread">
-          <strong>{c.basket ? `🧺 ${ui('basket', L)} · ${c.parts.map(p => tr(p.shop?.name, L)).join(' · ')}` : `${o.fulfillment === 'pickup' ? '🛍️' : '🛵'} ${tr(o.shop?.name, L)}`}</strong>
-          <span className="row" style={{ gap: 4 }}>{c.parts.map(p => <span key={p.id} className={`badge ${p.status}`}>{label(p.status)}</span>)}</span>
-        </div>
-        {items.length > 0 && <div className="order-items">{summary(items)}</div>}
-        {open && !c.basket && <div className="order-progress"><StatusTimeline status={o.status} labels={statusLabels} pickup={o.fulfillment === 'pickup'} compact /></div>}
-        <div className="row spread muted" style={{ fontSize: 13 }}>
-          <span>{when(c.placed_at)} · <span dir="ltr">{c.number}</span>{open && !c.basket && eta(o) ? <> · ⏰ <span dir="ltr">{eta(o)}</span></> : null}</span>
-          <strong className="order-total">{money(c.total)}</strong>
-        </div>
-        <div className="row spread order-foot">
-          <span className="muted">{items.length} {ar ? 'صنف' : items.length === 1 ? 'item' : 'items'}</span>
-          <span className="order-go">{open ? (ar ? 'تتبّع الطلب ‹' : 'Track order ›') : (ar ? 'التفاصيل ‹' : 'Details ›')}</span>
-        </div>
-      </Link>
-    );
-  };
+  // plain data for the client list (search + filters run in the browser — no extra trips to the server)
+  const view: OrderCard[] = cards.map(c => {
+    const o = c.parts[0]; const items = c.parts.flatMap(p => p.items ?? []); const open = isOpen(c);
+    const d = new Date(c.placed_at);
+    return {
+      key: c.key, href: c.href, basket: c.basket, open, number: c.number, pickup: o.fulfillment === 'pickup',
+      shops: c.parts.map(p => tr(p.shop?.name, L)), parts: c.parts.map(p => ({ id: p.id, status: p.status, label: label(p.status) })),
+      summary: summary(items), search: [c.number, ...c.parts.map(p => `${p.shop?.name?.ar ?? ''} ${p.shop?.name?.en ?? ''}`), ...items.map(i => `${i.name?.ar ?? ''} ${i.name?.en ?? ''}`)].join(' ').toLowerCase(),
+      itemCount: items.length, when: when(c.placed_at), eta: open && !c.basket ? eta(o) : null, total: c.total, totalLabel: money(c.total),
+      delivered: c.parts.some(p => p.status === 'delivered'), status: o.status,
+      month: d.toLocaleDateString('en-CA', { timeZone: tenant.timezone }).slice(0, 7), monthLabel: d.toLocaleDateString(loc, { timeZone: tenant.timezone, month: 'long', year: 'numeric' }),
+    };
+  });
 
   return (
     <div className="stack">
@@ -84,18 +74,10 @@ export default async function OrdersPage() {
         <h1 style={{ margin: 0, fontSize: 20 }}>{ui('myOrders', L)}</h1>
         <Link href="/" className="btn">{ar ? '🛒 تسوّق' : '🛒 Shop'}</Link>
       </div>
-      {!cards.length && <div className="card stack" style={{ alignItems: 'center', textAlign: 'center', padding: 28 }}>
+      {!cards.length ? <div className="card stack" style={{ alignItems: 'center', textAlign: 'center', padding: 28 }}>
         <div style={{ fontSize: 34 }}>🧺</div><div className="muted">{ui('noOrdersYet', L)}</div>
         <Link href="/" className="btn primary">{ar ? 'تصفّح المحلات' : 'Browse shops'}</Link>
-      </div>}
-      {active.length > 0 && <>
-        <div className="section-title">{ar ? 'طلبات جارية' : 'In progress'} <span className="count-pill">{active.length}</span></div>
-        {active.map(c => card(c, true))}
-      </>}
-      {past.length > 0 && <>
-        <div className="section-title">{ar ? 'الطلبات السابقة' : 'Past orders'} <span className="muted" style={{ fontWeight: 400 }}>· {past.length}{spent > 0 ? ` · ${money(spent)}` : ''}</span></div>
-        {past.map(c => card(c, false))}
-      </>}
+      </div> : <OrdersList cards={view} locale={L} statusLabels={statusLabels} basketLabel={ui('basket', L)} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} />}
     </div>
   );
 }

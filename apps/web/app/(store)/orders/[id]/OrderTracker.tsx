@@ -19,7 +19,7 @@ const digits = (p?: string | null) => String(p ?? '').replace(/\D/g, '').replace
 const tel = (p?: string | null) => { const d = digits(p); return d ? `+${d}` : ''; };
 
 /** The customer's order page: where the order is, who to call, what was ordered and what is left to pay. Updates itself while the order is open. */
-export default function OrderTracker(props: { initial: Row; extra: Extra; locale: Locale; fx: number; displayCurrency: DisplayCurrency; timezone: string; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<LabelKey, string> }) {
+export default function OrderTracker(props: { initial: Row; extra: Extra; rating: { stars: number; comment: string | null } | null; locale: Locale; fx: number; displayCurrency: DisplayCurrency; timezone: string; justPlaced: boolean; statusLabels: Record<OrderStatus, string>; labels: Record<LabelKey, string> }) {
   const { locale: L, fx, displayCurrency, statusLabels, labels, extra, timezone } = props;
   const ar = L === 'ar';
   const ask = useConfirm();
@@ -29,6 +29,17 @@ export default function OrderTracker(props: { initial: Row; extra: Extra; locale
   const cart = useCart();
   const [o, setO] = useState<Row>(props.initial);
   const [busy, setBusy] = useState(false);
+  const [rating, setRating] = useState(props.rating);
+  const [stars, setStars] = useState(props.rating?.stars ?? 0); const [comment, setComment] = useState(props.rating?.comment ?? ''); const [rateBusy, setRateBusy] = useState(false);
+  const rateDirty = stars > 0 && (stars !== (rating?.stars ?? 0) || comment.trim() !== (rating?.comment ?? ''));
+  async function sendRating() {
+    if (!stars) return;
+    setRateBusy(true);
+    const { error } = await sb.rpc('rate_order', { p_order: o.id, p_stars: stars, p_comment: comment.trim() || null });
+    setRateBusy(false);
+    if (error) { notify(friendlyError(error, L)); return; }
+    setRating({ stars, comment: comment.trim() || null });
+  }
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
   const loc = ar ? 'ar-LB-u-nu-latn' : 'en-GB';
   const fmt = (iso: string, withDate = false) => new Date(iso).toLocaleString(loc, { timeZone: timezone, ...(withDate ? { day: 'numeric', month: 'short' } : {}), hour: '2-digit', minute: '2-digit' });
@@ -126,6 +137,18 @@ export default function OrderTracker(props: { initial: Row; extra: Extra; locale
         </div>
         <OrderThread orderId={o.id} you="customer" labels={{ title: labels.threadTitle, customer: labels.threadCustomer, shop: labels.threadShop }} />
       </section>
+
+      {o.status === 'delivered' && <section className="card stack rate-card">
+        <div className="row spread"><strong>{rating && !rateDirty ? (ar ? 'تقييمك لهذا الطلب' : 'Your rating') : (ar ? 'كيف كان طلبك؟' : 'How was your order?')}</strong>{rating && !rateDirty && <span className="muted" style={{ fontSize: 12 }}>✓ {ar ? 'شكراً — وصل تقييمك إلى المحل' : 'Thanks — the shop received it'}</span>}</div>
+        <div className="stars" role="radiogroup" aria-label={ar ? 'التقييم' : 'Rating'} dir="ltr">
+          {[1, 2, 3, 4, 5].map(n => <button key={n} type="button" role="radio" aria-checked={stars === n} aria-label={`${n}/5`} className={n <= stars ? 'on' : ''} onClick={() => setStars(n)}>★</button>)}
+        </div>
+        {stars > 0 && (rateDirty || !rating) && <>
+          <textarea className="input" rows={2} maxLength={500} placeholder={ar ? 'ملاحظة للمحل (اختياري)' : 'A note for the shop (optional)'} value={comment} onChange={e => setComment(e.target.value)} />
+          <button className="btn primary" disabled={rateBusy} onClick={sendRating}>{rateBusy ? '…' : rating ? (ar ? 'تحديث التقييم' : 'Update rating') : (ar ? 'إرسال التقييم' : 'Send rating')}</button>
+        </>}
+        {rating && !rateDirty && rating.comment && <div style={{ fontSize: 14 }}>“{rating.comment}”</div>}
+      </section>}
 
       {showDriver && driver && <section className="card track-contact">
         <div><div className="muted" style={{ fontSize: 12 }}>{ar ? 'السائق' : 'Driver'}</div><strong>🛵 {driver.name}</strong>{driver.vehicle && <span className="muted"> · {driver.vehicle}</span>}{driver.phone && <div className="muted" dir="ltr" style={{ fontSize: 13 }}>{tel(driver.phone)}</div>}</div>

@@ -57,4 +57,5 @@ source of truth.
 | 53_driver_steps.sql | `orders.driver_delivered_at`; `driver_step(order, 'picked'|'delivered')` — driver sheet buttons record times + timeline event only; status and payment stay with the shop. Service key only. |
 | 54_pos_debt_unsettle.sql | `debt.unsettle` op (`_pos_debt_unsettle`: owner-only undo of a debt collection; settlement + allocations removed, full record kept in the audit log); `pos_push` re-created. |
 | 55_pos_approval_pin.sql | `shop_approval_pins` (one hashed 4-digit approval PIN per shop, own table, no policies); `pos_set_approval_pin(shop, hash, salt)` owner-only set / replace / remove; `pos_approval_pin(shop)` members read hash + salt for offline checks. Approvals at the till use it instead of the owner's login PIN once set. |
+| 56_order_ratings.sql | `order_ratings` (one 1–5 star rating + note per delivered order); `rate_order(order, stars, comment)` — customer of the order only, delivered only, may be changed; lands in the order timeline. Read by the customer, the shop and the association. |
 | ../seed/batroun.sql | first tenant |

@@ -5,6 +5,14 @@ import { freshApproval, getApproval, onApprovalChange } from '../lib/approval';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
 
+const FAILS_KEY = 'suqa-pos-approval-fails', MAX_FAILS = 5, LOCK_MS = 60_000;
+type Fails = { n: number; until: number };
+function readFails(): Fails { try { const f = JSON.parse(localStorage.getItem(FAILS_KEY) || 'null') as Fails | null; if (f && typeof f.n === 'number') return { n: f.n, until: Number(f.until) || 0 }; } catch {} return { n: 0, until: 0 }; }
+function writeFails(f: Fails) { try { localStorage.setItem(FAILS_KEY, JSON.stringify(f)); } catch {} }
+function clearFails() { writeFails({ n: 0, until: 0 }); }
+/** Counts a wrong PIN; returns the time the lock ends when this one triggered it. */
+function addFail(): number | null { const f = readFails(); const n = f.n + 1; if (n >= MAX_FAILS) { const until = Date.now() + LOCK_MS; writeFails({ n: 0, until }); return until; } writeFails({ n, until: 0 }); return null; }
+
 /**
  * Approval gate. Owners pass automatically; everyone else types the shop's APPROVAL PIN (schema 55) — or, while the shop has none,
  * an owner's login PIN as before. Checked locally against the hashes on the device, so it works offline.
@@ -25,24 +33,31 @@ export default function OwnerPin({ open, locale, staff, me, reason, onDone }: { 
       const a = await (fresh.current ?? Promise.resolve(getApproval()));
       const id = await verifyApproval(pin, staff, a);
       if (!on) return;
-      if (id) { setPin(''); onDone(id); } else { setErr(true); setPin(''); }
+      if (id) { setPin(''); clearFails(); onDone(id); } else { setErr(true); setPin(''); const u = addFail(); if (u) setLockedUntil(u); }
     })();
     return () => { on = false; };
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (/^\d$/.test(e.key)) { setErr(false); setPin(p => (p + e.key).slice(0, 4)); } else if (e.key === 'Backspace') setPin(p => p.slice(0, -1)); };
+    const h = (e: KeyboardEvent) => { if (/^\d$/.test(e.key)) { if (lockRef.current) return; setErr(false); setPin(p => (p + e.key).slice(0, 4)); } else if (e.key === 'Backspace') setPin(p => p.slice(0, -1)); };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [open]);
+  // guessing guard: 5 wrong PINs lock approvals on this device for a minute (kept across reloads)
+  const [lockedUntil, setLockedUntil] = useState<number>(() => readFails().until);
+  const [now, setNow] = useState(() => Date.now());
+  const locked = lockedUntil > now; const lockRef = useRef(locked); lockRef.current = locked;
+  useEffect(() => { if (open) { setLockedUntil(readFails().until); setNow(Date.now()); } }, [open]);
+  useEffect(() => { if (!open || !locked) return; const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, [open, locked]);
+  const press = (d: string) => { if (lockRef.current) return; setErr(false); setPin(p => (p + d).slice(0, 4)); };
   if (!open || me.role === 'owner') return null;
   return (
     <Modal open={open} onClose={() => { setPin(''); onDone(null); }} title={pt(approval ? 'approvalPin' : 'ownerPin', locale)}>
       <p className="muted">{pt(approval ? 'approvalPinHint' : 'ownerPinHint', locale)} — {reason}</p>
       <div className="pin-dots">{[0, 1, 2, 3].map(i => <span key={i} className={`dot ${pin.length > i ? 'on' : ''}`} />)}</div>
-      {err && <p className="bad">{pt('wrongPin', locale)}</p>}
-      <div className="pinpad">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => <button key={d} onClick={() => { setErr(false); setPin(p => (p + d).slice(0, 4)); }}>{d}</button>)}
-        <button className="muted" onClick={() => setPin('')}>C</button><button onClick={() => setPin(p => (p + '0').slice(0, 4))}>0</button><button className="muted" onClick={() => setPin(p => p.slice(0, -1))}>⌫</button>
+      {locked ? <p className="bad">🔒 {pt('approvalLocked', locale)} {Math.ceil((lockedUntil - now) / 1000)}s</p> : err && <p className="bad">{pt('wrongPin', locale)}{readFails().n > 0 ? ` · ${MAX_FAILS - readFails().n} ${pt('triesLeft', locale)}` : ''}</p>}
+      <div className="pinpad" style={locked ? { opacity: .4, pointerEvents: 'none' } : undefined}>
+        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => <button key={d} onClick={() => press(d)}>{d}</button>)}
+        <button className="muted" onClick={() => setPin('')}>C</button><button onClick={() => press('0')}>0</button><button className="muted" onClick={() => setPin(p => p.slice(0, -1))}>⌫</button>
       </div>
     </Modal>
   );

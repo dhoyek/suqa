@@ -86,6 +86,7 @@ const T = {
   orderDiscount: { ar: 'خصم على الطلب', en: 'Order discount' }, discountReason: { ar: 'سبب الخصم', en: 'Discount reason' },
   percent: { ar: '%', en: '%' }, amount: { ar: 'مبلغ', en: 'Amount' },
   ownerPin: { ar: 'رمز صاحب المحل مطلوب', en: 'Owner PIN required' }, approvalPin: { ar: 'رمز الموافقة مطلوب', en: 'Approval PIN required' }, approvalPinHint: { ar: 'أدخل رمز الموافقة (وليس رمز الدخول)', en: 'Enter the approval PIN (not a login PIN)' },
+  approvalLocked: { ar: 'محاولات خاطئة كثيرة — حاول بعد', en: 'Too many wrong attempts — try again in' }, triesLeft: { ar: 'محاولات باقية', en: 'tries left' },
   approvalPinTitle: { ar: 'رمز الموافقة', en: 'Approval PIN' }, approvalPinDesc: { ar: 'رمز من 4 أرقام يُطلب للموافقة على الخصومات وتغيير الأسعار والمرتجعات وحذف الطلبات وتعديل المخزون — بدل رمز دخول صاحب المحل. لا يفتح أي حساب ولا يمكن عرضه، يمكن فقط تغييره.', en: 'A 4-digit PIN asked for when approving discounts, price changes, returns, order deletes and stock adjustments — instead of the owner\'s login PIN. It opens no account and can never be shown, only changed.' },
   approvalPinSet: { ar: 'مُفعّل منذ', en: 'Set on' }, approvalPinNone: { ar: 'غير مُعيَّن — الموافقات تطلب رمز دخول صاحب المحل', en: 'Not set — approvals ask for the owner\'s login PIN' },
   approvalPinSetBtn: { ar: 'تعيين رمز الموافقة', en: 'Set approval PIN' }, approvalPinChangeBtn: { ar: 'تغيير رمز الموافقة', en: 'Change approval PIN' }, approvalPinRemoveBtn: { ar: 'إزالة', en: 'Remove' },

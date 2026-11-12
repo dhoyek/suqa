@@ -1,5 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
@@ -36,13 +37,42 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
   const [hours, setHours] = useState<Hours>((shop.opening_hours as Hours) ?? {});
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const dis = !canEdit;
+  // sections as tabs, and a guard for edits that were not saved
+  type Tab = 'details' | 'contact' | 'zones' | 'hours';
+  const [tab, setTab] = useState<Tab>('details');
+  const ask = useConfirm();
+  const snap = JSON.stringify({ f, hours, served });
+  const [base, setBase] = useState(snap);
+  const dirty = canEdit && snap !== base;
+  const dirtyIn = (keys: { f?: (keyof typeof f)[]; hours?: boolean; served?: boolean }) => {
+    if (!dirty) return false;
+    const b = JSON.parse(base) as { f: typeof f; hours: Hours; served: typeof served };
+    return (keys.f ?? []).some(k => b.f[k] !== f[k]) || (!!keys.hours && JSON.stringify(b.hours) !== JSON.stringify(hours)) || (!!keys.served && JSON.stringify(b.served) !== JSON.stringify(served));
+  };
+  const tabDirty: Record<Tab, boolean> = {
+    details: dirtyIn({ f: ['name_ar', 'name_en', 'desc_ar', 'desc_en', 'min_order', 'prep', 'pickup', 'logo_url', 'cover_url'] }),
+    contact: dirtyIn({ f: ['phone', 'whatsapp', 'address_text'] }), zones: dirtyIn({ served: true }), hours: dirtyIn({ f: ['override'], hours: true }),
+  };
+  function discard() { const b = JSON.parse(base) as { f: typeof f; hours: Hours; served: typeof served }; setF(b.f); setHours(b.hours); setServed(b.served); setMsg(null); }
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };          // closing / reloading the tab
+    const click = (e: MouseEvent) => {                                                            // links inside the app
+      const a = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || a.target === '_blank' || e.defaultPrevented || (a.pathname === location.pathname && a.search === location.search)) return;
+      e.preventDefault(); e.stopPropagation();
+      void ask(L === 'ar' ? 'لديك تغييرات غير محفوظة. المغادرة بدون حفظ؟' : 'You have unsaved changes. Leave without saving?', { danger: true }).then(ok => { if (ok) { window.removeEventListener('beforeunload', warn); window.location.href = a.href; } });
+    };
+    window.addEventListener('beforeunload', warn); document.addEventListener('click', click, true);
+    return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', click, true); };
+  }, [dirty, ask, L]);
 
   // quick pause switch — saved immediately (the merchant's panic button)
   async function setPaused(paused: boolean) {
     const override = paused ? false : null;
     setF(x => ({ ...x, override: paused ? 'closed' : 'hours' }));
     const { error } = await sb.from('shops').update({ is_open_override: override }).eq('id', shop.id);
-    if (error) setMsg(friendlyError(error, L)); else router.refresh();
+    if (error) setMsg(friendlyError(error, L)); else { setBase(b => { const x = JSON.parse(b); x.f.override = paused ? 'closed' : 'hours'; return JSON.stringify(x); }); router.refresh(); }
   }
 
   function setRange(day: string, i: number, k: 0 | 1, v: string) {
@@ -70,7 +100,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
     setBusy(false);
     const zerr = r1.error ?? r2.error;
     if (zerr) { setMsg(friendlyError(zerr, L)); return; }
-    setMsg(labels.saved); router.refresh();
+    setBase(JSON.stringify({ f, hours, served })); setMsg(labels.saved); router.refresh();
   }
 
   const paused = f.override === 'closed';
@@ -83,7 +113,12 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
         <button className={`switch ${paused ? 'on' : ''}`} aria-pressed={paused} disabled={dis} onClick={() => setPaused(!paused)} aria-label={labels.pauseOrders} />
       </section>
 
-      <section className="card stack">
+      <div className="subtabs" role="tablist">
+        {([['details', `🏪 ${labels.shopDetails}`], ['contact', `📞 ${labels.contact}`], ['zones', `🗺 ${labels.zonesServed}${zones.length ? ` (${servedCount})` : ''}`], ['hours', `🕒 ${labels.openingHours}`]] as [Tab, string][]).map(([k, t]) =>
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{t}{tabDirty[k] && <span className="dot" title={L === 'ar' ? 'غير محفوظ' : 'unsaved'} />}</button>)}
+      </div>
+
+      {tab === 'details' && <section className="card stack">
         <strong>{labels.shopDetails}</strong>
         <div><label className="label">{labels.cover}</label>
           <ImageUpload shopId={shop.id} kind="cover" value={f.cover_url} onChange={u => setF({ ...f, cover_url: u })} locale={L} labels={{ add: labels.photo, change: labels.changePhoto, remove: labels.remove }} /></div>
@@ -104,18 +139,18 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
         <div className="row">
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" disabled={dis} checked={f.pickup} onChange={e => setF({ ...f, pickup: e.target.checked })} /> 🛍️ {labels.pickupEnabled}</label>
         </div>
-      </section>
+      </section>}
 
-      <section className="card stack">
+      {tab === 'contact' && <section className="card stack">
         <strong>{labels.contact}</strong>
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}><label className="label">{labels.publicPhone}</label><input className="input" dir="ltr" inputMode="tel" disabled={dis} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
           <div style={{ flex: 1 }}><label className="label">{labels.whatsapp}</label><input className="input" dir="ltr" inputMode="tel" disabled={dis} value={f.whatsapp} onChange={e => setF({ ...f, whatsapp: e.target.value })} /></div>
         </div>
         <div><label className="label">{labels.addressText}</label><input className="input" disabled={dis} value={f.address_text} onChange={e => setF({ ...f, address_text: e.target.value })} /></div>
-      </section>
+      </section>}
 
-      <section className="card stack">
+      {tab === 'zones' && <section className="card stack">
         <strong>🗺 {labels.zonesServed}</strong>
         <div className="muted" style={{ fontSize: 13 }}>{labels.zonesServedHint}</div>
         {zones.length === 0 && <div className="muted">{labels.noZonesYet}</div>}
@@ -130,9 +165,9 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
               value={served[z.id]?.fee ?? ''} onChange={e => setServed({ ...served, [z.id]: { ...served[z.id], fee: e.target.value } })} />
           </div>
         ))}
-      </section>
+      </section>}
 
-      <section className="card stack">
+      {tab === 'hours' && <section className="card stack">
         <div className="row spread">
           <strong>{labels.openingHours}</strong>
           <select className="input" style={{ width: 'auto' }} disabled={dis} value={f.override} onChange={e => setF({ ...f, override: e.target.value })}>
@@ -157,13 +192,15 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
             {hours[d]?.length === 1 && <button type="button" className="btn ghost" style={{ alignSelf: 'flex-end', fontSize: 12 }} disabled={dis} onClick={() => addRange(d)}>{labels.addRange}</button>}
           </div>
         ))}
-      </section>
+      </section>}
 
       {!canEdit && <div className="card muted">🔒 {L === 'ar' ? 'يمكن لصاحب المحل فقط تعديل هذه البيانات.' : 'Only the shop owner can change these details.'}</div>}
       {/* always in view: the form is long and the button used to sit below everything */}
       {canEdit && <div className="savebar">
-        {msg && <span className={msg === labels.saved ? 'ok' : 'error'}>{msg === labels.saved ? '✓ ' : ''}{msg}</span>}
-        <button className="btn primary" disabled={busy} onClick={save}>{busy ? '…' : `💾 ${labels.save}`}</button>
+        {dirty && <span className="unsaved">● {L === 'ar' ? 'تغييرات غير محفوظة' : 'Unsaved changes'}</span>}
+        {msg && !(dirty && msg === labels.saved) && <span className={msg === labels.saved ? 'ok' : 'error'}>{msg === labels.saved ? '✓ ' : ''}{msg}</span>}
+        {dirty && <button className="btn ghost" disabled={busy} onClick={discard}>{L === 'ar' ? 'تراجع' : 'Discard'}</button>}
+        <button className="btn primary" disabled={busy || !dirty} onClick={save}>{busy ? '…' : `💾 ${labels.save}`}</button>
       </div>}
     </div>
   );

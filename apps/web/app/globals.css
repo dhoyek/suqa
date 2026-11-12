@@ -285,3 +285,16 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .order-line > span { white-space: nowrap; }
 .order-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .order-actions .btn { flex: 1 1 140px; justify-content: center; text-align: center; }
+
+.stars { display: flex; gap: 4px; }
+.stars button { border: 0; background: none; font-size: 34px; line-height: 1; color: #d1d5db; cursor: pointer; padding: 2px 4px; }
+.stars button.on { color: var(--brand-accent); }
+.orders-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+.orders-filter .input { flex: 1 1 160px; min-height: 40px; }
+.orders-filter select.input { flex: 0 1 auto; width: auto; }
+.subtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.subtabs button.on { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
+.subtabs .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-accent); margin-inline-start: 6px; vertical-align: middle; }
+.savebar .unsaved { color: #92400e; font-weight: 600; margin-inline-end: auto; }

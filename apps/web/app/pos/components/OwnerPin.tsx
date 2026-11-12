@@ -39,8 +39,13 @@ export default function OwnerPin({ open, locale, staff, me, reason, onDone }: { 
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (/^\d$/.test(e.key)) { if (lockRef.current) return; setErr(false); setPin(p => (p + e.key).slice(0, 4)); } else if (e.key === 'Backspace') setPin(p => p.slice(0, -1)); };
-    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+    // capture + stop: the dialog underneath (pay screen, quantity pad …) listens for the same keys — a PIN typed here used to land in its amount too
+    const h = (e: KeyboardEvent) => {
+      if (/^\d$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); if (lockRef.current) return; setErr(false); setPin(p => (p + e.key).slice(0, 4)); }
+      else if (e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); setPin(p => p.slice(0, -1)); }
+      else if (e.key === 'Enter' || e.key === '.') { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('keydown', h, true); return () => window.removeEventListener('keydown', h, true);
   }, [open]);
   // guessing guard: 5 wrong PINs lock approvals on this device for a minute (kept across reloads)
   const [lockedUntil, setLockedUntil] = useState<number>(() => readFails().until);

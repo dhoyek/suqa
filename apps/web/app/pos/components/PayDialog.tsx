@@ -174,7 +174,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           <NumPad value={pristine ? '' : amount} onChange={v => type(v)} decimal={cur === 'usd'} onEnter={() => (canConfirm ? void confirm() : addRow())} big />
         </div>
       </div>
-      {limitGate && me && <OwnerPin open locale={locale} staff={members} me={me} reason={`${pt('creditLimit', locale)} ${credit ? fmtUsd(credit.limit) : ''}`} onDone={id => { setLimitGate(null); if (id) { setLimitOk(true); setErr(null); } }} />}
+      {limitGate && me && <OwnerPin open locale={locale} staff={members} me={me} reason={`${pt('creditLimitOwner', locale)} · ${credit ? fmtUsd(credit.limit) : ''}`} onDone={id => { setLimitGate(null); if (id) { setLimitOk(true); setErr(null); } }} />}
     </Modal>
   );
 }

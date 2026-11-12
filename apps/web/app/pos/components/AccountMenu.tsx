@@ -46,13 +46,13 @@ export default function AccountMenu({ sb, boot, staff, locale, setLocale, onLock
       {open && <div className="menu card">
         <div className="who">
           <strong>{name || pt('account', locale)}</strong>
-          <div className="muted">{pt(`role_${boot.role}` as Parameters<typeof pt>[0], locale)} · 🏪 {text(boot.shop.name, locale)}</div>
+          <div className="muted">{pt(`role_${role}` as Parameters<typeof pt>[0], locale)} · 🏪 {text(boot.shop.name, locale)}</div>
           {me && <div className="muted" dir="ltr" style={{ textAlign: 'start' }}>{me}</div>}
         </div>
         <a className="item" href="/account">👤 {pt('account', locale)}</a>
         <a className="item" href="/orders">🧾 {pt('myPurchases', locale)}</a>
-        {boot.role === 'owner' && <a className="item" href="/shop/settings">🏪 {pt('backToShop', locale)}</a>}
-        {admin && <a className="item" href="/admin">🛠️ {pt('adminArea', locale)}</a>}
+        {role === 'owner' && <a className="item" href="/shop/settings">🏪 {pt('backToShop', locale)}</a>}
+        {admin && role === 'owner' && <a className="item" href="/admin">🛠️ {pt('adminArea', locale)}</a>}
         <a className="item" href="/">🏠 {pt('backHome', locale)}</a>
         <div className="item lang">
           <span className="muted">{pt('language', locale)}</span>

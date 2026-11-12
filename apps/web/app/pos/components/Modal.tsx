@@ -1,17 +1,24 @@
 'use client';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 /** Minimal modal: Esc closes, backdrop click closes, body scroll locked. */
 export default function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+  // dialogs stack (a PIN prompt over the pay dialog): only the one on top answers Esc, otherwise Esc closed the dialog underneath
+  const me = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (document.querySelector('[data-esc-layer]')) return; e.stopPropagation(); onClose(); } };   // an open menu inside the dialog takes Esc first
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('[data-esc-layer]')) return;                                  // an open menu inside the dialog takes Esc first
+      const all = document.querySelectorAll('.pos-modal-backdrop'); if (all.length && all[all.length - 1] !== me.current) return;
+      e.stopPropagation(); onClose();
+    };
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="pos-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="pos-modal-backdrop" ref={me} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`pos-modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true">
         {title && <div className="pos-modal-title">{title}<button className="btn icon" onClick={onClose} aria-label="close">✕</button></div>}
         <div className="pos-modal-body">{children}</div>

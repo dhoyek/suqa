@@ -59,6 +59,8 @@ create table if not exists suqa.orders (
   driver_ack_at     timestamptz,                         -- 52: driver confirmed he got the order (sheet button / WhatsApp reply)
   driver_picked_at  timestamptz,                         -- 52/53: driver took the bag from the shop
   driver_delivered_at timestamptz,                       -- 53: driver says he handed it over (status + payment stay with the shop)
+  driver_paid_at    timestamptz,                         -- 60: the driver's pay for this delivery (courier_fee_cents) was settled
+  driver_payout_id  uuid,                                -- 60: … in this payout (suqa.driver_payouts; fk added in 60)
   accepted_at       timestamptz,
   delivered_at      timestamptz,
   closed_at         timestamptz,                                 -- delivered/rejected/cancelled

@@ -30,6 +30,7 @@ export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;
   allow_negative_stock: boolean; lbp_rounding_step: number; deduct_stock_at: 'ready' | 'delivered'; hide_online_when_zero: boolean;
   receipt_footer?: string | null; default_delivery_fee_usd?: number | string; default_margin_pct?: number | string; scale_prefix?: string | null; scale_code_len?: number; scale_value_kind?: 'weight' | 'price_lbp' | 'price_usd'; scale_value_divisor?: number; scale_formats?: { prefix: string; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number }[]; printer: Record<string, unknown>; whatsapp?: string | null; phone?: string | null; pickup_enabled?: boolean;
+  driver_pay_mode?: DriverPayMode; driver_pay_cents?: number;   // 60: how the shop's drivers are paid by default
   notify_stages?: string[] | null;             // customer WhatsApp stages (null = tenant default)
 }
 
@@ -41,7 +42,7 @@ export interface Order {
   rate_lbp_per_usd: number; subtotal_cents: number; discount_cents: number; discount_reason?: string | null; total_cents: number; total_lbp: number;
   delivery_fee_usd?: number | string; total_usd?: number | string; courier_fee_cents?: number; courier_name?: string | null;
   paid_usd_cents: number; paid_lbp: number; change_usd_cents: number; change_lbp: number;
-  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null; driver_id?: string | null; driver_ack_at?: string | null; driver_picked_at?: string | null; driver_delivered_at?: string | null;
+  reject_reason?: string | null; cancel_reason?: string | null; shop_notes?: string | null; eta_minutes?: number | null; needed_at?: string | null; driver_id?: string | null; driver_paid_at?: string | null; driver_payout_id?: string | null; driver_ack_at?: string | null; driver_picked_at?: string | null; driver_delivered_at?: string | null;
   placed_at: string; accepted_at?: string | null; delivered_at?: string | null; closed_at?: string | null; updated_at?: string;
 }
 export interface OrderLine {
@@ -64,12 +65,14 @@ export interface CustomerAddress { line1?: string; notes?: string; map_url?: str
 /** One entry of a customer's address book (shop_customers.addresses). */
 export interface SavedAddress extends CustomerAddress { id: string; last_used_at?: string | null }
 /** A shop's contracted driver (shop_drivers): just a name and a WhatsApp number; user_id when he also has an account. */
-export interface Driver { id: string; shop_id: string; name: string; phone: string; phone_key: string; vehicle?: string | null; active: boolean; available: boolean; notes?: string | null; user_id?: string | null; last_used_at?: string | null; updated_at?: string }
+/** 'none' = nothing per order (salaried), 'per_delivery' = a fixed amount, 'delivery_fee' = the fee the customer paid on that order. */
+export type DriverPayMode = 'none' | 'per_delivery' | 'delivery_fee';
+export interface Driver { pay_mode?: DriverPayMode | null; pay_cents?: number | null; id: string; shop_id: string; name: string; phone: string; phone_key: string; vehicle?: string | null; active: boolean; available: boolean; notes?: string | null; user_id?: string | null; last_used_at?: string | null; updated_at?: string }
 export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; addresses?: SavedAddress[]; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'debt.unsettle' | 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert' | 'driver.delete';
+export type OpKind = 'driver.payout' | 'order.driver_pay' | 'debt.unsettle' | 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert' | 'driver.delete';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7

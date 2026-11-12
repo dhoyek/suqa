@@ -20,6 +20,8 @@ create table if not exists suqa.shop_drivers (
   notes         text,
   user_id       uuid references auth.users(id) on delete set null,   -- linked when a user with this number exists
   last_used_at  timestamptz,
+  pay_mode      text check (pay_mode is null or pay_mode in ('none','per_delivery','delivery_fee')),   -- 60: null = follow the shop default
+  pay_cents     int  check (pay_cents is null or pay_cents >= 0),                                    -- 60: fixed amount per delivery when pay_mode = 'per_delivery'
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (shop_id, phone_key)

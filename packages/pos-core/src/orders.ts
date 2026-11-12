@@ -1,6 +1,7 @@
 import { META, type PosDb } from './db';
 import { enqueue, newId } from './sale';
 import { settle, type Settlement } from './money';
+import { driverPayOf } from './drivers';
 import { num, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product } from './types';
 
 // Order inbox actions (PLAN §M5). Each one writes the local mirror first (so the board updates instantly, offline too) and queues an op.
@@ -15,6 +16,8 @@ export async function setOrderStatus(db: PosDb, order: Order, status: OrderStatu
   const updated: Order = { ...order, status, reject_reason: extra.reject_reason ?? order.reject_reason, cancel_reason: extra.cancel_reason ?? order.cancel_reason, eta_minutes: extra.eta_minutes ?? order.eta_minutes,
     notify_customer: extra.notify_customer ?? order.notify_customer, shop_notes: extra.shop_notes ?? order.shop_notes, driver_id: 'driver_id' in extra ? extra.driver_id ?? null : order.driver_id, courier_name: 'driver_id' in extra ? extra.courier_name ?? null : order.courier_name, accepted_at: status === 'accepted' ? now : order.accepted_at,
     delivered_at: status === 'delivered' ? now : order.delivered_at, closed_at: ['delivered', 'rejected', 'cancelled'].includes(status) ? now : order.closed_at, updated_at: now };
+  // delivered by a shop driver with no fee entered yet → what the delivery earns him, from the pay rule (the server does the same)
+  if (status === 'delivered' && order.status !== 'delivered' && updated.driver_id && !num(updated.courier_fee_cents) && !updated.driver_paid_at) updated.courier_fee_cents = await driverPayOf(db, updated);
   await db.transaction('rw', [db.orders, db.outbox], async () => {
     await db.orders.put(updated);
     const { courier_name: _cn, ...rest } = extra; void _cn;
@@ -66,6 +69,7 @@ export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Pay
   const updated: Order = { ...order, status, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp, shift_id: shiftId ?? order.shift_id ?? null,
     courier_fee_cents: extra.courier_fee_cents ?? order.courier_fee_cents ?? 0, courier_name: extra.courier_name ?? order.courier_name ?? null,
     delivered_at: status === 'delivered' ? now : order.delivered_at, closed_at: status === 'delivered' ? now : order.closed_at, updated_at: now };
+  if (status === 'delivered' && order.status !== 'delivered' && updated.driver_id && !num(updated.courier_fee_cents) && !updated.driver_paid_at) updated.courier_fee_cents = await driverPayOf(db, updated);
   await db.transaction('rw', [db.orders, db.payments, db.outbox], async () => {
     await db.payments.bulkPut(pays); await db.orders.put(updated);
     await enqueue(db, 'order.pay', { id: order.id, status, shift_id: shiftId, payments: pays.map(p => ({ id: p.id, tender: p.tender, amount: p.amount, currency: p.currency, reference: p.reference ?? null, unpaid_name: p.unpaid_name ?? null, unpaid_phone: p.unpaid_phone ?? null, at: p.at })),

@@ -139,3 +139,19 @@ export function supplierStatementHtml(s: Supplier, rows: Array<{ at: string; kin
     ${lines}<hr>
     <div class="kv tot"><span>${esc(pt('weOwe', L))}</span>${ltr(fmtUsd(num(s.balance_cents)))}</div>${cutBlock(st)}</div>`;
 }
+
+/** Driver statement for the period: deliveries with what each earned and whether it was settled, then the totals. */
+export function driverStatementHtml(name: string, t: { from: string; to: string; deliveries: number; value_cents: number; earned_cents: number; holding_cents: number; owed_cents: number }, rows: Array<{ at: string; number: string; total_cents: number; pay_cents: number; settled: boolean }>, shop: Shop, L: L, st: PrintSettings): string {
+  const lines = [...rows].reverse().map(r => `<div class="kv"><span>${esc(fmtDT(r.at, L).split(',')[0])} · ${ltr(esc(r.number))} · ${ltr(fmtUsd(r.total_cents))}</span>${ltr(fmtUsd(r.pay_cents) + (r.settled ? ' ✓' : ''))}</div>`).join('');
+  const net = t.holding_cents - t.owed_cents;
+  return `<div class="vch">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="kiosk">${esc(pt('drvStatement', L))}</div>
+    <div class="no">${esc(name)}</div><div class="ev">${ltr(esc(t.from))} → ${ltr(esc(t.to))} · ${esc(fmtDT(new Date().toISOString(), L))}</div><hr>
+    ${lines}<hr>
+    <div class="kv"><span>${esc(pt('drvDeliveries', L))}</span>${ltr(String(t.deliveries))}</div>
+    <div class="kv"><span>${esc(pt('drvValue', L))}</span>${ltr(fmtUsd(t.value_cents))}</div>
+    <div class="kv"><span>${esc(pt('drvEarned', L))}</span>${ltr(fmtUsd(t.earned_cents))}</div>
+    <div class="kv"><span>${esc(pt('drvHolding', L))}</span>${ltr(fmtUsd(t.holding_cents))}</div>
+    <div class="kv"><span>${esc(pt('drvOwed', L))}</span>${ltr(fmtUsd(t.owed_cents))}</div>
+    <div class="kv tot"><span>${esc(pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', L))}</span>${ltr(fmtUsd(Math.abs(net)))}</div>${cutBlock(st)}</div>`;
+}

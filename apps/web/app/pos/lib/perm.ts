@@ -12,7 +12,7 @@ export const roleOf = (s: { role?: Staff['role'] } | null | undefined): PosRole 
  *  owner:   everything
  */
 const VIEWS_BY_ROLE: Record<PosRole, View[]> = {
-  owner:   ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'settings'],
+  owner:   ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'drivers', 'settings'],   // drivers: deliveries, pay and settlements — owner only
   stock:   ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'settings'],
   cashier: ['sell', 'orders', 'customers', 'debts', 'items', 'shift', 'settings'],
 };

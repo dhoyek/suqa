@@ -18,16 +18,16 @@ const LBP_NOTES = [50000, 100000, 500000, 1000000];
  * payments (it moves the typed amount into the list so a second tender can be typed). Suggested amounts are the next notes a
  * customer would hand over for what remains. The layout never reflows when switching tender or currency.
  */
-export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number };
+export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number; /** the fee is handed to the driver now, out of the drawer; false = it stays owed and is settled later (السائقون) */ pay_now: boolean };
 export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, onCustomer, courier, title, boot, isOwner, me }: {
   totalCents: number; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
   /** sale in progress: the customer shown here IS the cart's customer — picking / clearing it here changes the cart (one field, two places to reach it) */
   onCustomer?: (c: { name: string; phone: string } | null) => void;
   /** delivery handover: ask who delivered and the driver's fee (recorded as cash out of the drawer) */
-  courier?: { name?: string | null } | null; title?: string; boot?: Booted; isOwner?: boolean; /** who is at the till — lets a non-owner get an over-limit debt approved with the approval PIN */ me?: Staff;
+  courier?: { name?: string | null; /** what this delivery earns him by the pay rule (USD cents) — prefilled */ fee_cents?: number; /** a driver of the shop: his pay can stay owed and be settled later */ driver?: boolean } | null; title?: string; boot?: Booted; isOwner?: boolean; /** who is at the till — lets a non-owner get an over-limit debt approved with the approval PIN */ me?: Staff;
   onConfirm: (payments: TenderRow[], changeIn: Currency, extra?: CourierExtra) => Promise<void>; onClose: () => void;
 }) {
-  const [drvName, setDrvName] = useState(courier?.name ?? ''); const [drvFee, setDrvFee] = useState(''); const [drvCur, setDrvCur] = useState<Currency>('usd');
+  const [drvName, setDrvName] = useState(courier?.name ?? ''); const [drvFee, setDrvFee] = useState(courier?.fee_cents ? (courier.fee_cents / 100).toFixed(2) : ''); const [payNow, setPayNow] = useState(!(courier?.driver && courier?.fee_cents)); const [drvCur, setDrvCur] = useState<Currency>('usd');   // a fee that comes from the pay rule waits for settlement; one typed on the spot is paid on the spot
   const feeCents = drvCur === 'lbp' ? Math.round(((Number(drvFee) || 0) / rate) * 100) : Math.round((Number(drvFee) || 0) * 100);
   const [tender, setTender] = useState<Tender>('cash_usd');
   const [rows, setRows] = useState<TenderRow[]>([]);
@@ -97,7 +97,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
     const all = pending ? [...rows, pending] : rows;
     if (settle(totalCents, all, rate, lbpStep, changeIn).remaining_cents > 0) return;
     setBusy(true);
-    try { await onConfirm(all, changeIn, courier ? { courier_name: drvName.trim() || null, courier_fee_cents: feeCents, fee_currency: drvCur, fee_amount: drvCur === 'lbp' ? Math.round(Number(drvFee) || 0) : Math.round((Number(drvFee) || 0) * 100) } : undefined); } catch (e) { setErr((e as Error).message); setBusy(false); }
+    try { await onConfirm(all, changeIn, courier ? { courier_name: drvName.trim() || null, courier_fee_cents: feeCents, fee_currency: drvCur, fee_amount: drvCur === 'lbp' ? Math.round(Number(drvFee) || 0) : Math.round((Number(drvFee) || 0) * 100), pay_now: courier.driver ? payNow : true } : undefined); } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const canConfirm = live.remaining_cents === 0 && (rows.length > 0 || !!pending);
 
@@ -143,8 +143,9 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
               <div className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted" style={{ minWidth: 80 }}>{pt('driverFee', locale)}</span>
                 <input className="input" dir="ltr" inputMode="decimal" value={drvFee} onChange={e => setDrvFee(e.target.value)} style={{ flex: 1 }} placeholder="0" />
                 <div className="seg"><button className={drvCur === 'usd' ? 'active' : ''} onClick={() => setDrvCur('usd')}>$</button><button className={drvCur === 'lbp' ? 'active' : ''} onClick={() => setDrvCur('lbp')}>ل.ل.</button></div></div>
-              <div className="row spread"><span className="muted">{pt('netToStore', locale)}</span><strong>{fmtUsd(live.paid_cents - feeCents)}</strong></div>
-              <small className="muted">{pt('driverFeeHint', locale)}</small>
+              {courier.driver && feeCents > 0 && <label className="row" style={{ gap: 8, alignItems: 'center', cursor: 'pointer' }}><input type="checkbox" checked={payNow} onChange={e => setPayNow(e.target.checked)} /> {pt('driverPayNow', locale)}</label>}
+              <div className="row spread"><span className="muted">{pt('netToStore', locale)}</span><strong>{fmtUsd(live.paid_cents - (!courier.driver || payNow ? feeCents : 0))}</strong></div>
+              <small className="muted">{pt(!courier.driver || payNow ? 'driverFeeHint' : 'driverPayLaterHint', locale)}</small>
             </div>}
             <div className="row" style={{ gap: 6, alignItems: 'center' }}>
               <span className="muted" style={{ fontSize: 13 }}>{pt('changeIn', locale)}</span>

@@ -27,6 +27,8 @@ create table if not exists suqa.shops (
   scale_value_kind     text not null default 'weight' check (scale_value_kind in ('weight','price_lbp','price_usd')),
   scale_value_divisor  int not null default 1000,
   scale_formats     jsonb not null default '[]'::jsonb, -- 39: extra scale-label formats
+  driver_pay_mode   text not null default 'none' check (driver_pay_mode in ('none','per_delivery','delivery_fee')),   -- 60: how drivers are paid by default (a driver can override)
+  driver_pay_cents  int  not null default 0 check (driver_pay_cents >= 0),                                   -- 60: the fixed amount per delivery, USD cents
   notify_stages        text[],                                     -- customer WhatsApp steps; null = tenant default (32_pos_notify)
   offline_days         int     not null default 30 check (offline_days between 1 and 90),   -- PIN unlock allowed this long without internet
   max_discount_pct     numeric(5,2) not null default 10,       -- above this a cashier needs the owner PIN

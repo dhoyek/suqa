@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NEXT, cashMove, currentShift, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { NEXT, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -35,7 +35,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order } | { k: 'detail'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     // delivery leaves the shop: who takes it? (a driver gets a WhatsApp with the order; the shop itself needs nothing)
     if (status === 'out_for_delivery' && o.fulfillment === 'delivery') return setDialog({ k: 'driver', o });
     // handover: pickup → pay dialog; delivery → cash-on-delivery settlement (what the customer paid, who delivered, driver fee)
-    if (status === 'delivered' && !isPaid(o)) return setDialog({ k: 'pay', o, status });
+    if (status === 'delivered' && !isPaid(o)) return setDialog({ k: 'pay', o, status, fee: num(o.courier_fee_cents) || await driverPayOf(boot.db, o) });   // the driver's pay for this delivery, from the pay rule
     await setOrderStatus(boot.db, o, status); boot.engine.poke(); await reload();
   };
   const chip = (s: OrderStatus) => <span className={`pill st-${s}`}>{pt(`st_${s}` as Key, locale)}</span>;
@@ -193,12 +193,17 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} paidCents={paidCents(dialog.o)} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
-        boot={boot} isOwner={staff.role === 'owner'} me={staff} customer={{ name: dialog.o.customer_name ?? undefined, phone: dialog.o.customer_phone ?? undefined }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
+        boot={boot} isOwner={staff.role === 'owner'} me={staff} customer={{ name: dialog.o.customer_name ?? undefined, phone: dialog.o.customer_phone ?? undefined }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name, driver: !!dialog.o.driver_id && !dialog.o.driver_paid_at, fee_cents: dialog.fee } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
         onConfirm={async (pays, changeIn: Currency, extra) => {
           const shift = await currentShift(boot.db); const r = num(dialog.o.rate_lbp_per_usd) || rate;
           await payOrder(boot.db, dialog.o, pays, r, boot.shop.lbp_rounding_step ?? 5000, changeIn, shift?.id ?? null, dialog.status, extra ? { courier_fee_cents: extra.courier_fee_cents, courier_name: extra.courier_name } : {});
-          // the driver's fee leaves the drawer → cash out on the open shift, so expected cash stays right
-          if (extra && extra.fee_amount > 0 && shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`, user_id: staff.user_id });
+          // the driver's fee: a shop driver's pay is settled through a payout (now, from the drawer — or later from السائقون, never both);
+          // a name typed by hand has no ledger, so its fee leaves the drawer on the spot as before
+          if (extra && extra.fee_amount > 0) {
+            const label = `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`;
+            if (dialog.o.driver_id && !dialog.o.driver_paid_at) { if (extra.pay_now) await payDriver(boot.db, { driver: { id: dialog.o.driver_id, name: extra.courier_name ?? '' }, orders: [{ id: dialog.o.id, courier_fee_cents: extra.courier_fee_cents }], currency: extra.fee_currency, amount: extra.fee_amount, rate: r, from_drawer: true, shift, user_id: staff.user_id, label }); }
+            else if (shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: label, user_id: staff.user_id });
+          }
           boot.engine.poke(); setDialog(null); await reload();
         }} onClose={() => setDialog(null)} />}
       {ackToast && <div className="toast">{ackToast}</div>}

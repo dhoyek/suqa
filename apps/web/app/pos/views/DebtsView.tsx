@@ -60,7 +60,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
   };
 
   return (
-    <div className="stack" style={{ padding: 16, maxWidth: 1000 }}>
+    <div className="stack" style={{ padding: 16, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       <section className="card">
         <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0 }}>{pt('debtBook', locale)}</h3>
@@ -134,9 +134,21 @@ function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDon
   const [tender, setTender] = useState<Exclude<Tender, 'unpaid'>>('cash_usd');
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const owed = person.outstanding_cents;
-  const [amount, setAmount] = useState(() => (owed / 100).toFixed(2).replace(/\.00$/, ''));
+  const fullIn = (c: Currency) => (c === 'lbp' ? String(roundLbp(usdToLbp(owed, rate), step, 'up')) : (owed / 100).toFixed(2).replace(/\.00$/, ''));
+  const [amount, setAmount] = useState(() => fullIn('usd'));
+  const [pristine, setPristine] = useState(true);       // still showing the suggested full amount: the first key replaces it
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { setAmount(cur === 'lbp' ? String(roundLbp(usdToLbp(owed, rate), step, 'up')) : (owed / 100).toFixed(2).replace(/\.00$/, '')); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setAmount(fullIn(cur)); setPristine(true); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
+  const type = (v: string) => { setAmount(v); setPristine(false); setErr(null); };
+  // quick amounts: everything, "up to and including" each of the oldest orders, then round notes below the total
+  const suggestions = useMemo(() => {
+    const toCur = (c: number) => (cur === 'lbp' ? roundLbp(usdToLbp(c, rate), step, 'up') : Math.round(c) / 100);
+    const out: number[] = [toCur(owed)]; let run = 0;
+    for (const l of person.lines.filter(x => !x.closed).slice(0, 3)) { run += l.outstanding_cents; const v = toCur(run); if (!out.includes(v)) out.push(v); }
+    const notes = cur === 'lbp' ? [500000, 1000000, 2000000, 5000000] : [5, 10, 20, 50, 100];
+    for (const nv of notes) if (nv < toCur(owed) && !out.includes(nv)) out.push(nv);
+    return out.slice(0, 6).sort((a, b) => a - b);
+  }, [cur, owed, person, rate, step]);
   const n = Number(amount) || 0;
   const raw = cur === 'lbp' ? Math.round(n) : Math.round(n * 100);
   const cents = cur === 'lbp' ? lbpToCents(raw, rate) : raw;
@@ -144,7 +156,7 @@ function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDon
   const allocated = plan.reduce((s, p) => s + p.amount_cents, 0);
   const remaining = owed - allocated;
   const confirm = async () => {
-    if (busy || raw <= 0) return; setBusy(true); setErr(null);
+    if (busy || raw <= 0 || cents <= 0) return; setBusy(true); setErr(null);
     try {
       const shift = await currentShift(boot.db);
       const r = await settleDebt(boot.db, { phone: person.phone, name: person.name, tender, currency: cur, amount: raw, rate, lbpStep: step, lines: person.lines, shift, user_id: staff.user_id, reason: `${pt('debtCollected', locale)} · ${person.name || person.phone}` });
@@ -152,9 +164,19 @@ function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDon
       onDone({ s: r.settlement, allocs: r.allocations.map(a => { const l = person.lines.find(x => x.order.id === a.order_id)!; return { number: l.number, amount_cents: a.amount_cents, closed: a.amount_cents >= l.outstanding_cents }; }), remaining });
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
+  // keyboard: digits, dot, Backspace, Enter — like the sale's payment screen
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.key === 'Enter') { e.preventDefault(); void confirm(); }
+      else if (/^\d$/.test(e.key) || (e.key === '.' && cur === 'usd' && !(amount.includes('.') && !pristine))) { e.preventDefault(); type(pristine ? e.key : amount + e.key); }
+      else if (e.key === 'Backspace') { e.preventDefault(); type(pristine ? '' : amount.slice(0, -1)); }
+    };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Modal open onClose={onClose} title={`${pt('collectFrom', locale)} ${person.name || person.phone}`} wide
-      footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary big" style={{ width: 'auto', minWidth: 200 }} disabled={busy || raw <= 0} onClick={confirm}>{pt('collect', locale)} ↵</button></>}>
+      footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary big" style={{ width: 'auto', minWidth: 200 }} disabled={busy || raw <= 0 || cents <= 0} onClick={confirm}>{pt('collect', locale)} {raw > 0 ? (cur === 'lbp' ? fmtLbp(raw, locale) : fmtUsd(raw)) : ''} ↵</button></>}>
       <div className="pay-grid">
         <div className="stack">
           <div className="pay-due">
@@ -164,14 +186,21 @@ function CollectDialog({ boot, locale, person, rate, step, staff, onClose, onDon
             {cents > owed && <div className="bad"><span>{pt('overpaid', locale)}</span><strong>{fmtUsd(cents - owed)}</strong></div>}
           </div>
           <div className="tenders">{TENDERS.map(t => <button key={t} className={`chip ${tender === t ? 'active' : ''}`} onClick={() => setTender(t)}>{pt(t, locale)}</button>)}</div>
-          <div className="pay-amount"><span className="muted">{pt(tender, locale)}</span><strong dir="ltr">{amount || '0'}</strong></div>
-          <div className="card" style={{ background: '#fafafa' }}>
+          <div className="card alloc-box" style={{ background: '#fafafa' }}>
             <strong>{pt('allocation', locale)}</strong>
+            {!plan.length && <div className="muted" style={{ fontSize: 13 }}>—</div>}
             {plan.map(p => <div className="row spread" key={p.line.order.id}><span>{fmtTime(p.line.at, locale)} · {p.line.number}</span><span>{fmtUsd(p.amount_cents)}{p.amount_cents >= p.line.outstanding_cents ? ' ✓' : ` (${pt('remainsOpen', locale)} ${fmtUsd(p.line.outstanding_cents - p.amount_cents)})`}</span></div>)}
           </div>
           {err && <p className="bad">{err}</p>}
         </div>
-        <NumPad value={amount} onChange={setAmount} decimal={cur === 'usd'} onEnter={() => void confirm()} big />
+        <div className="stack">
+          <div className={`pay-amount ${pristine ? 'pristine' : ''}`}><span className="muted">{pt(tender, locale)}</span><strong dir="ltr">{amount || '0'}</strong></div>
+          <div className="suggest-grid">
+            {suggestions.map(v => <button key={v} className={`chip ${Number(amount) === v ? 'active' : ''}`} onClick={() => type(String(v))}>{cur === 'lbp' ? v.toLocaleString('en-US') : '$' + v}</button>)}
+          </div>
+          {/* no ↵ on the pad here: the only way to collect is the labelled button below (or Enter on a keyboard) */}
+          <NumPad value={pristine ? '' : amount} onChange={type} decimal={cur === 'usd'} big />
+        </div>
       </div>
     </Modal>
   );

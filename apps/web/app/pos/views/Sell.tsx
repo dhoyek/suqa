@@ -1,9 +1,9 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, type ShopCustomer,
+import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
-import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
+import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
@@ -19,13 +19,13 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'help' } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
+type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
+export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onStock, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
@@ -47,7 +47,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   // restore an unfinished cart (crash / tab close), rate, parked list, staff (for owner PIN)
   useEffect(() => { loadCurrentDraft(boot.db).then(d => { if (d) setDraft(d); }); }, [boot]);
   // "＋ new order" from the inbox: start a WhatsApp order and open the customer dialog
-  useEffect(() => { if (newOrderRequest && presetCustomer) { setReceipt(null); setDraft(d => ({ ...(d.lines.length ? d : newDraft('whatsapp')), channel: 'whatsapp', customer_phone: presetCustomer.phone, customer_name: presetCustomer.name })); setDialog({ k: 'customer' }); return; } if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'pickup' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
+  useEffect(() => { if (newOrderRequest && presetCustomer) { setReceipt(null); setDraft(d => ({ ...(d.lines.length ? d : { ...newDraft('whatsapp'), fulfillment: 'delivery' as const }), channel: 'whatsapp', customer_phone: presetCustomer.phone, customer_name: presetCustomer.name })); setDialog({ k: 'customer' }); return; } if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'delivery' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
   // A sold / saved cart must never be written back: the autosave below used to fire again when the pay dialog closed, so the
@@ -92,11 +92,15 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
-  const add = useCallback((p: Product, quantity = 1, opts: { weigh?: boolean } = {}) => {
+  const add = useCallback((p: Product, quantity = 1, opts: { weigh?: boolean; ask?: boolean } = {}) => {
     if (p.track_stock) {
       const avail = num(p.on_hand) - num(p.reserved);
       const inCart = draft.lines.filter(l => l.product_id === p.id && !l.voided).reduce((s, l) => s + l.quantity, 0);
-      if (avail - inCart - quantity < 0) { if (!shop.allow_negative_stock) { flash(pt('outOfStock', locale)); return; } flash(`${pt('outOfStock', locale)} (${avail})`); }
+      if (avail - inCart - quantity < 0) {
+        if (!shop.allow_negative_stock) { flash(pt('outOfStock', locale)); return; }
+        if (opts.ask && loadPrintSettings().confirmOos) { setDialog({ k: 'oos', p, avail: avail - inCart }); return; }
+        flash(`${pt('outOfStock', locale)} (${avail})`);
+      }
       else if (avail - inCart - quantity <= num(p.min_stock)) flash(`${pt('lowStock', locale)}: ${avail - inCart - quantity} ${pt('available', locale)}`);
     }
     if (opts.weigh && p.decimal_qty) {                                  // kg/g item tapped on the grid → ask for the weight (or the amount) right away
@@ -141,12 +145,19 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     if (ps.autoPrint) doPrint(receiptHtml(r.order, r.lines, r.payments, shop, locale, ps, { cashier: staff.display_name || staff.full_name || '' }));
   };
 
+  const addCartToOrder = async (o: Order) => {
+    const adds = live.filter(l => l.product_id && index.byId.get(l.product_id)).map(l => ({ product: index.byId.get(l.product_id!)!, new_qty: l.quantity }));
+    if (!adds.length) { flash(pt('cartEmptyHint', locale)); return; }
+    committed.current.add(draft.id);
+    await editOrder(boot.db, o, adds, undefined, o.notify_customer !== false);
+    await dropDraft(boot.db, draft.id); boot.engine.poke(); await startNew(); flash(`${pt('addedToOrder', locale)} ${o.number ?? o.local_number ?? ''}`);
+  };
   const saveToOrders = async () => {
     if (!live.length || !isOrder) return;
     if (!draft.customer_phone) { setDialog({ k: 'customer' }); return; }
     committed.current.add(draft.id);
-    await commitSale(boot.db, { draft, payments: [], rate, lbpStep, changeIn: 'usd', staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: 'accepted' }).catch(e => { committed.current.delete(draft.id); throw e; });
-    await dropDraft(boot.db, draft.id); boot.engine.poke(); flash(pt('orderSaved', locale)); await startNew(); onGo('orders');
+    const r = await commitSale(boot.db, { draft, payments: [], rate, lbpStep, changeIn: 'usd', staff_user_id: staff.user_id, shift_id: shift?.id ?? null, delivery_fee_cents: feeCents, status: 'accepted' }).catch(e => { committed.current.delete(draft.id); throw e; });
+    await dropDraft(boot.db, draft.id); boot.engine.poke(); await startNew(); setDialog({ k: 'saved', order: r.order, lines: r.lines });
   };
   useShortcuts({
     F2: () => { setDialog(null); searchRef.current?.focus(); searchRef.current?.select(); },
@@ -186,11 +197,13 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             const avail = num(p.on_hand) - num(p.reserved);
             const stock = !p.track_stock ? null : avail < 0 ? 'neg' : avail <= 0 ? 'out' : avail <= num(p.min_stock) ? 'low' : 'ok';
             return (
-              <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''}`} onClick={() => add(p, 1, { weigh: true })}>
+              <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''}`} onClick={() => add(p, 1, { weigh: true, ask: true })}>
                 <div className="item-name">{text(p.name, locale)}</div>
                 <div className="row spread" style={{ alignItems: 'center', marginTop: 'auto' }}>
                   <div className="item-price">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}{p.decimal_qty && p.unit ? <span className="muted" style={{ fontWeight: 400 }}> /{p.unit}</span> : ''}</div>
-                  {stock && <span className={`stock ${stock}`} title={`${avail} ${pt('available', locale)}`}>{stock === 'neg' ? '⚠' : ''}{avail}</span>}
+                  {stock && (stock === 'neg' && onStock
+                    ? <span role="button" tabIndex={-1} className="stock neg fix" title={pt('fixStock', locale)} onClick={e => { e.stopPropagation(); onStock(p.id); }}>⚠{avail} ✎</span>
+                    : <span className={`stock ${stock}`} title={`${avail} ${pt('available', locale)}`}>{stock === 'neg' ? '⚠' : ''}{avail}</span>)}
                 </div>
               </button>
             );
@@ -262,6 +275,21 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
       {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} boot={boot} isOwner={boot.role === 'owner'} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'oos' && <Modal open onClose={() => setDialog(null)} title={text(dialog.p.name, locale)}
+        footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { const p = dialog.p; setDialog(null); add(p, 1, { weigh: true }); }}>＋ {pt('addAnyway', locale)}</button></>}>
+        <p style={{ margin: 0 }}>⚠ {pt('oosAsk', locale)} <span className="muted num">({dialog.avail} {pt('available', locale)})</span></p>
+      </Modal>}
+      {dialog?.k === 'saved' && <Modal open onClose={() => setDialog(null)} title={`✓ ${pt('orderSavedTitle', locale)} · ${dialog.order.number ?? dialog.order.local_number ?? ''}`}
+        footer={<><button className="btn" onClick={() => { setDialog(null); onGo('orders'); }}>📥 {pt('goToOrders', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { setDraft({ ...newDraft('whatsapp'), fulfillment: 'delivery' }); setDialog({ k: 'customer' }); }}>＋ {pt('newOrderBtn', locale)}</button></>}>
+        <div className="stack" style={{ gap: 8 }}>
+          <div>👤 <strong>{dialog.order.customer_name || '—'}</strong> <span className="muted" dir="ltr">{dialog.order.customer_phone}</span> · {dialog.order.fulfillment === 'pickup' ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)} · <strong className="num">{fmtUsd(num(dialog.order.total_cents))}</strong></div>
+          <div className="order-items-line" style={{ maxWidth: 'none' }}>{dialog.lines.filter(l => !l.voided).map(l => `${num(l.quantity)}${l.unit ? ' ' + l.unit : '×'} ${text(l.name, locale)}`).join('، ')}</div>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn" onClick={() => doPrint(orderSheetHtml(dialog.order, dialog.lines, shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
+            <button className="btn" onClick={() => doPrint(receiptHtml(dialog.order, dialog.lines, [], shop, locale, loadPrintSettings(), { cashier: staff.display_name || staff.full_name || '' }))}>🖨 {pt('print', locale)}</button>
+          </div>
+        </div>
+      </Modal>}
       {dialog?.k === 'help' && <Modal open onClose={() => setDialog(null)} title={`⌨ ${pt('shortcuts', locale)}`}>
         <table className="table"><tbody>
           {([['F1', 'shortcuts'], ['F2', 'searchItems'], ['F4', 'qty'], ['F6', 'discount'], ['F8', 'pay'], ['F9', 'park'], ['Esc', 'cancelSale'], ['Ctrl+Del', 'cancelSale'], ['Enter', 'enterAdds']] as const).map(([k, t]) => <tr key={k}><td><kbd className="kbd">{k}</kbd></td><td>{pt(t, locale)}</td></tr>)}
@@ -272,7 +300,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'discount' && <OrderDiscount locale={locale} draft={draft} subtotal={totals.subtotal_cents} maxPct={maxDisc} staff={members} me={staff} onApply={(cents, reason, by) => { setDraft(d => ({ ...d, discount_cents: cents, discount_reason: reason, approved_by: by ?? d.approved_by })); setDialog(null); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'park' && <ParkDialog boot={boot} locale={locale} parked={parked} canPark={!!live.length} customer={draft.customer_phone ? { name: draft.customer_name ?? '', phone: draft.customer_phone } : null} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'customer' && <CustomerDialog boot={boot} sb={sb} locale={locale} draft={draft} fee={fee} online={status?.online ?? true} onDone={r => {
+      {dialog?.k === 'customer' && <CustomerDialog boot={boot} sb={sb} locale={locale} draft={draft} fee={fee} online={status?.online ?? true} cartCount={live.length} onAddToOrder={addCartToOrder} onOpenOrders={() => { setDialog(null); onGo('orders'); }} onDone={r => {
         setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = addToDraft(n, p, num(l.quantity)); } return n; });
         setFee(r.feeCents); setDialog(null); }} onClose={() => setDialog(null)} />}
     </div>

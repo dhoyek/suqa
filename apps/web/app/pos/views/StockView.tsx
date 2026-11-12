@@ -16,10 +16,12 @@ type Mode = 'receive' | 'count' | 'damaged' | 'adjust';
  * WhatsApp-shareable reorder list; negative-stock review; movement history per item. Everything offline (stock.move ops).
  * Cashiers need an owner PIN for adjustments (server enforces); stock role and owner work freely.
  */
-export default function StockView({ boot, locale, index, tick, staff, reindex }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
+export default function StockView({ boot, locale, index, tick, staff, reindex, focus }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; focus?: { id: string; n: number } | null }) {
   const [mode, setMode] = useState<Mode>('receive');
   const [q, setQ] = useState(''); const [sel, setSel] = useState<Product | null>(null);
   const [members, setMembers] = useState<Staff[]>([]);
+  // opened from a ⚠ negative-stock tile on the Sell screen: straight to a count of that item
+  useEffect(() => { if (!focus) return; const p = index.byId.get(focus.id); if (p) { setMode('count'); setSel(p); } }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [newFromBc, setNewFromBc] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [hist, setHist] = useState<Product | null>(null);

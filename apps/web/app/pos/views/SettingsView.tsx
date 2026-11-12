@@ -121,6 +121,8 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.cutMark} onChange={e => upd({ cutMark: e.target.checked })} /> {pt('cutMark', locale)}</label>
           <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.autoPrint} onChange={e => upd({ autoPrint: e.target.checked })} /> {pt('autoPrint', locale)}</label>
           <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.showLbp} onChange={e => upd({ showLbp: e.target.checked })} /> {pt('showLbpOnReceipt', locale)}</label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.autoNew} onChange={e => upd({ autoNew: e.target.checked })} /> {pt('autoNewSale', locale)}</label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={ps.confirmOos} onChange={e => upd({ confirmOos: e.target.checked })} /> {pt('confirmOos', locale)}</label>
           <div><button className="btn" onClick={() => doPrint(testPrintHtml(boot.shop, locale, ps), ps)}>🖨 {pt('testPrint', locale)}</button></div>
           <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('printerHint', locale)}</p>
         </div>

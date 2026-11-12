@@ -20,11 +20,15 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
   const [pick, setPick] = useState(false); const [cq, setCq] = useState(''); const [found, setFound] = useState<ShopCustomer[]>([]);
   const [printed, setPrinted] = useState<boolean>(() => !again && loadPrintSettings().autoPrint);
   const [ret, setRet] = useState(false);
+  const [auto, setAuto] = useState<number | null>(() => (!again && loadPrintSettings().autoNew && loadPrintSettings().autoPrint ? 5 : null));
+  useEffect(() => { if (auto == null) return; if (auto <= 0) { onNew(); return; } const t = setTimeout(() => setAuto(a => (a == null ? null : a - 1)), 1000); return () => clearTimeout(t); }, [auto]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (showQr || pick || ret) setAuto(null); }, [showQr, pick, ret]);
   const ps = loadPrintSettings();
   const url = `${location.origin}/r/${order.id}`;
-  const print = () => { doPrint(receiptHtml(order, lines, payments, shop, locale, loadPrintSettings(), { cashier, serverNumber, again: printed || again })); setPrinted(true); };
+  const print = () => { setAuto(null); doPrint(receiptHtml(order, lines, payments, shop, locale, loadPrintSettings(), { cashier, serverNumber, again: printed || again })); setPrinted(true); };
   const sendWa = async () => {
     if (!phone.trim()) return;
+    setAuto(null);
     setWaState('sending');
     try {
       const r = await fetch('/api/pos/receipt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ order_id: order.id, phone: phone.trim(), locale }) });
@@ -74,7 +78,8 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
         <div className="r-foot muted">{pt('cashier', locale)}: {cashier}<br />{shop.receipt_footer || pt('thanks', locale)}</div>
       </div>
       <div className="receipt-actions">
-        <button className="btn primary big" onClick={onNew} autoFocus>{pt('newSale', locale)} ↵</button>
+        <button className="btn primary big" onClick={onNew} autoFocus>{pt('newSale', locale)} ↵{auto != null ? ` · ${auto}` : ''}</button>
+        {auto != null && <button className="btn ghost" style={{ minHeight: 32 }} onClick={() => setAuto(null)}>⏸ {pt('autoNewIn', locale)} {auto} — {pt('stayHere', locale)}</button>}
         <div className="row" style={{ gap: 8 }}>
           <button className={`btn ${printed ? '' : 'primary'}`} style={{ flex: 1 }} onClick={print}>{printed ? `✓ ${pt('printed', locale)} · ${pt('reprint', locale)}` : `🖨 ${pt('print', locale)}`} <kbd>P</kbd></button>
           <button className="btn" style={{ flex: 1 }} onClick={() => setShowQr(true)}>▦ {pt('showQr', locale)}</button>

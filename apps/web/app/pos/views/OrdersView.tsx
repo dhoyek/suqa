@@ -37,7 +37,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus } | { k: 'return'; o: Order } | { k: 'detail'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
-  const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [, setClock] = useState(0); useEffect(() => { const t = setInterval(() => setClock(c => c + 1), 30_000); return () => clearInterval(t); }, []);   // ages tick every 30 s
   const ackSeen = useRef<Set<string> | null>(null); const [ackToast, setAckToast] = useState<string | null>(null);
@@ -68,6 +68,9 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   useEffect(() => { void reload(); }, [boot, tick, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
   const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
+  // open for more than a day past its time (asked-for time, else when it was placed): forgotten, usually already delivered or dead
+  const isStale = (o: Order) => !o.closed_at && !['delivered', 'rejected', 'cancelled'].includes(o.status) && Date.now() - new Date(o.needed_at ?? o.placed_at).getTime() > 24 * 3600_000;
+  const staleCount = useMemo(() => orders.filter(isStale).length, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
   const cols = useMemo(() => {
     const c: Record<Col, Order[]> = { new: [], active: [], onway: [], done: [], cancelled: [] };
     const needle = q.trim().toLowerCase(); const digits = needle.replace(/\D/g, '');
@@ -78,6 +81,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
       // open orders always show; the date range only trims the finished columns
       if ((col === 'done' || col === 'cancelled') && ((from && o.placed_at < from) || (to && o.placed_at >= to))) continue;
       if (unpaidOnly && isPaid(o)) continue;
+      if (staleOnly && !isStale(o)) continue;
       if (needle) {
         const hay = [o.number, o.local_number, o.customer_name, o.customer_phone, o.courier_name, ...(lines[o.id] ?? []).map(l => text(l.name, locale))].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(needle) && !(digits.length >= 3 && (o.customer_phone ?? '').replace(/\D/g, '').includes(digits))) continue;
@@ -86,7 +90,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     }
     c.new.sort((a, b) => (a.needed_at ?? a.placed_at) < (b.needed_at ?? b.placed_at) ? -1 : 1);   // waiting longest first
     return c;
-  }, [orders, q, range, unpaidOnly, lines, payments, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [orders, q, range, unpaidOnly, staleOnly, lines, payments, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const [show, setShow] = useState<Set<Col>>(loadCols);
   const toggleCol = (c: Col) => setShow(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); if (!n.size) n.add(c); try { localStorage.setItem(LS_COLS, JSON.stringify([...n])); } catch {} return n; });
   const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
@@ -121,6 +125,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
         <input className="input" style={{ flex: '1 1 220px', minHeight: 36 }} placeholder={pt('searchOrders', locale)} value={q} onChange={e => setQ(e.target.value)} />
         <div className="seg">{(['today', 'yesterday', '7d', 'all'] as const).map(r => <button key={r} className={range === r ? 'active' : ''} onClick={() => setRange(r)}>{pt(`range_${r}` as Key, locale)}</button>)}</div>
         <button className={`chip ${unpaidOnly ? 'active' : ''}`} onClick={() => setUnpaidOnly(v => !v)}>💵 {pt('unpaidOnly', locale)}</button>
+        {(staleCount > 0 || staleOnly) && <button className={`chip ${staleOnly ? 'active' : ''}`} style={staleOnly ? undefined : { borderColor: '#fca5a5', color: '#991b1b' }} onClick={() => setStaleOnly(v => !v)}>⏳ {pt('staleOrders', locale)} <span className="muted">{staleCount}</span></button>}
       </div>
       <div className="row" style={{ gap: 6, padding: '6px 12px 0', alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13 }}>{pt('showColumns', locale)}:</span>
@@ -144,20 +149,22 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
                   {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
+                  {isStale(o) && <div className="stale-hint" onClick={e => e.stopPropagation()}>⏳ {pt('staleHint', locale)}
+                    {NEXT[o.status].includes('cancelled') && <button className="link-btn" style={{ color: '#991b1b' }} onClick={() => act(o, 'cancelled')}>{pt('act_cancelled', locale)}</button>}</div>}
                   {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered') && <DriverLine o={o} boot={boot} locale={locale} />}
                   {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(num(o.total_lbp), boot.shop.lbp_rounding_step ?? 5000), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
-                  {open && (
+                  {(open || NEXT[o.status].some(n => n !== 'rejected' && n !== 'cancelled')) && (
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
                       {NEXT[o.status].filter(n => n !== 'rejected' && n !== 'cancelled').map(n => <button key={n} className={`btn ${n === 'delivered' ? 'primary' : ''}`} onClick={() => act(o, n)}>
                         {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codSettle', locale)) : ''}
                       </button>)}
-                      {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
-                      <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>
-                      <span style={{ position: 'relative' }}>
+                      {open && !['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
+                      {open && <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>}
+                      {open && <span style={{ position: 'relative' }}>
                         <button className="btn icon" title={pt('moreActions', locale)} onClick={() => setMenu(menu === o.id ? null : o.id)}>⋯</button>
                         {menu === o.id && <div className="order-menu" onClick={() => setMenu(null)}>
                           <button onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨 {pt('print', locale)}</button>
@@ -168,7 +175,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                           {NEXT[o.status].includes('cancelled') && <button className="danger" onClick={() => act(o, 'cancelled')}>✕ {pt('act_cancelled', locale)}</button>}
                           {(o.status === 'cancelled' || o.status === 'rejected') && <button className="danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
                         </div>}
-                      </span>
+                      </span>}
                     </div>
                   )}
                 </article>

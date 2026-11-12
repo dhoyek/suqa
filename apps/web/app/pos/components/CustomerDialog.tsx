@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addressBook, coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, sameAddress, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type OrderLine, type SavedAddress, type ShopCustomer } from '@suqa/pos-core';
+import { addressBook, coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, sameAddress, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type Order, type OrderLine, type SavedAddress, type ShopCustomer } from '@suqa/pos-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { pt, type L } from '../i18n';
+import { pt, type Key, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import Modal from './Modal';
 import MapPicker from './MapPicker';
@@ -10,10 +10,10 @@ import MapPicker from './MapPicker';
 export type CustomerResult = { patch: Partial<Draft>; feeCents: number; repeat?: OrderLine[] };
 
 /** Who is this sale/order for. Picks from the shop's customers (name or number), fills name / address / map pin, and saves edits back to the customer. */
-export default function CustomerDialog({ boot, sb, locale, draft, fee, online, onDone, onClose }: { boot: Booted; sb: SupabaseClient; locale: L; draft: Draft; fee: number; online: boolean; onDone: (r: CustomerResult) => void; onClose: () => void }) {
+export default function CustomerDialog({ boot, sb, locale, draft, fee, online, cartCount = 0, onAddToOrder, onOpenOrders, onDone, onClose }: { boot: Booted; sb: SupabaseClient; locale: L; draft: Draft; fee: number; online: boolean; cartCount?: number; onAddToOrder?: (o: Order) => void; onOpenOrders?: () => void; onDone: (r: CustomerResult) => void; onClose: () => void }) {
   const [channel, setChannel] = useState<Draft['channel']>(draft.channel);
   const [phone, setPhone] = useState(draft.customer_phone ?? ''); const [name, setName] = useState(draft.customer_name ?? '');
-  const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.fulfillment ?? 'pickup');
+  const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.channel !== 'walkin' && draft.customer_phone ? (draft.fulfillment ?? 'delivery') : 'delivery');
   const a0 = (draft.address ?? {}) as CustomerAddress;
   const [line1, setLine1] = useState(a0.line1 ?? ''); const [map, setMap] = useState(a0.map_url ?? ''); const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(a0.lat != null && a0.lng != null ? { lat: a0.lat, lng: a0.lng } : null);
   const [notes, setNotes] = useState(draft.notes ?? ''); const [when, setWhen] = useState('');
@@ -22,7 +22,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
   const defFee = Math.round(num(boot.shop.default_delivery_fee_usd) * 100);
   const [f, setF] = useState(fee ? (fee / 100).toString() : defFee ? (defFee / 100).toString() : '');
   const [matches, setMatches] = useState<ShopCustomer[]>([]); const [picked, setPicked] = useState<ShopCustomer | null>(null); const [showList, setShowList] = useState(false);
-  const [openOrders, setOpenOrders] = useState(0); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
+  const [openOrders, setOpenOrders] = useState(0); const [openList, setOpenList] = useState<Order[]>([]); const [showOpen, setShowOpen] = useState(false); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
   const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
   const [asking, setAsking] = useState<string | null>(null); const [picker, setPicker] = useState(false);
@@ -54,7 +54,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
 
   // search as you type (number or name), recent customers when empty
   useEffect(() => { let on = true; searchCustomers(boot.db, phone || name, 8).then(m => { if (on) setMatches(m); }); return () => { on = false; }; }, [boot, phone, name]);
-  useEffect(() => { if (key.length < 6) { setOpenOrders(0); setLast(null); return; } openOrdersOf(boot.db, key).then(o => setOpenOrders(o.filter(x => x.id !== draft.id).length)); lastOrderOf(boot.db, key).then(setLast); }, [boot, key, draft.id]);
+  useEffect(() => { if (key.length < 6) { setOpenOrders(0); setLast(null); return; } openOrdersOf(boot.db, key).then(o => { const l = o.filter(x => x.id !== draft.id); setOpenOrders(l.length); setOpenList(l); }); lastOrderOf(boot.db, key).then(setLast); }, [boot, key, draft.id]);
   // exact number typed → auto-fill from the customer record
   useEffect(() => { if (picked && picked.phone_key === key) return; const c = matches.find(m => m.phone_key === key); if (c && key.length >= 7) pick(c, false); }, [key, matches]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -114,11 +114,11 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
 
   return (
     <>
-      <Modal open onClose={onClose} title={pt('customer', locale)} wide
+      <Modal open onClose={onClose} title={pt('customer', locale)} wide={isOrder}
         footer={<><button className="btn ghost" onClick={() => onDone({ patch: { channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {}, notes: null }, feeCents: 0 })}>✕ {pt('walkin', locale)}</button>
           {last && isOrder && <button className="btn" onClick={() => submit(last.lines)}>🔁 {pt('repeatLast', locale)} ({last.lines.length})</button>}
           <span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={() => submit()}>{pt('ok', locale)}</button></>}>
-        <div className="cust-grid">
+        <div className={`cust-grid ${isOrder ? '' : 'one'}`}>
           <div className="stack">
             <label className="label">{pt('channelLabel', locale)}</label>
             <div className="seg">{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div>
@@ -137,8 +137,17 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
             </div>
             <button className="btn" type="button" onClick={() => setPicker(true)} title={pt('pickCustomer', locale)}>👥 {pt('pickCustomer', locale)}</button>
             </div>
-            {!phone && !name && matches.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>{matches.slice(0, 5).map(c => <button key={c.id} className="chip" onClick={() => pick(c)}>{c.name || fmtPhone(c.phone)}</button>)}</div>}
-            {openOrders > 0 && <p className="pill warn" style={{ margin: 0 }}>⚠ {pt('hasOpenOrder', locale).replace('{n}', String(openOrders))}</p>}
+            {!phone && !name && matches.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}><small className="muted">{pt('recentCustomers', locale)}:</small>{matches.slice(0, isOrder ? 5 : 8).map(c => <button key={c.id} className="chip" onClick={() => pick(c)}>{c.name || fmtPhone(c.phone)}</button>)}</div>}
+            {openOrders > 0 && <div className="open-orders">
+              <button type="button" className="pill warn" style={{ border: 0, cursor: 'pointer', font: 'inherit' }} onClick={() => setShowOpen(v => !v)}>⚠ {pt('hasOpenOrder', locale).replace('{n}', String(openOrders))} {showOpen ? '▴' : '▾'}</button>
+              {showOpen && <ul className="tender-list" style={{ marginTop: 6 }}>
+                {openList.map(o => <li key={o.id} style={{ flexWrap: 'wrap' }}>
+                  <span><strong>{o.number ?? o.local_number}</strong> <span className="muted">· {pt(`st_${o.status}` as Key, locale)} · {o.fulfillment === 'pickup' ? '🛍' : '🛵'} · {fmtUsd(num(o.total_cents))}</span></span>
+                  {onAddToOrder && ['pending', 'accepted', 'preparing'].includes(o.status) && <button className="btn" disabled={!cartCount} title={cartCount ? '' : pt('cartEmptyHint', locale)} onClick={() => onAddToOrder(o)}>＋ {pt('addToOpenOrder', locale)}</button>}
+                </li>)}
+                {onOpenOrders && <li><span /><button className="btn ghost" onClick={onOpenOrders}>📥 {pt('goToOrders', locale)}</button></li>}
+              </ul>}
+            </div>}
 
             <label className="label">{pt('customerName', locale)}</label>
             <input className="input" value={name} onChange={e => { setName(e.target.value); if (!phone) setShowList(true); }} />
@@ -147,7 +156,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, o
 
             {isOrder && <>
               <label className="label">{pt('fulfillment', locale)}</label>
-              <div className="seg"><button className={ful === 'pickup' ? 'active' : ''} onClick={() => setFul('pickup')}>🛍 {pt('pickupBadge', locale)}</button><button className={ful === 'delivery' ? 'active' : ''} onClick={() => setFul('delivery')}>🛵 {pt('deliveryBadge', locale)}</button></div>
+              <div className="seg"><button className={ful === 'delivery' ? 'active' : ''} onClick={() => setFul('delivery')}>🛵 {pt('deliveryBadge', locale)}</button><button className={ful === 'pickup' ? 'active' : ''} onClick={() => setFul('pickup')}>🛍 {pt('pickupBadge', locale)}</button></div>
             </>}
           </div>
 

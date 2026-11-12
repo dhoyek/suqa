@@ -8,9 +8,11 @@ import { pt, type L } from '../i18n';
  * The thermal printer is simply the system printer (Windows driver, Android print service, AirPrint). No ESC/POS, no drivers in the app.
  * Per-device settings live in localStorage (paper width, feed lines, cut mark, auto-print, show LBP).
  */
-export interface PrintSettings { paper: 58 | 80; feed: number; cutMark: boolean; autoPrint: boolean; showLbp: boolean }
+export interface PrintSettings { paper: 58 | 80; feed: number; cutMark: boolean; autoPrint: boolean; showLbp: boolean;
+  /** till behaviour kept with the other per-device settings: new sale by itself after a printed receipt; ask before adding an out-of-stock item */
+  autoNew: boolean; confirmOos: boolean }
 const KEY = 'suqa-pos-print';
-export const defaultPrint: PrintSettings = { paper: 58, feed: 3, cutMark: true, autoPrint: false, showLbp: true };
+export const defaultPrint: PrintSettings = { paper: 58, feed: 3, cutMark: true, autoPrint: false, showLbp: true, autoNew: false, confirmOos: true };
 export function loadPrintSettings(): PrintSettings { try { return { ...defaultPrint, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return defaultPrint; } }
 export function savePrintSettings(s: PrintSettings): void { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ } }
 

@@ -422,3 +422,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* customer dialog: the shorter column must not stretch its fields to match the taller one */
 .cust-grid { align-items: start; }
 .cust-grid > .stack > * { flex: 0 0 auto; }
+.stale-hint { font-size: 12px; color: #991b1b; background: #fef2f2; border-radius: 6px; padding: 3px 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cust-grid.one { grid-template-columns: 1fr; }
+.item-tile .stock.fix { cursor: pointer; text-decoration: underline dotted; }

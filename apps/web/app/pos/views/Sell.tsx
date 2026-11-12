@@ -67,17 +67,27 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     const since = new Date(Date.now() - 30 * 86400e3).toISOString();
     const recent = new Set((await boot.db.orders.toArray()).filter(o => o.placed_at >= since && o.status !== 'cancelled' && o.status !== 'rejected').map(o => o.id));
     const m = new Map<string, number>(), m30 = new Map<string, number>();
-    for (const l of await boot.db.orderLines.toArray()) { if (!l.product_id || l.voided) continue; m.set(l.product_id, (m.get(l.product_id) ?? 0) + 1); if (recent.has(l.order_id)) m30.set(l.product_id, (m30.get(l.product_id) ?? 0) + 1); }
+    for (const l of await boot.db.orderLines.toArray()) { if (!l.product_id || l.voided) continue; const u = Math.max(0, num(l.quantity)); m.set(l.product_id, (m.get(l.product_id) ?? 0) + u); if (recent.has(l.order_id)) m30.set(l.product_id, (m30.get(l.product_id) ?? 0) + u); }
     setPop(m); setPop30(m30);
   })(); }, [boot, tick]);
-  // ⭐ favourites: the 12 most-sold items of the last 30 days, shown while browsing the whole catalog
-  const favs = useMemo(() => (q.trim() || cats.size ? [] : [...pop30.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => index.byId.get(id)).filter((p): p is Product => !!p && p.is_active).slice(0, 12)), [pop30, index, q, cats, tick]);
   // open debt of the customer on the cart (shown next to 👤 so the cashier knows before "pay")
   const [debt, setDebt] = useState(0);
   useEffect(() => { if (!draft.customer_phone) { setDebt(0); return; } let on = true; debtLines(boot.db, { openOnly: true, phones: [draft.customer_phone] }).then(ls => { if (on) setDebt(ls.reduce((s, l) => s + l.outstanding_cents, 0)); }); return () => { on = false; }; }, [draft.customer_phone, boot.db, tick]);
   const [noteFor, setNoteFor] = useState<string | null>(null);        // cart line whose note input is open
-  // search first: typing searches everything; browsing shows the most-sold items of the (optional) category first
-  const results = useMemo(() => (q.trim() ? index.search(q, 60, cats) : index.byCategory(cats, 400).sort((a, b) => (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0)).slice(0, 60)), [q, cats, index, tick, pop]);
+  // The whole catalog (it is all on the device), most ordered first: units sold in the last 30 days, then all-time, then the shop's own order.
+  // Typing searches everything; the category filter narrows the same list. Nothing is cut off — tiles are drawn in batches as you scroll.
+  const all = useMemo(() => {
+    const list = q.trim() ? index.search(q, 100000, cats) : index.byCategory(cats, 100000);
+    return list.filter(p => p.is_active !== false).sort((a, b) => (pop30.get(b.id) ?? 0) - (pop30.get(a.id) ?? 0) || (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }, [q, cats, index, tick, pop, pop30]);
+  const BATCH = 120;
+  const [shown, setShown] = useState(BATCH);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const catKey = [...cats].join(',');
+  useEffect(() => { setShown(BATCH); paneRef.current?.scrollTo({ top: 0 }); }, [q, catKey]);
+  const growIfNear = useCallback(() => { const el = paneRef.current; if (el && el.scrollTop + el.clientHeight > el.scrollHeight - 1200) setShown(n => (n < all.length ? n + BATCH : n)); }, [all.length]);
+  useEffect(() => { growIfNear(); }, [shown, all.length, growIfNear]);     // tall screens: keep filling until there is something to scroll
+  const results = useMemo(() => all.slice(0, shown), [all, shown]);
   const catList = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
@@ -159,18 +169,18 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
 
   return (
     <div className="pos-sell">
-      <div className="pos-pane">
+      <div className="pos-pane" ref={paneRef} onScroll={growIfNear}>
         <div className="row" style={{ gap: 8 }}>
           <input ref={searchRef} className="input big" style={{ flex: 1 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
-            onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (results.length === 1 ? results[0] : null); if (p) add(p); } }} />
+            onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { const p = index.scan(q.trim()) ?? (all.length === 1 ? all[0] : null); if (p) add(p); } }} />
           <button className="btn big" style={{ width: 'auto' }} title={pt('cameraScan', locale)} onClick={() => setDialog({ k: 'camera' })}>📷</button>
           <button className="btn big" style={{ width: 'auto' }} title={pt('openItem', locale)} onClick={() => setDialog({ k: 'open' })}>＋</button>
           {typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches && <button className="btn big" style={{ width: 'auto' }} title={pt('shortcuts', locale)} onClick={() => setDialog({ k: 'help' })}>?</button>}
           <CategoryFilter cats={catList} selected={cats} onChange={setCats} locale={locale} big />
         </div>
         <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />
+        <div className="muted num" style={{ fontSize: 12, flexShrink: 0 }}>{all.length.toLocaleString('en-US')} {pt('itemsCount', locale)}{q.trim() || cats.size ? ` / ${index.size.toLocaleString('en-US')}` : ''} · {pt('sortedByTop', locale)}</div>
         {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p, 1, { weigh: true })}>{b.label || text(p.name, locale)}</button> : null)}</div>}
-        {!!favs.length && <div className="quick-row favs"><span className="muted" style={{ fontSize: 12, alignSelf: 'center', whiteSpace: 'nowrap' }}>⭐ {pt('favourites', locale)}</span>{favs.map(p => <button key={p.id} className="quick fav" onClick={() => add(p, 1, { weigh: true })}>{text(p.name, locale)}</button>)}</div>}
         <div className="grid-items">
           {results.map(p => {
             const avail = num(p.on_hand) - num(p.reserved);

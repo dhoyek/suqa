@@ -416,3 +416,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .quick-row { flex-shrink: 0; flex-wrap: wrap; overflow: visible; }
 .quick-row.favs { max-height: 92px; overflow: hidden; align-items: center; }
 .quick-row.favs .quick.fav { min-height: 40px; flex-shrink: 0; }
+/* sell grid holds the whole catalog: rows keep their size, off-screen tiles are skipped by the browser */
+.grid-items { flex-shrink: 0; }
+.grid-items .item-tile { content-visibility: auto; contain-intrinsic-size: auto 120px; }

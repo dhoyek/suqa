@@ -4,6 +4,7 @@ import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import Modal, { NumPad } from './Modal';
+import CustomerPick from './CustomerPick';
 
 type TenderRow = Omit<Payment, 'id' | 'order_id' | 'at'>;
 const TENDERS: Tender[] = ['cash_usd', 'cash_lbp', 'card', 'wallet', 'unpaid'];
@@ -35,13 +36,12 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
   const [ref, setRef] = useState(''); const [uName, setUName] = useState(customer?.name ?? ''); const [uPhone, setUPhone] = useState(customer?.phone ?? '');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   // the customer comes from the cart / the order (line at the top). It can be picked here only when the sale has none yet, or changed when the caller allows it (Sell).
-  const [pickOpen, setPickOpen] = useState(false); const [pq, setPq] = useState(''); const [pickList, setPickList] = useState<ShopCustomer[]>([]);
-  useEffect(() => { if (!boot || !pickOpen) return; let on = true; searchCustomers(boot.db, pq, 20).then(r => { if (on) setPickList(r); }); return () => { on = false; }; }, [boot, pickOpen, pq]);
+  const [pickOpen, setPickOpen] = useState(false);
   const [cust, setCust] = useState<{ name: string; phone: string } | null>(customer?.phone ? { name: customer.name ?? '', phone: customer.phone } : null);
   const [custDebt, setCustDebt] = useState(0);
   useEffect(() => { if (!boot || !cust?.phone) { setCustDebt(0); return; } let on = true; debtLines(boot.db, { openOnly: true, phones: [cust.phone] }).then(ls => { if (on) setCustDebt(ls.reduce((a, l) => a + l.outstanding_cents, 0)); }); return () => { on = false; }; }, [boot, cust?.phone]);
   const canChange = !!onCustomer || !customer?.phone;      // an order that already has its customer is fixed
-  const pickCustomer = (c: ShopCustomer) => { const v = { name: c.name || '', phone: c.phone }; setUName(v.name); setUPhone(v.phone); setCust(v); setPickOpen(false); setErr(null); onCustomer?.(v); };
+  const pickCustomer = (c: { name: string; phone: string }) => { const v = { name: c.name || '', phone: c.phone }; setUName(v.name); setUPhone(v.phone); setCust(v); setPickOpen(false); setErr(null); onCustomer?.(v); };
   const clearCustomer = () => { setCust(null); setUName(''); setUPhone(''); onCustomer?.(null); };
 
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
@@ -80,7 +80,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
   }, [boot, tender, uPhone]);
   const overLimit = credit && pending ? credit.outstanding + pending.amount > credit.limit : false;
   const validatePending = () => {
-    if (tender === 'unpaid' && !uPhone.trim()) { setErr(pt('unpaidNeedsCustomer', locale)); if (canChange && boot) { setPq(''); setPickOpen(true); } return false; }
+    if (tender === 'unpaid' && !uPhone.trim()) { setErr(pt('unpaidNeedsCustomer', locale)); if (canChange && boot) { setPickOpen(true); } return false; }
     if (tender === 'unpaid' && overLimit && !isOwner) { setErr(pt('creditLimitExceeded', locale)); return false; }
     return true;
   };
@@ -118,9 +118,9 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           ? <><span>👤 <strong>{cust.name || '—'}</strong> <span className="muted" dir="ltr">{cust.phone}</span></span>
               {custDebt > 0 && <span className="pill bad">{pt('debtShort', locale)} {fmtUsd(custDebt)}</span>}
               <span style={{ flex: 1 }} />
-              {canChange && <><button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
+              {canChange && <><button type="button" className="btn" onClick={() => { setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
               <button type="button" className="btn icon" title={pt('removeCustomer', locale)} onClick={clearCustomer}>✕</button></>}</>
-          : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('pickCustomer', locale)}</button></>}
+          : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><button type="button" className="btn" onClick={() => { setPickOpen(true); }}>📇 {pt('pickCustomer', locale)}</button></>}
       </div>}
       <div className="pay-grid">
         <div className="stack">
@@ -167,11 +167,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           <NumPad value={pristine ? '' : amount} onChange={v => type(v)} decimal={cur === 'usd'} onEnter={() => (canConfirm ? void confirm() : addRow())} big />
         </div>
       </div>
-      {pickOpen && <Modal open onClose={() => setPickOpen(false)} title={`📇 ${pt('pickCustomer', locale)}`}>
-        <input className="input" autoFocus placeholder={pt('searchCustomer', locale)} value={pq} onChange={e => setPq(e.target.value)} />
-        <ul className="tender-list" style={{ marginTop: 8 }}>{pickList.map(c => <li key={c.id}><span>👤 {c.name || '—'} <span className="muted" dir="ltr">{c.phone}</span></span><button className="btn" onClick={() => pickCustomer(c)}>✓</button></li>)}</ul>
-        {!pickList.length && <p className="muted">{pt('noResults', locale)}</p>}
-      </Modal>}
+      {pickOpen && boot && <CustomerPick boot={boot} locale={locale} onPick={pickCustomer} onClose={() => setPickOpen(false)} />}
     </Modal>
   );
 }

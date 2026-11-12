@@ -435,3 +435,5 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .pos-account .menu .who .muted { font-size: 12px; margin-top: 2px; }
 .pos-account .menu form { margin: 0; }
 @media (max-width: 760px) { .pos-status .pos-account .menu .muted { display: block; } }
+
+.cust-list.static { position: static; box-shadow: none; max-height: 300px; }

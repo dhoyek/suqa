@@ -53,7 +53,7 @@ export default function DebtsView({ boot, locale, tick, staff, onCustomer }: { b
     : <strong>{name || '—'}</strong>;
   const items = useOrderItems(boot.db, lines.map(l => l.order.id), locale, showItems);
   // order number = link to the full order; the items sit under it when "📋 الأصناف" is on
-  const No = ({ l }: { l: DebtLine }) => <><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(l)}>{l.number} ↗</button>{showItems && items.get(l.order.id) && <div className="order-items-line">{items.get(l.order.id)}</div>}</>;
+  const No = ({ l }: { l: DebtLine }) => <><button className="link-btn" title={pt('orderDetails', locale)} onClick={() => setDetail(l)}>{l.number} ↗</button>{l.note && <div className="order-items-line" style={{ color: '#92400e' }}>📝 {l.note}</div>}{showItems && items.get(l.order.id) && <div className="order-items-line">{items.get(l.order.id)}</div>}</>;
   const printList = (person?: DebtPerson) => {
     const st = loadPrintSettings();
     doPrint(debtStatementHtml(person ? person.lines.filter(l => openOnly ? !l.closed : true) : lines, boot.shop, locale, st, { person: person ? { name: person.name, phone: person.phone } : undefined, rate, lbpStep: step }), st);

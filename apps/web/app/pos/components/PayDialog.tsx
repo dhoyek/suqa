@@ -34,26 +34,21 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
   const [changeIn, setChangeIn] = useState<Currency>('lbp');
   const [ref, setRef] = useState(''); const [uName, setUName] = useState(customer?.name ?? ''); const [uPhone, setUPhone] = useState(customer?.phone ?? '');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  // debt: pick the person from the shop's customers (typing in either field suggests matches; 📇 opens the full search)
-  const [sugg, setSugg] = useState<ShopCustomer[]>([]); const [suggOpen, setSuggOpen] = useState(false); const [pickOpen, setPickOpen] = useState(false); const [pq, setPq] = useState('');
-  const [pickList, setPickList] = useState<ShopCustomer[]>([]);
-  useEffect(() => {
-    if (!boot || tender !== 'unpaid' || !suggOpen) { setSugg([]); return; }
-    const q = (uPhone.trim().length >= 3 ? uPhone : uName).trim(); if (q.length < 2) { setSugg([]); return; }
-    let on = true; searchCustomers(boot.db, q, 6).then(r => { if (on) setSugg(r.filter(c => !(normPhone(c.phone) === normPhone(uPhone) && c.name === uName))); }); return () => { on = false; };
-  }, [boot, tender, uName, uPhone, suggOpen]);
+  // the customer comes from the cart / the order (line at the top). It can be picked here only when the sale has none yet, or changed when the caller allows it (Sell).
+  const [pickOpen, setPickOpen] = useState(false); const [pq, setPq] = useState(''); const [pickList, setPickList] = useState<ShopCustomer[]>([]);
   useEffect(() => { if (!boot || !pickOpen) return; let on = true; searchCustomers(boot.db, pq, 20).then(r => { if (on) setPickList(r); }); return () => { on = false; }; }, [boot, pickOpen, pq]);
   const [cust, setCust] = useState<{ name: string; phone: string } | null>(customer?.phone ? { name: customer.name ?? '', phone: customer.phone } : null);
   const [custDebt, setCustDebt] = useState(0);
   useEffect(() => { if (!boot || !cust?.phone) { setCustDebt(0); return; } let on = true; debtLines(boot.db, { openOnly: true, phones: [cust.phone] }).then(ls => { if (on) setCustDebt(ls.reduce((a, l) => a + l.outstanding_cents, 0)); }); return () => { on = false; }; }, [boot, cust?.phone]);
-  const pickCustomer = (c: ShopCustomer) => { setUName(c.name || ''); setUPhone(c.phone); setSuggOpen(false); setPickOpen(false); setErr(null); if (onCustomer) { const v = { name: c.name || '', phone: c.phone }; setCust(v); onCustomer(v); } };
+  const canChange = !!onCustomer || !customer?.phone;      // an order that already has its customer is fixed
+  const pickCustomer = (c: ShopCustomer) => { const v = { name: c.name || '', phone: c.phone }; setUName(v.name); setUPhone(v.phone); setCust(v); setPickOpen(false); setErr(null); onCustomer?.(v); };
   const clearCustomer = () => { setCust(null); setUName(''); setUPhone(''); onCustomer?.(null); };
 
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const committed = useMemo(() => settle(totalCents, rows, rate, lbpStep, changeIn), [totalCents, rows, rate, lbpStep, changeIn]);
   const remainingIn = (c: Currency) => (c === 'lbp' ? roundLbp(usdToLbp(committed.remaining_cents, rate), lbpStep, 'up') : committed.remaining_cents / 100);
   const n = Number(amount) || 0;
-  const pending: TenderRow | null = n > 0 ? { tender, currency: cur, amount: cur === 'lbp' ? Math.round(n) : Math.round(n * 100), reference: tender === 'card' || tender === 'wallet' ? ref || null : null, unpaid_name: tender === 'unpaid' ? uName.trim() : null, unpaid_phone: tender === 'unpaid' ? uPhone.trim() : null } : null;
+  const pending: TenderRow | null = n > 0 ? { tender, currency: cur, amount: cur === 'lbp' ? Math.round(n) : Math.round(n * 100), reference: ref.trim() || null, unpaid_name: tender === 'unpaid' ? uName.trim() : null, unpaid_phone: tender === 'unpaid' ? uPhone.trim() : null } : null;
   const live = useMemo(() => settle(totalCents, pending ? [...rows, pending] : rows, rate, lbpStep, changeIn), [totalCents, rows, pending, rate, lbpStep, changeIn]);
 
   // pre-fill the exact remaining amount whenever the tender changes or a row is added, unless the cashier already typed something
@@ -85,7 +80,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
   }, [boot, tender, uPhone]);
   const overLimit = credit && pending ? credit.outstanding + pending.amount > credit.limit : false;
   const validatePending = () => {
-    if (tender === 'unpaid' && (!uName.trim() || !uPhone.trim())) { setErr(pt('unpaidNeedsName', locale)); return false; }
+    if (tender === 'unpaid' && !uPhone.trim()) { setErr(pt('unpaidNeedsCustomer', locale)); if (canChange && boot) { setPq(''); setPickOpen(true); } return false; }
     if (tender === 'unpaid' && overLimit && !isOwner) { setErr(pt('creditLimitExceeded', locale)); return false; }
     return true;
   };
@@ -118,13 +113,13 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
         <span style={{ flex: 1 }} />
         <button className="btn primary big" style={{ width: 'auto', minWidth: 220 }} disabled={!canConfirm || busy} onClick={confirm}>{pt('confirmPay', locale)} ↵</button>
       </>}>
-      {onCustomer && boot && <div className="pay-customer">
+      {boot && (cust || canChange) && <div className="pay-customer">
         {cust
           ? <><span>👤 <strong>{cust.name || '—'}</strong> <span className="muted" dir="ltr">{cust.phone}</span></span>
               {custDebt > 0 && <span className="pill bad">{pt('debtShort', locale)} {fmtUsd(custDebt)}</span>}
               <span style={{ flex: 1 }} />
-              <button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
-              <button type="button" className="btn icon" title={pt('removeCustomer', locale)} onClick={clearCustomer}>✕</button></>
+              {canChange && <><button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
+              <button type="button" className="btn icon" title={pt('removeCustomer', locale)} onClick={clearCustomer}>✕</button></>}</>
           : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><button type="button" className="btn" onClick={() => { setPq(''); setPickOpen(true); }}>📇 {pt('pickCustomer', locale)}</button></>}
       </div>}
       <div className="pay-grid">
@@ -155,14 +150,7 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           </div>
           <div className="tender-extra">
             {(tender === 'card' || tender === 'wallet') && <input className="input" placeholder={pt('reference', locale)} value={ref} onChange={e => setRef(e.target.value)} />}
-            {tender === 'unpaid' && <div style={{ position: 'relative' }}>
-              <div className="row" style={{ gap: 8 }}>
-                <input className="input" placeholder={pt('customerName', locale)} value={uName} onFocus={() => setSuggOpen(true)} onChange={e => { setUName(e.target.value); setSuggOpen(true); }} />
-                <input className="input" placeholder={pt('customerPhone', locale)} inputMode="tel" value={uPhone} onFocus={() => setSuggOpen(true)} onChange={e => { setUPhone(e.target.value); setSuggOpen(true); }} />
-                {boot && <button type="button" className="btn" title={pt('pickCustomer', locale)} onClick={() => { setPq(uName || uPhone); setPickOpen(true); }}>📇</button>}
-              </div>
-              {suggOpen && sugg.length > 0 && <ul className="pay-sugg">{sugg.map(c => <li key={c.id}><button type="button" onMouseDown={e => e.preventDefault()} onClick={() => pickCustomer(c)}><span>👤 {c.name || '—'}</span><span className="muted" dir="ltr">{c.phone}</span></button></li>)}</ul>}
-            </div>}
+            {tender !== 'card' && tender !== 'wallet' && <input className="input" placeholder={pt(tender === 'unpaid' ? 'debtNote' : 'payNote', locale)} value={ref} onChange={e => setRef(e.target.value)} />}
             {tender === 'unpaid' && credit && <small className={overLimit ? 'bad' : 'muted'}>{pt('creditLimit', locale)} {fmtUsd(credit.limit)} · {pt('outstanding', locale)} {fmtUsd(credit.outstanding)}{overLimit ? ` — ${pt(isOwner ? 'creditLimitOwner' : 'creditLimitExceeded', locale)}` : ''}</small>}
           </div>
           <ul className="tender-list">

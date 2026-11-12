@@ -8,6 +8,8 @@ import { lbpToCents, roundLbp, usdToLbp } from './money';
 export interface DebtLine {
   order: Order; number: string; at: string; name: string; phone: string;
   original_cents: number; paid_cents: number; outstanding_cents: number; closed: boolean;
+  /** note typed at the till when the sale was put on credit (payment.reference) */
+  note?: string;
 }
 export interface DebtPerson { phone: string; name: string; lines: DebtLine[]; outstanding_cents: number; original_cents: number; last_at: string }
 
@@ -28,7 +30,7 @@ export async function debtLines(db: PosDb, opts: { openOnly?: boolean; from?: st
   for (const p of unpaid) {
     const o = orders.get(p.order_id); if (!o) continue;
     const l = byOrder.get(o.id) ?? { order: o, number: o.number ?? o.local_number ?? '', at: p.at, name: p.unpaid_name ?? o.customer_name ?? '', phone: normPhone(p.unpaid_phone || o.customer_phone), original_cents: 0, paid_cents: paid.get(o.id) ?? 0, outstanding_cents: 0, closed: false };
-    l.original_cents += unpaidCents(p, o); if (p.at < l.at) l.at = p.at; if (!l.name && p.unpaid_name) l.name = p.unpaid_name;
+    l.original_cents += unpaidCents(p, o); if (p.at < l.at) l.at = p.at; if (!l.name && p.unpaid_name) l.name = p.unpaid_name; if (p.reference && !l.note) l.note = p.reference;
     byOrder.set(o.id, l);
   }
   let lines = [...byOrder.values()].map(l => ({ ...l, outstanding_cents: Math.max(0, l.original_cents - l.paid_cents), closed: l.original_cents - l.paid_cents <= 0 }));

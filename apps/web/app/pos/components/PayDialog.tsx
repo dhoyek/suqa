@@ -118,9 +118,9 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           ? <><span>👤 <strong>{cust.name || '—'}</strong> <span className="muted" dir="ltr">{cust.phone}</span></span>
               {custDebt > 0 && <span className="pill bad">{pt('debtShort', locale)} {fmtUsd(custDebt)}</span>}
               <span style={{ flex: 1 }} />
-              {canChange && <><button type="button" className="btn" onClick={() => { setPickOpen(true); }}>📇 {pt('changeCustomer', locale)}</button>
+              {canChange && <><span className="cust-anchor"><button type="button" className="btn" aria-expanded={pickOpen} onClick={() => setPickOpen(o => !o)}>📇 {pt('changeCustomer', locale)}</button>{pickOpen && <CustomerPick boot={boot} locale={locale} onPick={pickCustomer} onClose={() => setPickOpen(false)} />}</span>
               <button type="button" className="btn icon" title={pt('removeCustomer', locale)} onClick={clearCustomer}>✕</button></>}</>
-          : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><button type="button" className="btn" onClick={() => { setPickOpen(true); }}>📇 {pt('pickCustomer', locale)}</button></>}
+          : <><span className="muted">👤 {pt('noCustomer', locale)}</span><span style={{ flex: 1 }} /><span className="cust-anchor"><button type="button" className="btn" aria-expanded={pickOpen} onClick={() => setPickOpen(o => !o)}>📇 {pt('pickCustomer', locale)}</button>{pickOpen && <CustomerPick boot={boot} locale={locale} onPick={pickCustomer} onClose={() => setPickOpen(false)} />}</span></>}
       </div>}
       <div className="pay-grid">
         <div className="stack">
@@ -167,7 +167,6 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
           <NumPad value={pristine ? '' : amount} onChange={v => type(v)} decimal={cur === 'usd'} onEnter={() => (canConfirm ? void confirm() : addRow())} big />
         </div>
       </div>
-      {pickOpen && boot && <CustomerPick boot={boot} locale={locale} onPick={pickCustomer} onClose={() => setPickOpen(false)} />}
     </Modal>
   );
 }

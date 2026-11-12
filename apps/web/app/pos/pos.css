@@ -437,3 +437,17 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 @media (max-width: 760px) { .pos-status .pos-account .menu .muted { display: block; } }
 
 .cust-list.static { position: static; box-shadow: none; max-height: 300px; }
+
+/* customer picker menu (drops under the button that opened it) */
+.cust-anchor { position: relative; display: inline-flex; }
+.cust-pop { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; width: min(360px, 86vw); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 8px; display: flex; flex-direction: column; gap: 6px; text-align: start; }
+.cust-pop .input { min-height: 42px; }
+.cust-pop-list { max-height: min(46vh, 320px); overflow: auto; display: flex; flex-direction: column; }
+.cust-pop-list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: none; font: inherit; text-align: start; cursor: pointer; min-height: 48px; }
+.cust-pop-list button.hi { background: #eef6f8; }
+.cust-pop-av { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #e5edf0; color: var(--brand-primary, #0e7490); font-weight: 700; display: grid; place-items: center; font-size: 13px; }
+.cust-pop-who { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }
+.cust-pop-who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cust-pop-who .muted { font-size: 12px; text-align: start; }
+.cust-pop-hint { padding: 4px 8px; margin: 0; font-size: 12px; }
+.cust-pop-new { border: 0; border-top: 1px solid var(--line); background: none; font: inherit; font-weight: 700; color: var(--brand-primary, #0e7490); padding: 10px 8px 4px; text-align: start; cursor: pointer; }

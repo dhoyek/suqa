@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 export default function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (document.querySelector('[data-esc-layer]')) return; e.stopPropagation(); onClose(); } };   // an open menu inside the dialog takes Esc first
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
   }, [open, onClose]);

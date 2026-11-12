@@ -97,5 +97,5 @@ export async function setMeta(db: PosDb, key: string, value: unknown): Promise<v
 
 export const META = {
   deviceId: 'device_id', devicePrefix: 'device_prefix', deviceName: 'device_name', cursor: 'cursor', localSeq: 'local_seq',
-  shop: 'shop', role: 'role', currentDraft: 'current_draft', lastOnlineAt: 'last_online_at', lastSyncAt: 'last_sync_at', userId: 'user_id', revoked: 'revoked',
+  shop: 'shop', role: 'role', currentDraft: 'current_draft', lastOnlineAt: 'last_online_at', lastSyncAt: 'last_sync_at', userId: 'user_id', revoked: 'revoked', approvalPin: 'approval_pin',
 } as const;

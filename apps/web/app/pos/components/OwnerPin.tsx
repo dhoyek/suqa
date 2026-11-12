@@ -1,19 +1,33 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { verifyOwnerPin, type Staff } from '@suqa/pos-core';
+import { useEffect, useRef, useState } from 'react';
+import { verifyApproval, type ApprovalPin, type Staff } from '@suqa/pos-core';
+import { freshApproval, getApproval, onApprovalChange } from '../lib/approval';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
 
 /**
- * Owner approval gate. Owners pass automatically; everyone else types an owner's PIN (verified locally against the synced hashes).
- * Resolves with the approving owner's user id (stamped on the op as approved_by) or null when dismissed.
+ * Approval gate. Owners pass automatically; everyone else types the shop's APPROVAL PIN (schema 55) — or, while the shop has none,
+ * an owner's login PIN as before. Checked locally against the hashes on the device, so it works offline.
+ * Resolves with an owner's user id (stamped on the op as approved_by) or null when dismissed.
  */
 export default function OwnerPin({ open, locale, staff, me, reason, onDone }: { open: boolean; locale: L; staff: Staff[]; me: Staff; reason: string; onDone: (approvedBy: string | null) => void }) {
   const [pin, setPin] = useState(''); const [err, setErr] = useState(false);
   useEffect(() => { if (open && me.role === 'owner') onDone(me.user_id); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [approval, setApproval] = useState<ApprovalPin>(() => getApproval());
+  const fresh = useRef<Promise<ApprovalPin> | null>(null);
+  useEffect(() => onApprovalChange(() => setApproval(getApproval())), []);
+  // re-read it when the prompt opens (another device may have just changed it); the check below waits for this, briefly
+  useEffect(() => { if (open && me.role !== 'owner') fresh.current = freshApproval(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (pin.length !== 4) return;
-    verifyOwnerPin(pin, staff).then(id => { if (id) { setPin(''); onDone(id); } else { setErr(true); setPin(''); } });
+    let on = true;
+    void (async () => {
+      const a = await (fresh.current ?? Promise.resolve(getApproval()));
+      const id = await verifyApproval(pin, staff, a);
+      if (!on) return;
+      if (id) { setPin(''); onDone(id); } else { setErr(true); setPin(''); }
+    })();
+    return () => { on = false; };
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
@@ -22,8 +36,8 @@ export default function OwnerPin({ open, locale, staff, me, reason, onDone }: { 
   }, [open]);
   if (!open || me.role === 'owner') return null;
   return (
-    <Modal open={open} onClose={() => { setPin(''); onDone(null); }} title={pt('ownerPin', locale)}>
-      <p className="muted">{pt('ownerPinHint', locale)} — {reason}</p>
+    <Modal open={open} onClose={() => { setPin(''); onDone(null); }} title={pt(approval ? 'approvalPin' : 'ownerPin', locale)}>
+      <p className="muted">{pt(approval ? 'approvalPinHint' : 'ownerPinHint', locale)} — {reason}</p>
       <div className="pin-dots">{[0, 1, 2, 3].map(i => <span key={i} className={`dot ${pin.length > i ? 'on' : ''}`} />)}</div>
       {err && <p className="bad">{pt('wrongPin', locale)}</p>}
       <div className="pinpad">

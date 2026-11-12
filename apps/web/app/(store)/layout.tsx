@@ -9,17 +9,19 @@ import { supabaseServer } from '@/lib/supabase-server';
 import { getTenantRole } from '@/lib/admin';
 
 export default async function StoreLayout({ children }: { children: ReactNode }) {
-  const tenant = await getTenant();
-  const user = await getUser();
+  const [tenant, user] = await Promise.all([getTenant(), getUser()]);
   const L = await getLocale(tenant);
-  const myShops = user ? await getMyShops() : [];
-  const admin = user ? !!(await getTenantRole(tenant.id)) : false;
   type Prof = { full_name: string | null; phone: string | null };
-  const profile: Prof | null = user ? (((await (await supabaseServer()).from('profiles').select('full_name,phone').eq('id', user.id).maybeSingle()).data as unknown) as Prof | null) : null;
-  const staff = myShops.length > 0; const pos = myShops.some(s => (s as unknown as { pos_enabled?: boolean }).pos_enabled);
+  // one round of parallel lookups instead of four in a row (each is a trip to the database)
+  const [myShops, role, profile] = user ? await Promise.all([
+    getMyShops(), getTenantRole(tenant.id),
+    supabaseServer().then(sb => sb.from('profiles').select('full_name,phone').eq('id', user.id).maybeSingle()).then(r => (r.data as unknown) as Prof | null),
+  ]) : [[], null, null] as const;
+  const admin = !!role;
+  const staff = myShops.length > 0;
   return (
     <CartProvider tenantSlug={tenant.slug} multiShop={!!tenant.settings.multi_shop_cart}>
-      <StoreHeader brand={tenant.brand_name} user={user ? { name: profile?.full_name ?? null, phone: profile?.phone ?? null, email: user.email } : null} staff={staff} pos={pos} admin={admin} locale={L}
+      <StoreHeader brand={tenant.brand_name} user={user ? { name: profile?.full_name ?? null, phone: profile?.phone ?? null, email: user.email } : null} staff={staff} admin={admin} locale={L}
         labels={{ cart: ui('cart', L), account: ui('account', L), signIn: ui('signIn', L), myOrders: ui('myOrders', L), myShop: ui('myShop', L), pos: ui('pos', L), signOut: ui('signOut', L), language: ui('language', L), purchaseHistory: ui('purchaseHistory', L), guest: ui('guest', L), admin: ui('admin', L) }} />
       <main className="container">{children}</main>
       <footer className="container muted" style={{ fontSize: 12, padding: '24px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>

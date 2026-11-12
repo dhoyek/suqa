@@ -38,3 +38,18 @@ export async function verifyOwnerPin(pin: string, staff: Array<{ user_id: string
   }
   return null;
 }
+
+/** The shop's separate approval PIN as the till holds it (hash + salt, never the PIN). null = none set. */
+export type ApprovalPin = { hash: string; salt: string; set_at?: string | null } | null;
+
+/**
+ * Approval for a gated action. When the shop has an approval PIN, only that PIN approves (the owner's login PIN is deliberately
+ * NOT accepted here — the point is that it is never typed in front of the till). Without one, an owner's login PIN approves as before.
+ * Returns the user id to stamp as approved_by (an owner of the shop), or null when the PIN is wrong.
+ */
+export async function verifyApproval(pin: string, staff: Array<{ user_id: string; role: string; active?: boolean; pin_hash?: string | null; pin_salt?: string | null }>, approval: ApprovalPin): Promise<string | null> {
+  if (!approval?.hash || !approval.salt) return verifyOwnerPin(pin, staff);
+  if (!(await verifyPin(pin, approval.hash, approval.salt))) return null;
+  const owner = staff.find(s => s.role === 'owner' && s.active !== false) ?? staff.find(s => s.role === 'owner');
+  return owner?.user_id ?? null;
+}

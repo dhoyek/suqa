@@ -6,6 +6,7 @@ import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import AccountMenu from './components/AccountMenu';
+import { initApproval, refreshApproval } from './lib/approval';
 import { roleOf, viewsFor } from './lib/perm';
 import { newOrderChime } from './lib/chime';
 import Sell from './views/Sell';
@@ -32,6 +33,9 @@ export default function Shell(props: {
   const { boot, locale, status, staff, updateReady, onUpdate, onLock } = props;
   const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
+  // the shop's approval PIN: cached copy first, then the server's (again whenever the till comes back online)
+  useEffect(() => { void initApproval(props.sb, boot.db, boot.shop.id); }, [props.sb, boot]);
+  useEffect(() => { if (status?.online) void refreshApproval(); }, [status?.online]);
   useEffect(() => { document.documentElement.lang = locale; document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr'; }, [locale]);
   const [pendingCount, setPendingCount] = useState(0);
   // new online/WhatsApp orders: badge on the nav + a chime when the pending count grows (any view, any tab)

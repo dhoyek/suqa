@@ -1,4 +1,5 @@
 import { getTenant } from '@/lib/tenant';
+import { getLocale } from '@/lib/locale';
 import { currentShop } from '@/lib/current-shop';
 import { ui } from '@/lib/ui-text';
 import { supabaseServer } from '@/lib/supabase-server';
@@ -13,7 +14,7 @@ export default async function ShopSettingsPage({ searchParams }: { searchParams:
   const tenant = await getTenant();
   const shop = await currentShop(sp);
   if (!shop) return null;
-  const L = tenant.default_locale;
+  const L = await getLocale(tenant);
   const sb = await supabaseServer();
   const [{ data: zones }, { data: served }] = await Promise.all([
     sb.from('delivery_zones').select('id,name,fee_usd').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),

@@ -6,6 +6,7 @@ import Modal from '../components/Modal';
 import StaffPanel from '../components/StaffPanel';
 import DriversPanel from '../components/DriversPanel';
 import ShopSettings from '../components/ShopSettings';
+import ApprovalPinPanel from '../components/ApprovalPinPanel';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
@@ -92,6 +93,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           </Modal>}
         </div>
       </section>
+      {staff.role === 'owner' && <ApprovalPinPanel boot={boot} sb={sb} locale={locale} me={staff} online={online} />}
       {owner && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">

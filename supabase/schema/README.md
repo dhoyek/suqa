@@ -56,4 +56,5 @@ source of truth.
 | 52_driver_ack.sql | `orders.driver_ack_at` / `driver_picked_at`; `driver_ack(order)` (driver sheet button via service key) and `driver_ack_by_phone(phone)` (any WhatsApp reply from the driver); event in the order timeline. Service key only. |
 | 53_driver_steps.sql | `orders.driver_delivered_at`; `driver_step(order, 'picked'|'delivered')` — driver sheet buttons record times + timeline event only; status and payment stay with the shop. Service key only. |
 | 54_pos_debt_unsettle.sql | `debt.unsettle` op (`_pos_debt_unsettle`: owner-only undo of a debt collection; settlement + allocations removed, full record kept in the audit log); `pos_push` re-created. |
+| 55_pos_approval_pin.sql | `shop_approval_pins` (one hashed 4-digit approval PIN per shop, own table, no policies); `pos_set_approval_pin(shop, hash, salt)` owner-only set / replace / remove; `pos_approval_pin(shop)` members read hash + salt for offline checks. Approvals at the till use it instead of the owner's login PIN once set. |
 | ../seed/batroun.sql | first tenant |

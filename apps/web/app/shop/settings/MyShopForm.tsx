@@ -159,8 +159,12 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
         ))}
       </section>
 
-      {msg && <div className={msg === labels.saved ? 'muted' : 'error'}>{msg}</div>}
-      {canEdit && <button className="btn primary wide" disabled={busy} onClick={save}>{labels.save}</button>}
+      {!canEdit && <div className="card muted">🔒 {L === 'ar' ? 'يمكن لصاحب المحل فقط تعديل هذه البيانات.' : 'Only the shop owner can change these details.'}</div>}
+      {/* always in view: the form is long and the button used to sit below everything */}
+      {canEdit && <div className="savebar">
+        {msg && <span className={msg === labels.saved ? 'ok' : 'error'}>{msg === labels.saved ? '✓ ' : ''}{msg}</span>}
+        <button className="btn primary" disabled={busy} onClick={save}>{busy ? '…' : `💾 ${labels.save}`}</button>
+      </div>}
     </div>
   );
 }

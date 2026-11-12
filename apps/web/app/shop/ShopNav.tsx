@@ -23,8 +23,6 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
         <a href="/pos#items" className="tab">🏷 {labels.products}</a>
         <Link href={`/shop/settings${q}`} className={`tab ${path.startsWith('/shop/settings') ? 'active' : ''}`}>⚙ {labels.myShop}</Link>
         {slug && <Link href={`/s/${slug}`} className="tab" title={labels.viewAsCustomer}>👁 {labels.viewAsCustomer}</Link>}
-        <Link href="/" className="tab" title={labels.home}>🏠</Link>
-        <form action="/auth/signout" method="post"><button className="btn ghost muted" type="submit">{labels.signOut}</button></form>
       </nav>
     </>
   );

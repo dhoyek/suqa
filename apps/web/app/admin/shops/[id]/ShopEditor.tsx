@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import MapPicker from '@/components/MapPicker';
+import RestorePanel from './RestorePanel';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
 
 type Member = { user_id: string; full_name: string | null; email: string; role: 'owner' | 'staff' };
@@ -128,6 +129,7 @@ export default function ShopEditor(props: {
           </div>
         </section>
       )}
+      {shop && <RestorePanel shopId={shop.id} locale={props.locale} />}
     </div>
   );
 }

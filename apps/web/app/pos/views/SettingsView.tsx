@@ -7,6 +7,7 @@ import StaffPanel from '../components/StaffPanel';
 import DriversPanel from '../components/DriversPanel';
 import ShopSettings from '../components/ShopSettings';
 import ApprovalPinPanel from '../components/ApprovalPinPanel';
+import BackupPanel from '../components/BackupPanel';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
@@ -96,6 +97,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
       {staff.role === 'owner' && <ApprovalPinPanel boot={boot} sb={sb} locale={locale} me={staff} online={online} />}
       {owner && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
+      {staff.role === 'owner' && <BackupPanel boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🏬 {pt('onlineShop', locale)}</h3>
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>{pt('onlineShopHint', locale)}</p>

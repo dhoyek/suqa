@@ -478,13 +478,31 @@ do $$ begin
   end if;
 exception when undefined_object then null; end $$;
 
--- Retention: 30 days (a device further behind does a full resync).
+-- Retention: follows the tills' cursors, 30 days at most (see 63).
 create or replace function suqa.pos_prune_sync_log() returns int
 language plpgsql security definer set search_path = public as $$
-declare n int;
+declare n int := 0; m int; r record; v_min bigint; v_anchor bigint; v_newest bigint;
 begin
-  delete from suqa.sync_log where at < now() - interval '30 days';
-  get diagnostics n = row_count;
+  for r in select distinct shop_id from suqa.sync_log where shop_id is not null loop
+    select min(last_cursor) into v_min from suqa.devices
+     where shop_id = r.shop_id and revoked_at is null and last_sync_at > now() - interval '30 days';
+    select max(seq) into v_newest from suqa.sync_log where shop_id = r.shop_id;
+    if v_min is null then v_anchor := v_newest;
+    else select max(seq) into v_anchor from suqa.sync_log where shop_id = r.shop_id and seq <= v_min; end if;
+    delete from suqa.sync_log
+     where shop_id = r.shop_id and (seq < coalesce(v_anchor, 0) or (at < now() - interval '30 days' and seq < v_newest));
+    get diagnostics m = row_count; n := n + m;
+  end loop;
+  for r in select distinct tenant_id from suqa.sync_log where shop_id is null loop
+    select min(last_cursor) into v_min from suqa.devices
+     where tenant_id = r.tenant_id and revoked_at is null and last_sync_at > now() - interval '30 days';
+    select max(seq) into v_newest from suqa.sync_log where shop_id is null and tenant_id = r.tenant_id;
+    if v_min is null then v_anchor := v_newest;
+    else select max(seq) into v_anchor from suqa.sync_log where shop_id is null and tenant_id = r.tenant_id and seq <= v_min; end if;
+    delete from suqa.sync_log
+     where shop_id is null and tenant_id = r.tenant_id and (seq < coalesce(v_anchor, 0) or (at < now() - interval '30 days' and seq < v_newest));
+    get diagnostics m = row_count; n := n + m;
+  end loop;
   delete from suqa.pos_ops where applied_at < now() - interval '60 days';
   return n;
 end $$;
@@ -568,7 +586,7 @@ grant execute on function suqa.pos_set_pin(uuid, uuid, text, text) to authentica
 create or replace function suqa.pos_pull(p_device uuid, p_cursor bigint, p_limit int default 1000)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v_dev suqa.devices; v_role text; v_rows jsonb; v_next bigint; v_oldest bigint; v_count int;
+declare v_dev suqa.devices; v_role text; v_rows jsonb; v_next bigint; v_oldest bigint; v_oldest_t bigint; v_count int;
 begin
   select * into v_dev from suqa.devices where id = p_device;
   if not found then raise exception 'device_not_found'; end if;
@@ -576,8 +594,11 @@ begin
   v_role := suqa.pos_role(v_dev.shop_id);
   if v_role is null then raise exception 'not_a_member' using errcode = 'insufficient_privilege'; end if;
 
-  select min(seq) into v_oldest from suqa.sync_log where shop_id = v_dev.shop_id or (shop_id is null and tenant_id = v_dev.tenant_id);
-  if p_cursor > 0 and v_oldest is not null and p_cursor < v_oldest - 1 then
+  -- too far behind = the feed no longer reaches back to this till's cursor. Checked per scope (63): the shop's own rows and the
+  -- association's shared rows are pruned separately, and a restore (64) drops the shop's rows on purpose to make every till resnapshot.
+  select min(seq) into v_oldest from suqa.sync_log where shop_id = v_dev.shop_id;
+  select min(seq) into v_oldest_t from suqa.sync_log where shop_id is null and tenant_id = v_dev.tenant_id;
+  if p_cursor > 0 and ((v_oldest is not null and p_cursor < v_oldest - 1) or (v_oldest_t is not null and p_cursor < v_oldest_t - 1)) then
     return jsonb_build_object('resync', true, 'cursor', 0, 'server_now', now());
   end if;
 

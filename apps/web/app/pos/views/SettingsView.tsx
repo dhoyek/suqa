@@ -67,7 +67,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
     <div className="stack" style={{ padding: 16, maxWidth: 760 }}>
       {seeDevices && <section className="card">
         <h3 style={{ marginTop: 0 }}>{pt('devices', locale)}</h3>
-        <table className="table">
+        <table className="table stack-sm">
           <tbody>
             {devices.map(d => (
               <tr key={d.id} className={d.revoked_at ? 'muted' : ''}>

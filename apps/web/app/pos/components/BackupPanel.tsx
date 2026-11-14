@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { pt, type L } from '../i18n';
+import { pt, posErr, type L } from '../i18n';
 import { fmtTime, type Booted } from '../lib/boot';
 import { buildBackup, saveBlob } from '@/lib/shop-backup';
 
@@ -20,7 +20,7 @@ export default function BackupPanel({ boot, sb, locale, online }: { boot: Booted
       saveBlob(b.blob, b.name);
       try { localStorage.setItem(key(boot.shop.id), b.at); } catch { /* private mode */ }
       setLast(b.at); setMsg({ ok: true, text: `${pt('backupDone', locale)} — ${b.name} (${b.rows.toLocaleString('en-US')} ${pt('backupRows', locale)}, ${(b.blob.size / 1024 / 1024).toFixed(1)} MB)` });
-    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+    } catch (e) { setMsg({ ok: false, text: posErr((e as { message?: string }).message ?? String(e), locale) }); }
     setBusy(false);
   };
   return (

@@ -462,3 +462,13 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .drv-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .drv-stats b { color: var(--text, #111827); font-size: 14px; }
 .drv-money { font-size: 13px; border-top: 1px solid var(--line); padding-top: 6px; }
+
+/* phones: tables marked stack-sm show each row as a wrapped block instead of scrolling sideways (devices, purchases, suppliers, cash moves) */
+.seg.wrap { flex-wrap: wrap; border-radius: 14px; }
+@media (max-width: 760px) {
+  .pos .card .table.stack-sm, .pos .card .table.stack-sm tbody { display: block; }
+  .pos .card .table.stack-sm tr { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); }
+  .pos .card .table.stack-sm td { border: 0; padding: 0; white-space: normal; }
+  .pos .card .table.stack-sm td.num { margin-inline-start: auto; text-align: end; }
+  .pos .card .table.stack-sm td:empty { display: none; }
+}

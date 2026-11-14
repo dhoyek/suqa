@@ -79,6 +79,17 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
   };
 
   useEffect(() => { void start(); }, [start]);
+  // the person at the till follows the staff list: a role or name changed elsewhere applies at once, a removed / deactivated one is locked out
+  useEffect(() => {
+    if (!boot || !staff) return;
+    let on = true;
+    void boot.db.staff.get(staff.user_id).then(s => {
+      if (!on) return;
+      if (!s || s.active === false) { setStaff(null); setPhase({ k: 'locked' }); return; }
+      if (s.role !== staff.role || s.display_name !== staff.display_name || s.pin_hash !== staff.pin_hash) setStaff(s);
+    });
+    return () => { on = false; };
+  }, [tick, boot, staff]);
   useEffect(() => { if (boot && tick) void reloadIndex(boot).then(() => setTick(t => t)); }, [tick, boot]);   // feed applied → refresh index
   useEffect(() => { if (!boot) return; return subscribePoke(sb, boot.shop.id, boot.engine); }, [boot, sb]);
   useEffect(() => () => { void boot?.engine.stop(); }, [boot]);

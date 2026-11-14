@@ -46,7 +46,7 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
 
       {tab === 'invoices' && <section className="card">
         {!purchases.length && <p className="muted">—</p>}
-        <table className="table"><tbody>
+        <table className="table stack-sm"><tbody>
           {purchases.map(p => <tr key={p.id} className={p.status === 'void' ? 'muted' : ''} style={{ cursor: 'pointer' }} onClick={() => setOpenPur(p)}>
             <td><strong>{p.number.replace('~', '')}</strong>{p.invoice_no ? <span className="muted"> · {p.invoice_no}</span> : ''}</td><td className="muted">{fmtTime(p.at, locale)}</td><td>{supName(p.supplier_id)}</td>
             <td><span className={`pill ${p.kind === 'return' ? 'warn' : ''}`}>{pt(p.kind === 'return' ? 'purchaseReturn' : 'newPurchase', locale)}</span>{p.status === 'void' && <span className="pill bad" style={{ marginInlineStart: 4 }}>{pt('voided', locale)}</span>}</td>
@@ -58,7 +58,7 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
       {tab === 'suppliers' && <section className="card">
         <input className="input" placeholder={pt('searchSupplier', locale)} value={supQ} onChange={e => setSupQ(e.target.value)} style={{ marginBottom: 8 }} />
         {!suppliers.length && <p className="muted">—</p>}
-        <table className="table"><tbody>
+        <table className="table stack-sm"><tbody>
           {suppliers.filter(supMatch).map(s => <tr key={s.id} className={s.active ? '' : 'muted'} style={{ cursor: 'pointer' }} onClick={() => setSelSup(s)}>
             <td><strong>{s.name}</strong>{s.contact ? <span className="muted"> · {s.contact}</span> : ''}</td><td className="muted" dir="ltr">{s.phone ? fmtPhone(s.phone) : ''}</td>
             <td className="num"><strong className={num(s.balance_cents) > 0 ? 'bad' : num(s.balance_cents) < 0 ? 'ok' : ''}>{fmtUsd(num(s.balance_cents))}</strong></td>

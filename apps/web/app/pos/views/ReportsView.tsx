@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, num, shiftSummary, text, todaySummary, type CatalogIndex, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
-import { pt, type L } from '../i18n';
+import { pt, posErr, type L } from '../i18n';
 import ApprovalsReport from '../components/ApprovalsReport';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
@@ -53,7 +53,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
       if (online) {
         const { data, error } = await sb.rpc('pos_report', { p_shop: boot.shop.id, p_from: range[0], p_to: range[1] });
         if (!error) { setRep(data as Report); return; }
-        setErr(error.message);
+        setErr(posErr(error.message, locale));
       }
       setRep(await localReport(boot.db, range[0], range[1]));
     } finally { setBusy(false); }
@@ -142,7 +142,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               {rep.totals.purchases_cents != null && <div className="kpi"><span>{pt('purchasesTotal', locale)}</span><strong>{N(rep.totals.purchases_cents)}</strong><small>{pt('suppliersBalance', locale)} {N(rep.totals.suppliers_balance_cents ?? 0)}</small></div>}
               <div className="kpi"><span>{pt('grossMargin', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.cost_cents)}</strong><small>{pt('cost', locale)} {N(rep.totals.cost_cents)}{rep.totals.total_cents ? ` · ${Math.round(((rep.totals.total_cents - rep.totals.cost_cents) / rep.totals.total_cents) * 100)}%` : ''}</small></div>
             </div>
-            <div className="seg" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+            <div className="seg wrap" style={{ marginTop: 12 }}>
               {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab' } as const)[x], locale)}</button>)}
             </div>
             <div style={{ marginTop: 10, overflowX: 'auto' }}>

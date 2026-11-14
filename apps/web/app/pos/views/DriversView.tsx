@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { currentShift, dayKey, driverPayRule, fmtLbp, fmtPhone, fmtUsd, payDriver, roundLbp, setOrderDriverPay, text, usdToLbp, waDigits, type Currency, type DriverPayMode, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
-import { pt, type L } from '../i18n';
+import { pt, posErr, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import Modal from '../components/Modal';
@@ -40,7 +40,7 @@ export default function DriversView({ boot, sb, locale, status, staff, tick }: {
     setBusy(true);
     const { data, error } = await sb.rpc('pos_driver_report', { p_shop: boot.shop.id, p_from: from, p_to: to });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (error) { setErr(posErr(error.message, locale)); return; }
     setErr(null); setRep(data as Rep);
   }, [sb, boot, from, to, online]);
   useEffect(() => { void load(); }, [load, tick]);

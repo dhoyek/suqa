@@ -47,7 +47,7 @@ export default function ShiftView({ boot, locale, staff, tick, status }: { boot:
               <div className="kpi"><span>{pt('expected', locale)} $</span><strong>{fmtUsd(sum.expected_usd_cents)}</strong><small>{pt('float', locale)} {fmtUsd(num(shift.float_usd_cents))}</small></div>
               <div className="kpi"><span>{pt('expected', locale)} ل.ل.</span><strong>{fmtLbp(sum.expected_lbp, locale)}</strong><small>{pt('float', locale)} {fmtLbp(num(shift.float_lbp), locale)}</small></div>
             </div>
-            <table className="table" style={{ marginTop: 10 }}><tbody>
+            <table className="table stack-sm" style={{ marginTop: 10 }}><tbody>
               {Object.entries(sum.by_tender).map(([t, v]) => <tr key={t}><td>{pt(t as 'cash_usd', locale)}</td><td className="muted">{v.count}</td><td className="num">{v.usd ? fmtUsd(v.usd) : ''} {v.lbp ? fmtLbp(v.lbp, locale) : ''}</td></tr>)}
               {sum.moves.map(m => <tr key={m.id}><td>{m.kind === 'in' ? '＋' : '−'} {m.reason}</td><td className="muted">{fmtTime(m.at, locale)}</td><td className="num">{m.currency === 'lbp' ? fmtLbp(num(m.amount), locale) : fmtUsd(num(m.amount))}</td></tr>)}
             </tbody></table>

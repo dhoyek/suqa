@@ -102,6 +102,7 @@ const T = {
   settleSelected: { ar: 'تصفية المحدد', en: 'Settle selected' }, pastPayouts: { ar: 'التصفيات السابقة', en: 'Past settlements' }, drvStatement: { ar: 'كشف السائق', en: 'Driver statement' }, drvNoData: { ar: 'لا سائقين بعد — أضفهم من الإعدادات', en: 'No drivers yet — add them in Settings' },
   drvOnRoad: { ar: 'في الطريق', en: 'On the road' }, drvHandedNotPaid: { ar: 'سُلّم — بانتظار الدفع', en: 'Delivered — payment pending' }, customerPaid: { ar: 'دفع الزبون', en: 'Customer paid' }, a_driver_payout: { ar: 'تصفية سائق', en: 'Driver settlement' }, a_order_driver_pay: { ar: 'تعديل أجر سائق', en: 'Driver pay changed' }, a_driver_pay_rule: { ar: 'قاعدة دفع السائقين', en: 'Driver pay rule' },
   approvalLocked: { ar: 'محاولات خاطئة كثيرة — حاول بعد', en: 'Too many wrong attempts — try again in' }, triesLeft: { ar: 'محاولات باقية', en: 'tries left' },
+  ownerAccountNeeded: { ar: 'هذا الجهاز مسجّل بحساب ليس لصاحب المحل. هذه الشاشة تحتاج تسجيل الدخول بحساب صاحب المحل على هذا الجهاز.', en: 'This device is signed in with an account that is not the shop owner\'s. This screen needs the owner\'s account signed in on this device.' },
   backupTitle: { ar: 'نسخة احتياطية', en: 'Backup' }, backupDesc: { ar: 'تنزيل ملف واحد فيه كل بيانات المحل: الأصناف، الطلبات، الزبائن والديون، الموردون والمشتريات، المخزون والصندوق. احفظه خارج هذا الجهاز (فلاشة أو بريد). الاسترجاع يتم عبر إدارة المنصة.', en: 'Downloads one file with everything the shop holds: items, orders, customers and debts, suppliers and purchases, stock and cash. Keep it off this device (USB stick or email). Restoring is done by the platform admin.' },
   backupBtn: { ar: 'تنزيل نسخة الآن', en: 'Download backup now' }, backupLast: { ar: 'آخر نسخة', en: 'Last backup' }, backupNever: { ar: 'لم تؤخذ نسخة من هذا الجهاز بعد', en: 'No backup taken from this device yet' },
   backupStale: { ar: 'مرّ أكثر من أسبوع على آخر نسخة.', en: 'More than a week since the last backup.' }, backupDone: { ar: 'تم التنزيل', en: 'Downloaded' }, backupRows: { ar: 'سجل', en: 'rows' },
@@ -322,3 +323,8 @@ const T = {
 export type Key = keyof typeof T;
 // never throws: an unknown key (new audit action, status…) renders as the key itself
 export const pt = (k: Key, l: L): string => T[k]?.[l] ?? T[k]?.ar ?? String(k);
+
+/** Server refusals shown to a person: the owner-only ones get a sentence instead of a code. */
+export function posErr(message: string, locale: L): string {
+  return /not_owner|owner_only/.test(message) ? pt('ownerAccountNeeded', locale) : message;
+}

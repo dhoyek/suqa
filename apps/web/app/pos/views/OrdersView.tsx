@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NEXT, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { NEXT, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -35,7 +35,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
@@ -91,6 +91,18 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     c.new.sort((a, b) => (a.needed_at ?? a.placed_at) < (b.needed_at ?? b.placed_at) ? -1 : 1);   // waiting longest first
     return c;
   }, [orders, q, range, unpaidOnly, staleOnly, lines, payments, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+  // two open orders of one customer that can become one: the order that stays is the one already holding a payment, else the older
+  const mergePair = (a: Order, b: Order): { target: Order; source: Order } | null => {
+    const pa = (payments[a.id] ?? []).length, pb = (payments[b.id] ?? []).length;
+    const [t, x] = pa && !pb ? [a, b] : pb && !pa ? [b, a] : a.placed_at <= b.placed_at ? [a, b] : [b, a];
+    return mergeBlock(t, x, (payments[x.id] ?? []).length) ? null : { target: t, source: x };
+  };
+  const mergeable = useMemo(() => {
+    const open = orders.filter(o => !o.closed_at && ['pending', 'accepted', 'preparing'].includes(o.status));
+    const m: Record<string, Order[]> = {};
+    for (const a of open) for (const b of open) if (a.id < b.id && mergePair(a, b)) { (m[a.id] ??= []).push(b); (m[b.id] ??= []).push(a); }
+    return m;
+  }, [orders, payments]); // eslint-disable-line react-hooks/exhaustive-deps
   const [show, setShow] = useState<Set<Col>>(loadCols);
   const toggleCol = (c: Col) => setShow(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); if (!n.size) n.add(c); try { localStorage.setItem(LS_COLS, JSON.stringify([...n])); } catch {} return n; });
   const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
@@ -149,6 +161,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
                   {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
+                  {mergeable[o.id] && <button className="merge-hint" onClick={e => { e.stopPropagation(); setDialog({ k: 'merge', o }); }}>🔗 {pt('omHint', locale)} ({mergeable[o.id].map(x => x.number ?? x.local_number).join('، ')}) — <u>{pt('mergeBtn', locale)}</u></button>}
                   {isStale(o) && <div className="stale-hint" onClick={e => e.stopPropagation()}>⏳ {pt('staleHint', locale)}
                     {NEXT[o.status].includes('cancelled') && <button className="link-btn" style={{ color: '#991b1b' }} onClick={() => act(o, 'cancelled')}>{pt('act_cancelled', locale)}</button>}</div>}
                   {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered') && <DriverLine o={o} boot={boot} locale={locale} />}
@@ -191,6 +204,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
         onPick={async d => { await setOrderStatus(boot.db, dialog.o, 'out_for_delivery', { driver_id: d?.id ?? null, courier_name: d?.name ?? null }); boot.engine.poke(); setDialog(null); await reload(); }} />}
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'merge' && mergeable[dialog.o.id] && <MergeDialog locale={locale} order={dialog.o} others={mergeable[dialog.o.id]} lines={lines} pair={mergePair} step={boot.shop.lbp_rounding_step ?? 5000}
+        onDone={async (t, x) => { await mergeOrders(boot.db, t, x); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} paidCents={paidCents(dialog.o)} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
         boot={boot} isOwner={staff.role === 'owner'} me={staff} customer={{ name: dialog.o.customer_name ?? undefined, phone: dialog.o.customer_phone ?? undefined }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name, driver: !!dialog.o.driver_id && !dialog.o.driver_paid_at, fee_cents: dialog.fee } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
@@ -354,4 +369,45 @@ function DriverLine({ o, boot, locale }: { o: Order; boot: Booted; locale: L }) 
       : <span className={`pill ${o.updated_at && Date.now() - new Date(o.updated_at).getTime() > 5 * 60000 ? 'warn' : ''}`} style={{ marginInlineStart: 4 }} title={pt('driverAckHint', locale)}>⏳ {pt('driverAckWaiting', locale)}</span>)
     : null;
   return <div className="muted" style={{ fontSize: 12 }}>🛵 {d ? <>{d.name}{ack} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>💬</a></> : (o.courier_name || pt('shopDelivers', locale))}</div>;
+}
+
+/** Confirm a merge: which order stays, what moves into it, and the total after (one delivery fee). */
+function MergeDialog({ locale, order, others, lines, pair, step, onDone, onClose }: { locale: L; order: Order; others: Order[]; lines: Record<string, OrderLine[]>; pair: (a: Order, b: Order) => { target: Order; source: Order } | null; step: number; onDone: (target: Order, source: Order) => Promise<void>; onClose: () => void }) {
+  const [pick, setPick] = useState(others[0].id); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const other = others.find(x => x.id === pick) ?? others[0];
+  const p = pair(order, other);
+  const no = (o: Order) => o.number ?? o.local_number ?? '';
+  const live = (o: Order) => (lines[o.id] ?? []).filter(l => !l.voided);
+  const sub = (o: Order) => live(o).reduce((x, l) => x + num(l.line_total_cents), 0);
+  if (!p) return <Modal open onClose={onClose} title={`🔗 ${pt('mergeTitle', locale)}`}><p className="bad">{pt('mergeGone', locale)}</p></Modal>;
+  const { target, source } = p;
+  const fee = Math.round(Math.max(num(target.delivery_fee_usd), num(source.delivery_fee_usd)) * 100);
+  const saved = Math.round((num(target.delivery_fee_usd) + num(source.delivery_fee_usd)) * 100) - fee;
+  const subtotal = sub(target) + sub(source); const discount = Math.min(num(target.discount_cents) + num(source.discount_cents), subtotal);
+  const total = subtotal - discount + fee; const rate = num(target.rate_lbp_per_usd) || 89500;
+  const go = async () => { setBusy(true); setErr(null); try { await onDone(target, source); } catch (e) { setErr((e as Error).message); setBusy(false); } };
+  const block = (o: Order, label: string) => (
+    <div className="card" style={{ padding: 10 }}>
+      <div className="row spread"><strong>{no(o)}</strong><span className="muted" style={{ fontSize: 12 }}>{label}</span></div>
+      {live(o).map(l => <div key={l.id} className="row spread" style={{ fontSize: 13 }}><span>{num(l.quantity)}{l.unit ? ` ${l.unit}` : '×'} {text(l.name, locale)}</span><span className="num">{fmtUsd(num(l.line_total_cents))}</span></div>)}
+    </div>
+  );
+  return (
+    <Modal open onClose={onClose} title={`🔗 ${pt('mergeTitle', locale)}`}
+      footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={busy} onClick={go}>{pt('omConfirm', locale)} {no(target)}</button></>}>
+      <div className="stack" style={{ gap: 10 }}>
+        <div className="muted" style={{ fontSize: 13 }}>👤 {order.customer_name} <span dir="ltr">{order.customer_phone}</span></div>
+        {others.length > 1 && <div className="seg wrap">{others.map(x => <button key={x.id} className={x.id === pick ? 'active' : ''} onClick={() => setPick(x.id)}>{no(x)}</button>)}</div>}
+        {block(target, pt('mergeStays', locale))}
+        {block(source, pt('mergeMoves', locale))}
+        <div className="card" style={{ padding: 10 }}>
+          {fee > 0 && <div className="row spread" style={{ fontSize: 13 }}><span>{pt('ofWhichDelivery', locale)}{saved > 0 ? ` (${pt('mergeOneFee', locale)})` : ''}</span><span className="num">{fmtUsd(fee)}</span></div>}
+          {discount > 0 && <div className="row spread" style={{ fontSize: 13 }}><span>{pt('discount', locale)}</span><span className="num">−{fmtUsd(discount)}</span></div>}
+          <div className="row spread"><strong>{pt('total', locale)}</strong><strong className="num">{fmtUsd(total)} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(Math.round((total * rate) / 100), step), locale)}</span></strong></div>
+        </div>
+        <p className="muted" style={{ fontSize: 12, margin: 0 }}>{no(source)} — {pt('mergeNote', locale)}</p>
+        {err && <div className="bad">{err}</div>}
+      </div>
+    </Modal>
+  );
 }

@@ -107,6 +107,45 @@ export async function deleteOrder(db: PosDb, order: Order, approved_by: string |
   });
 }
 
+/** Statuses in which two orders can still be merged: nothing has left the shop and (online) stock is still only reserved. */
+export const MERGEABLE: OrderStatus[] = ['pending', 'accepted', 'preparing'];
+const phoneKey = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '').replace(/^00/, '').replace(/^961/, '').replace(/^0/, '');
+/** Why `source` cannot be merged into `target` (null = it can). The server checks the same things. */
+export function mergeBlock(target: Order, source: Order, sourcePayments: number): 'same_order' | 'order_closed' | 'different_customer' | 'different_fulfillment' | 'source_has_payments' | null {
+  if (target.id === source.id) return 'same_order';
+  if (!MERGEABLE.includes(target.status) || !MERGEABLE.includes(source.status) || target.parked || source.parked) return 'order_closed';
+  const a = phoneKey(target.customer_phone), b = phoneKey(source.customer_phone);
+  if (!((a && a === b) || (target.customer_id && target.customer_id === source.customer_id))) return 'different_customer';
+  if ((target.fulfillment ?? 'pickup') !== (source.fulfillment ?? 'pickup')) return 'different_fulfillment';
+  if (sourcePayments > 0) return 'source_has_payments';
+  return null;
+}
+/**
+ * Merge two open orders of the same customer: `source`'s lines are added to `target` (which keeps its number), the delivery fee is
+ * charged once (the higher of the two), order discounts add up, and `source` is closed as cancelled with "merged into <number>" —
+ * never deleted, so its history and the customer's tracking link still explain what happened. One op, applied atomically on the server.
+ */
+export async function mergeOrders(db: PosDb, target: Order, source: Order): Promise<Order> {
+  const [tLines, sLines, sPays] = await Promise.all([db.orderLines.where('order_id').equals(target.id).toArray(), db.orderLines.where('order_id').equals(source.id).toArray(), db.payments.where('order_id').equals(source.id).count()]);
+  const block = mergeBlock(target, source, sPays); if (block) throw new Error(block);
+  const rate = num(target.rate_lbp_per_usd) || 89500; const now = new Date().toISOString();
+  const map: Record<string, string> = {};
+  const moved: OrderLine[] = sLines.filter(l => !l.voided).map(l => { const id = newId(); map[l.id] = id; return { ...l, id, order_id: target.id }; });
+  const subtotal = [...tLines, ...moved].filter(l => !l.voided).reduce((x, l) => x + num(l.line_total_cents), 0);
+  const discount = Math.min(num(target.discount_cents) + num(source.discount_cents), subtotal);
+  const feeUsd = Math.max(num(target.delivery_fee_usd), num(source.delivery_fee_usd)); const fee = Math.round(feeUsd * 100);
+  const total = subtotal - discount + fee;
+  const tNo = target.number ?? target.local_number ?? '', sNo = source.number ?? source.local_number ?? '';
+  const notes = [target.shop_notes, source.shop_notes, source.customer_notes].map(x => (x ?? '').trim()).filter(Boolean).join(' · ') || null;
+  const updated: Order = { ...target, subtotal_cents: subtotal, discount_cents: discount, delivery_fee_usd: feeUsd, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100), shop_notes: notes, updated_at: now };
+  const closed: Order = { ...source, status: 'cancelled', cancel_reason: `دُمج مع الطلب ${tNo}`, notify_customer: false, closed_at: now, updated_at: now };
+  await db.transaction('rw', [db.orders, db.orderLines, db.outbox], async () => {
+    await db.orderLines.bulkPut(moved); await db.orders.bulkPut([updated, closed]);
+    await enqueue(db, 'order.merge', { id: target.id, from: source.id, map, target_number: tNo, source_number: sNo });
+  });
+  return updated;
+}
+
 /** Move the time an order is wanted for (null = as soon as possible). */
 export async function setOrderNeeded(db: PosDb, order: Order, needed_at: string | null): Promise<Order> {
   const updated: Order = { ...order, needed_at, updated_at: new Date().toISOString() };

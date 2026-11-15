@@ -101,6 +101,9 @@ begin
           insert into suqa.stock_moves (id, shop_id, tenant_id, product_id, qty, kind, ref_order_id, device_id, user_id)
           values (gen_random_uuid(), v_o.shop_id, v_o.tenant_id, v_item.product_id, v_delta, case when v_delta < 0 then 'release' else 'reserve' end, v_o.id, d.id, p_user);
         end if;
+      else
+        -- 65: phone / WhatsApp orders took their stock when they were typed in: follow the change
+        perform suqa._order_line_stock(d, v_o, v_item.product_id, v_delta, p_user);
       end if;
     else
       -- substitution / added line (reservation for online orders comes from the order_items_reserve trigger)
@@ -109,6 +112,7 @@ begin
               coalesce((v_l->>'unit_price_cents')::numeric, 0) / 100, (v_l->>'qty')::numeric, coalesce((v_l->>'line_total_cents')::numeric, 0) / 100, v_l->>'notes',
               coalesce(v_l->>'price_currency', 'usd'), (v_l->>'unit_price_cents')::int, (v_l->>'unit_price_lbp')::bigint,
               greatest(0, coalesce((v_l->>'discount_cents')::int, 0)), (v_l->>'line_total_cents')::int);   -- 57: an added line keeps its discount
+      perform suqa._order_line_stock(d, v_o, nullif(v_l->>'product_id', '')::uuid, (v_l->>'qty')::numeric, p_user);   -- 65 (no-op for online: the trigger reserves)
     end if;
   end loop;
 

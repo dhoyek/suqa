@@ -37,9 +37,21 @@ def iso(s):
         try: return datetime.strptime(s[:19], f).strftime('%Y-%m-%dT%H:%M:%S+02:00')
         except ValueError: pass
     return None
-def name(s):
+# Arabic item names: migration/names_ar.tsv (item code <TAB> Arabic name). The old system only has Latin titles; this file is the
+# translation, kept beside the script so every run of the migration — including the final one — carries it. An item that is
+# not in the file (added in the old system since) keeps its Latin title in both languages until a line is added for it.
+def load_names_ar():
+    import os
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'names_ar.tsv'); out = {}
+    if os.path.exists(f):
+        for line in open(f, encoding='utf-8'):
+            k, _, v = line.rstrip('\n').partition('\t')
+            if k.strip() and v.strip(): out[k.strip()] = v.strip()
+    return out
+NAMES_AR = load_names_ar()
+def name(s, code=None):
     s = (s or '').strip() or '—'
-    return {'ar': s, 'en': s}
+    return {'ar': NAMES_AR.get(str(code).strip(), s) if code is not None else s, 'en': s}
 def phone_clean(p):
     d = ''.join(ch for ch in (p or '') if ch.isdigit())
     if d.startswith('00'): d = d[2:]
@@ -98,7 +110,7 @@ def convert(exp, two_years=True):
                     barcodes.append({'barcode': b['barcode'], 'pack_qty': b['pack'], **({'pack_price_usd': round(pp, 2)} if scur == USD else {'pack_price_lbp': int(round(pp))})})
             markup = num((next((b for b in rows if b['pack'] == 1), None) or {}).get('markup', 0))
             margin = round(100 * markup / (100 + markup), 2) if 0 < markup <= 100 else None    # old system: fixed profit % over cost → our margin on selling price
-            pname[code] = name(it['ITM_TITLE'])
+            pname[code] = name(it['ITM_TITLE'], code)
             products.append({'key': code, 'name': pname[code], 'section': sub.get(it['ITM_SUBGROUP'], '') or None, 'price_currency': pcur,
                              'price_usd': round(price_usd, 4), 'price_lbp': price_lbp, 'cost_cents': cost_cents, 'sku': code,
                              'unit_kind': 'kg' if scale else 'piece', 'decimal_qty': scale, 'vat': num(it['ITM_VAT']) > 0, 'active': it['ITM_ACTIVE'].strip() in ('1', 'True'),

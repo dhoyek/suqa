@@ -77,6 +77,9 @@ begin
     if p_addr.id is null then raise exception 'address_required'; end if;
     select * into v_zone from suqa.find_zone(p_tenant.id, v_shop.id, p_addr.location);
     if v_zone.zone_id is null then raise exception 'outside_delivery_area' using detail = p_shop_id::text; end if;
+  else
+    -- pickup has no zone; the record must still be assigned, or reading v_zone.* below fails ("record is not assigned yet")
+    select null::uuid as zone_id, null::numeric as fee_usd, null::int as eta_minutes into v_zone;
   end if;
 
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then raise exception 'empty_order' using detail = p_shop_id::text; end if;

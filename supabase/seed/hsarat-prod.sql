@@ -1,0 +1,9 @@
+-- seed/hsarat-prod.sql — what production was started with on 2026-11-15 (record only; already applied on project Suqa Prod).
+-- Tenant "Yorgo Suqa" (slug hsarat, orders HS-…, hosts purplestore.app / www.purplestore.app), the 8 categories, the 4 delivery
+-- zones (Hsarat, Chamat, Hbalin, Beit Hebak & Ramout) and Elie's shop with its settings and served zones were copied from dev
+-- with the same ids. No items, customers, sales, staff or devices. Admin: an account invite for the owner's phone — the
+-- account that signs up with that number becomes the tenant admin.
+-- The schema was installed from supabase/all.sql in three runs (the SQL editor runs one transaction per run, and a new enum
+-- value cannot be used in the transaction that adds it): lines up to "alter type suqa.actor_kind add value" (14), then up to
+-- "alter type suqa.shop_role add value … 'stock'" (21), then the rest. Then: alter role authenticator set pgrst.db_schemas =
+-- 'public, graphql_public, suqa' (the "Exposed schemas" setting).

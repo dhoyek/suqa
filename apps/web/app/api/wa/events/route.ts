@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, shopCustomerComing, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, shopCustomerComing, shopCustomerComingTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 
 export const runtime = 'nodejs';
@@ -60,8 +60,7 @@ export async function POST(req: Request) {
       for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier', tpl);
     }
   } else if (e.event === 'order.coming') {
-    // inside the shop's own 24 h window in practice (it talks to this number all day); plain text, no template
-    to(e.shop?.whatsapp, shopCustomerComing(e), 'shop');
+    to(e.shop?.whatsapp, shopCustomerComing(e), 'shop', shopCustomerComingTpl(e, origin));
   } else if (e.event === 'order.driver') {
     // a driver chosen (or changed) without a status change: he gets the order now so he can come for it
     if (e.driver?.phone) to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));

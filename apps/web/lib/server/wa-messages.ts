@@ -92,6 +92,12 @@ export function shopCustomerComing(e: OrderEvent): string {
             : `🚶 ${o.customer_name || 'The customer'} ${tel(o.customer_phone)} is on the way to pick up order *${o.number}* — ${money(e, o.total_usd)}.`;
 }
 
+/** Same, as the approved generic template: the shop's 24 h window is usually closed (it rarely writes to the business number). */
+export function shopCustomerComingTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
+  return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(shopCustomerComing(e).replace(/\*/g, '')), P(`${origin}/pos#orders`)] };
+}
+
 /** Order ready → couriers (only in courier delivery mode). */
 export function courierReady(e: OrderEvent, origin: string): string {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar';

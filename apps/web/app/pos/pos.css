@@ -218,6 +218,7 @@
 .order-items { font-size: 13px; }
 .order-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); align-items: center; }
 .order-actions .btn { min-height: 40px; }
+.pos .order-actions .btn.next-step { border: 2px solid var(--brand-primary); color: var(--brand-primary); font-weight: 700; background: #fff; }
 .pos .pill.st-pending { background: #fef3c7; color: #92400e; } .pos .pill.st-ready { background: #dcfce7; color: var(--ok); } .pos .pill.st-out_for_delivery { background: #e0f2fe; color: #0c4a6e; }
 .pos .pill.st-delivered { background: #e5e7eb; } .pos .pill.st-rejected, .pos .pill.st-cancelled { background: #fee2e2; color: var(--bad); }
 .nav-badge { position: absolute; top: -4px; inset-inline-end: -8px; background: var(--bad); color: #fff; font-size: 11px; border-radius: 999px; padding: 0 5px; min-width: 16px; line-height: 16px; }

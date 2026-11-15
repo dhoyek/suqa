@@ -58,8 +58,8 @@ export default function Shell(props: {
   const [stockFocus, setStockFocus] = useState<{ id: string; n: number } | null>(null);
   const [purPreset, setPurPreset] = useState<{ supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null>(null);
   const canStock = viewsFor(roleOf(staff)).includes('stock');
-  const [orderFocus, setOrderFocus] = useState<{ id: string; n: number } | null>(null);
-  const openOrder = (id: string) => { setOrderFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('orders'); };
+  const [orderFocus, setOrderFocus] = useState<{ id: string; n: number; detail?: boolean } | null>(null);
+  const openOrder = (id: string, detail?: boolean) => { setOrderFocus(f => ({ id, detail, n: (f?.n ?? 0) + 1 })); setView('orders'); };
   const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
   const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly

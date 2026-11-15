@@ -3,7 +3,7 @@ import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type Di
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
 export type OrderEvent = {
-  event: 'order.created' | 'order.status' | 'order.edited' | 'order.driver';
+  event: 'order.created' | 'order.status' | 'order.edited' | 'order.driver' | 'order.coming';
   /** order.status only: false = the same driver was already on the order before this change (he has his message). */
   driver_changed?: boolean;
   channel?: 'online' | 'walkin' | 'whatsapp' | 'phone';
@@ -80,7 +80,16 @@ export function customerStatus(e: OrderEvent, origin: string): string | null {
     pending:          null,
   };
   const text = body[o.status];
-  return text ? `${text}\n${ar ? 'تابع الطلب' : 'Track'}: ${link}` : null;
+  // pickup + ready: the link lets him tell the shop he is on his way (POS orders; basket pages have no such button)
+  const coming = pickup && o.status === 'ready' && !o.basket_id;
+  return text ? `${text}\n${coming ? (ar ? 'أخبر المحل أنك قادم' : 'Tell the shop you are coming') : (ar ? 'تابع الطلب' : 'Track')}: ${link}` : null;
+}
+
+/** Pickup customer tapped "I'm on my way" on his order page → the shop. */
+export function shopCustomerComing(e: OrderEvent): string {
+  const ar = (e.tenant?.default_locale ?? 'ar') === 'ar'; const o = e.order;
+  return ar ? `🚶 ${o.customer_name || 'الزبون'} ${tel(o.customer_phone)} في الطريق لاستلام الطلب *${o.number}* — ${money(e, o.total_usd)}.`
+            : `🚶 ${o.customer_name || 'The customer'} ${tel(o.customer_phone)} is on the way to pick up order *${o.number}* — ${money(e, o.total_usd)}.`;
 }
 
 /** Order ready → couriers (only in courier delivery mode). */
@@ -161,6 +170,7 @@ export function driverDispatch(e: OrderEvent, origin: string): string {
   const shopPhone = tel(e.shop?.whatsapp || e.shop?.phone);
   return [
     ar ? `🛵 *طلب للتوصيل ${o.number}* — ${shop}` : `🛵 *Delivery ${o.number}* — ${shop}`,
+    o.status === 'ready' ? (ar ? '✅ الطلب جاهز — تعال استلمه من المحل.' : '✅ The order is ready — come pick it up at the shop.') : null,
     shopPhone ? `${ar ? 'المحل' : 'Shop'}: ${shopPhone} ${waMe(shopPhone)}` : null,
     `${ar ? 'الزبون' : 'Customer'}: ${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`.replace(/\s+/g, ' '),
     dest ? `${ar ? 'العنوان' : 'Address'}: ${dest}` : null,

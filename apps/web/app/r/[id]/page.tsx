@@ -34,6 +34,9 @@ export default async function OrderPublicPage({ params }: { params: Promise<{ id
   const { data } = await admin.from('orders').select('id, number, local_number, status, channel, fulfillment, placed_at, accepted_at, delivered_at, closed_at, needed_at, eta_minutes, reject_reason, cancel_reason, address, delivery_fee_usd, rate_lbp_per_usd, subtotal_cents, discount_cents, total_cents, total_lbp, change_usd_cents, change_lbp, tenant_id, driver_id, courier_name, shop:shops(name, phone, whatsapp, receipt_footer, address_text), items:order_items(name, quantity, unit, notes, price_currency, unit_price_cents, unit_price_lbp, discount_cents, line_total_cents, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
   const o = data as unknown as Row | null;
   if (!o || o.tenant_id !== t.id) notFound();
+  // pickup: has he already told the shop he is coming? (column from schema 67; a database without it simply shows no button)
+  const { data: cm, error: cmErr } = await admin.from('orders').select('customer_coming_at').eq('id', id).maybeSingle();
+  const comingAt = (cm as { customer_coming_at?: string | null } | null)?.customer_coming_at ?? null;
   const L = t.default_locale === 'en' ? 'en' : 'ar'; const ar = L === 'ar';
   const shop = o.shop;
   const tx = (n: Record<string, string> | null | undefined) => n?.[L] || n?.ar || n?.en || '';
@@ -92,6 +95,15 @@ export default async function OrderPublicPage({ params }: { params: Promise<{ id
             {open && <span className="muted" style={{ fontSize: 12 }}>{ar ? 'تتحدّث الصفحة تلقائياً' : 'This page updates itself'}</span>}
           </div>
         </section>
+
+        {tracked && pickup && !cmErr && ['accepted', 'preparing', 'ready'].includes(o.status) && (comingAt || o.status === 'ready') && <section className="card stack" style={{ gap: 6 }}>
+          {comingAt
+            ? <div style={{ fontWeight: 700, color: '#166534' }}>✓ {ar ? 'أبلغنا المحل أنك في الطريق' : 'The shop knows you are on your way'} <span dir="ltr">{fmt(comingAt)}</span></div>
+            : <form method="post" action={`/api/r/${o.id}/coming`} className="stack" style={{ gap: 6 }}>
+                <button className="btn primary" type="submit" style={{ minHeight: 56, fontSize: 18, justifyContent: 'center' }}>🚶 {ar ? 'أنا في الطريق لاستلام الطلب' : "I'm on my way to pick it up"}</button>
+                <small className="muted">{ar ? 'اضغط ليعرف المحل أنك قادم ويجهّز طلبك.' : 'Tap so the shop knows you are coming.'}</small>
+              </form>}
+        </section>}
 
         {showDriver && driver && <section className="card track-contact">
           <div><div className="muted" style={{ fontSize: 12 }}>{ar ? 'السائق' : 'Driver'}</div><strong>🛵 {driver.name}</strong>{driver.vehicle && <span className="muted"> · {driver.vehicle}</span>}{driver.phone && <div className="muted" dir="ltr" style={{ fontSize: 13 }}>{tel(driver.phone)}</div>}</div>

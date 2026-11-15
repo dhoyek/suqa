@@ -30,17 +30,18 @@ const loadCols = (): Set<Col> => { try { const v = JSON.parse(localStorage.getIt
  * Reads the local mirror (works offline); every action queues an op; the feed brings other devices' actions back within seconds.
  * Handover: pickup → pay dialog; courier delivery → cash on delivery recorded automatically; already-paid orders just close.
  */
-export default function OrdersView({ boot, sb, locale, index, tick, staff, status, focus, onNewOrder, onCustomer }: { focus?: { id: string; n: number } | null; boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status?: SyncStatus | null; onNewOrder: () => void; onCustomer?: (phone: string, name: string) => void }) {
+export default function OrdersView({ boot, sb, locale, index, tick, staff, status, focus, onNewOrder, onCustomer }: { focus?: { id: string; n: number; detail?: boolean } | null; boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status?: SyncStatus | null; onNewOrder: () => void; onCustomer?: (phone: string, name: string) => void }) {
   const online = status?.online ?? (typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta' | 'driver'; o: Order } | { k: 'assign'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta'; o: Order } | { k: 'driver'; o: Order; to: OrderStatus } | { k: 'assign'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [, setClock] = useState(0); useEffect(() => { const t = setInterval(() => setClock(c => c + 1), 30_000); return () => clearInterval(t); }, []);   // ages tick every 30 s
+  const comingSeen = useRef<Set<string> | null>(null);
   const ackSeen = useRef<Set<string> | null>(null); const [ackToast, setAckToast] = useState<string | null>(null);
   const reload = async () => {
     const since = new Date(Date.now() - (range === '7d' || range === 'all' ? 8 * 24 : 48) * 3600_000).toISOString();
@@ -59,6 +60,11 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
       }
     }
     ackSeen.current = acked;
+    // a pickup customer just said he is on his way → same chime + toast
+    const coming = new Set(all.filter(o => o.customer_coming_at).map(o => o.id));
+    if (comingSeen.current) { const c = all.find(o => o.customer_coming_at && !o.closed_at && !comingSeen.current!.has(o.id));
+      if (c) { newOrderChime(); setAckToast(`🚶 ${c.customer_name || ''} · ${c.number ?? c.local_number ?? ''} — ${pt('customerComing', locale)}`); setTimeout(() => setAckToast(null), 7000); } }
+    comingSeen.current = coming;
     setOrders(all);
     const ids = all.map(o => o.id);
     const ls = await boot.db.orderLines.where('order_id').anyOf(ids).toArray(); const ps = await boot.db.payments.where('order_id').anyOf(ids).toArray();
@@ -72,7 +78,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   useEffect(() => {
     if (!focus) return;
     setQ(''); setUnpaidOnly(false); setStaleOnly(false); setSel(focus.id); setFlash(focus.id);
-    boot.db.orders.get(focus.id).then(o => { if (o) setShow(s => s.has(COL_OF[o.status]) ? s : new Set([...s, COL_OF[o.status]])); });
+    boot.db.orders.get(focus.id).then(o => { if (o && focus.detail) setDialog({ k: 'detail', o }); if (o) setShow(s => s.has(COL_OF[o.status]) ? s : new Set([...s, COL_OF[o.status]])); });
     const t1 = setTimeout(() => document.querySelector(`[data-oid="${focus.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250);
     const t2 = setTimeout(() => setFlash(null), 3500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
@@ -131,7 +137,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     if (status === 'cancelled') return setDialog({ k: 'cancel', o });
     if (status === 'accepted' && o.channel === 'online') return setDialog({ k: 'eta', o });
     // delivery leaves the shop: who takes it? (a driver gets a WhatsApp with the order; the shop itself needs nothing)
-    if (status === 'out_for_delivery' && o.fulfillment === 'delivery' && !o.driver_id) return setDialog({ k: 'driver', o });   // already chosen while it was being prepared → straight on the road
+    if ((status === 'out_for_delivery' || status === 'ready') && o.fulfillment === 'delivery' && !o.driver_id) return setDialog({ k: 'driver', o, to: status });   // already chosen while it was being prepared → straight on the road
     // handover: pickup → pay dialog; delivery → cash-on-delivery settlement (what the customer paid, who delivered, driver fee)
     if (status === 'delivered' && !isPaid(o)) return setDialog({ k: 'pay', o, status, fee: num(o.courier_fee_cents) || await driverPayOf(boot.db, o) });   // the driver's pay for this delivery, from the pay rule
     await setOrderStatus(boot.db, o, status); boot.engine.poke(); await reload();
@@ -161,6 +167,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
             {!cols[c].length && <p className="muted" style={{ fontSize: 13 }}>{pt('noOrders', locale)}</p>}
             {cols[c].map(o => {
               const ls = (lines[o.id] ?? []).filter(l => !l.voided); const open = sel === o.id; const pickup = o.fulfillment === 'pickup';
+              const steps = NEXT[o.status].filter(n => n !== 'rejected' && n !== 'cancelled' && !(pickup && n === 'out_for_delivery'));
               return (
                 <article key={o.id} data-oid={o.id} className={`order-card ${open ? 'open' : ''} ${flash === o.id ? 'flash' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
                   <div className="row spread" style={{ alignItems: 'center' }}>
@@ -175,18 +182,21 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                   {mergeable[o.id] && <button className="merge-hint" onClick={e => { e.stopPropagation(); setDialog({ k: 'merge', o }); }}>🔗 {pt('omHint', locale)} ({mergeable[o.id].map(x => x.number ?? x.local_number).join('، ')}) — <u>{pt('mergeBtn', locale)}</u></button>}
                   {isStale(o) && <div className="stale-hint" onClick={e => e.stopPropagation()}>⏳ {pt('staleHint', locale)}
                     {NEXT[o.status].includes('cancelled') && <button className="link-btn" style={{ color: '#991b1b' }} onClick={() => act(o, 'cancelled')}>{pt('act_cancelled', locale)}</button>}</div>}
+                  {pickup && o.customer_coming_at && !o.closed_at && <div><span className="pill ok">🚶 {pt('customerComing', locale)} {fmtClock(o.customer_coming_at, locale)}</span></div>}
                   {o.fulfillment === 'delivery' && (o.status === 'out_for_delivery' || o.status === 'delivered' || !!o.driver_id) && <DriverLine o={o} boot={boot} locale={locale} />}
                   {o.channel === 'online' && !o.closed_at && online && <OrderThread orderId={o.id} you="shop" labels={{ title: pt('threadTitle', locale), customer: pt('threadCustomer', locale), shop: pt('threadShop', locale) }} />}
                   <div className="row spread" style={{ alignItems: 'center', marginTop: 4 }}>
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(num(o.total_lbp), boot.shop.lbp_rounding_step ?? 5000), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
-                  {(open || NEXT[o.status].some(n => n !== 'rejected' && n !== 'cancelled')) && (
+                  {(open || steps.length > 0) && (
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
-                      {NEXT[o.status].filter(n => n !== 'rejected' && n !== 'cancelled').map(n => <button key={n} className={`btn ${n === 'delivered' ? 'primary' : ''}`} onClick={() => act(o, n)}>
+                      {/* the next step is outlined; solid blue only when one step is left */}
+                      {steps.map((n, i) => <button key={n} className={`btn ${steps.length === 1 ? 'primary' : i === 0 ? 'next-step' : ''}`} onClick={() => act(o, n)}>
                         {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codSettle', locale)) : ''}
                       </button>)}
-                      {!pickup && ASSIGNABLE.includes(o.status) && (o.status === 'ready' || open || !!o.driver_id) && <button className="btn" onClick={() => setDialog({ k: 'assign', o })}>🛵 {pt(o.driver_id ? 'changeDriver' : 'chooseDriver', locale)}</button>}
+                      {(o.status === 'accepted' || o.status === 'preparing') && <button className="btn" onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>}
+                      {!pickup && ASSIGNABLE.includes(o.status) && (open || !!o.driver_id) && <button className="btn" onClick={() => setDialog({ k: 'assign', o })}>🛵 {pt(o.driver_id ? 'changeDriver' : 'chooseDriver', locale)}</button>}
                       {open && !['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
                       {open && <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>}
                       {open && <span style={{ position: 'relative' }}>
@@ -214,8 +224,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
       {dialog?.k === 'eta' && <EtaDialog locale={locale} onDone={async eta => { await setOrderStatus(boot.db, dialog.o, 'accepted', { eta_minutes: eta }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'assign' && <DriverPicker boot={boot} locale={locale} order={dialog.o} early onClose={() => setDialog(null)}
         onPick={async d => { await assignDriver(boot.db, dialog.o, d); boot.engine.poke(); setDialog(null); await reload(); }} />}
-      {dialog?.k === 'driver' && <DriverPicker boot={boot} locale={locale} order={dialog.o} onClose={() => setDialog(null)}
-        onPick={async d => { await setOrderStatus(boot.db, dialog.o, 'out_for_delivery', { driver_id: d?.id ?? null, courier_name: d?.name ?? null }); boot.engine.poke(); setDialog(null); await reload(); }} />}
+      {dialog?.k === 'driver' && <DriverPicker boot={boot} locale={locale} order={dialog.o} early={dialog.to === 'ready'} onClose={() => setDialog(null)}
+        onPick={async d => { await setOrderStatus(boot.db, dialog.o, dialog.to, { driver_id: d?.id ?? null, courier_name: d?.name ?? null }); boot.engine.poke(); setDialog(null); await reload(); }} />}
       {(dialog?.k === 'reject' || dialog?.k === 'cancel') && <ReasonDialog locale={locale} title={pt(dialog.k === 'reject' ? 'act_rejected' : 'act_cancelled', locale)} label={pt(dialog.k === 'reject' ? 'rejectReason' : 'cancelReason', locale)}
         onDone={async r => { await setOrderStatus(boot.db, dialog.o, dialog.k === 'reject' ? 'rejected' : 'cancelled', dialog.k === 'reject' ? { reject_reason: r } : { cancel_reason: r }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'merge' && mergeable[dialog.o.id] && <MergeDialog locale={locale} order={dialog.o} others={mergeable[dialog.o.id]} lines={lines} pair={mergePair} step={boot.shop.lbp_rounding_step ?? 5000}

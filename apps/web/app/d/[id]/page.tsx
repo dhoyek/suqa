@@ -45,17 +45,19 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
       {o.driver_id && ['accepted', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && (() => {
         const hm = (iso: string) => new Date(iso).toLocaleTimeString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
         const Step = ({ done, label, at }: { done: boolean; label: string; at: string | null }) => <span className={`dstep ${done ? 'done' : ''}`}>{done ? '✓' : '○'} {label}{at ? ` ${hm(at)}` : ''}</span>;
-        const next = !o.driver_ack_at ? { action: `/api/d/${o.id}/ack`, s: '', label: ar ? '✅ استلمت الطلب — أنا قادم' : '✅ Got it — on my way', hint: ar ? 'اضغط ليعرف المحل أنك رأيت الطلب وستأتي لاستلامه.' : 'Tap so the shop knows you saw it and are coming.' }
-          : !o.driver_picked_at ? { action: `/api/d/${o.id}/step`, s: 'picked', label: ar ? '📦 استلمت الطلب من المحل' : '📦 Picked up from the shop', hint: ar ? 'اضغط عند خروجك من المحل ومعك الطلب.' : 'Tap when you leave the shop with the order.' }
-          : !o.driver_delivered_at ? { action: `/api/d/${o.id}/step`, s: 'delivered', label: ar ? '🏠 سلّمت الطلب للزبون' : '🏠 Handed to the customer', hint: due > 0 ? (ar ? 'بعد استلام المبلغ من الزبون.' : 'After collecting the amount.') : (ar ? 'عند تسليم الطلب.' : 'On handover.') }
-          : null;
+        // both early taps are offered together: "got it" first (highlighted), "picked up" under it — he may skip straight to the second
+        type Tap = { action: string; s: string; label: string; hint: string };
+        const ackTap: Tap = { action: `/api/d/${o.id}/ack`, s: '', label: ar ? '✅ استلمت الرسالة — أنا قادم' : '✅ Got the message — coming', hint: ar ? 'ليعرف المحل أنك رأيت الطلب وستأتي لاستلامه.' : 'So the shop knows you saw it and are coming.' };
+        const pickTap: Tap = { action: `/api/d/${o.id}/step`, s: 'picked', label: ar ? '📦 استلمت الطلب — أنا في الطريق' : '📦 Picked up — on my way', hint: ar ? 'عند خروجك من المحل ومعك الطلب. الزبون يُبلَّغ أن طلبه في الطريق.' : 'When you leave the shop with the order. The customer is told it is on its way.' };
+        const doneTap: Tap = { action: `/api/d/${o.id}/step`, s: 'delivered', label: ar ? '🏠 سلّمت الطلب للزبون' : '🏠 Handed to the customer', hint: due > 0 ? (ar ? 'بعد استلام المبلغ من الزبون.' : 'After collecting the amount.') : (ar ? 'عند تسليم الطلب.' : 'On handover.') };
+        const taps: Tap[] = o.driver_delivered_at ? [] : o.driver_picked_at ? [doneTap] : o.driver_ack_at ? [pickTap] : [ackTap, pickTap];
         return <section className="card stack" style={{ gap: 8 }}>
           <div className="dsteps"><Step done={!!o.driver_ack_at} label={ar ? 'تأكيد' : 'Confirmed'} at={o.driver_ack_at} /><Step done={!!o.driver_picked_at} label={ar ? 'استلام' : 'Picked up'} at={o.driver_picked_at} /><Step done={!!o.driver_delivered_at} label={ar ? 'تسليم' : 'Delivered'} at={o.driver_delivered_at} /></div>
-          {next ? <form method="post" action={next.action} className="stack" style={{ gap: 6 }}>
-              {next.s && <input type="hidden" name="s" value={next.s} />}
-              <button className="btn primary big" type="submit" style={{ minHeight: 64, fontSize: 20 }}>{next.label}</button>
-              <small className="muted">{next.hint}</small>
-            </form>
+          {taps.length ? taps.map((t, i) => <form key={t.s || 'ack'} method="post" action={t.action} className="stack" style={{ gap: 4 }}>
+              {t.s && <input type="hidden" name="s" value={t.s} />}
+              <button className={`btn big ${i === 0 ? 'primary' : ''}`} type="submit" style={{ minHeight: i === 0 ? 64 : 52, fontSize: i === 0 ? 20 : 17 }}>{t.label}</button>
+              <small className="muted">{t.hint}</small>
+            </form>)
             : <div style={{ fontWeight: 700, color: '#166534' }}>✓ {ar ? 'تم التسليم — أعد المبلغ المحصّل للمحل.' : 'Delivered — bring the collected amount back to the shop.'}</div>}
         </section>;
       })()}

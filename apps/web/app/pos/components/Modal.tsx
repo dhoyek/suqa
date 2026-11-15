@@ -2,7 +2,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
 /** Minimal modal: Esc closes, backdrop click closes, body scroll locked. */
-export default function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+export default function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
   // dialogs stack (a PIN prompt over the pay dialog): only the one on top answers Esc, otherwise Esc closed the dialog underneath
   const me = useRef<HTMLDivElement>(null);
   useEffect(() => {

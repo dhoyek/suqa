@@ -472,3 +472,14 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
   .pos .card .table.stack-sm td.num { margin-inline-start: auto; text-align: end; }
   .pos .card .table.stack-sm td:empty { display: none; }
 }
+
+/* phones: the after-sale page stacks (receipt, then actions) — must come after the wide-screen rule above;
+   message pills (a whole sentence in a div/p/small) wrap instead of pushing the card wider than the screen */
+@media (max-width: 760px) {
+  .receipt-wrap { grid-template-columns: minmax(0, 1fr); justify-content: stretch; padding: 10px; height: auto; }
+  .receipt-wrap .receipt { margin-inline: auto; }
+  .receipt-actions { min-width: 0; order: -1; }               /* New sale / Print first: reachable without scrolling */
+  .receipt-actions .row { flex-wrap: wrap; }
+  .receipt-actions .row .input { flex: 1 1 140px; min-width: 0; }
+}
+.pos div.pill, .pos p.pill, .pos small.pill { white-space: normal; border-radius: 12px; max-width: 100%; }

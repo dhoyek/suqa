@@ -25,7 +25,7 @@ type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLin
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onStock, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
+export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onOrder, onStock, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onOrder?: (id: string) => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
@@ -280,7 +280,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <p style={{ margin: 0 }}>⚠ {pt('oosAsk', locale)} <span className="muted num">({dialog.avail} {pt('available', locale)})</span></p>
       </Modal>}
       {dialog?.k === 'saved' && <Modal open onClose={() => setDialog(null)} title={`✓ ${pt('orderSavedTitle', locale)} · ${dialog.order.number ?? dialog.order.local_number ?? ''}`}
-        footer={<><button className="btn" onClick={() => { setDialog(null); onGo('orders'); }}>📥 {pt('goToOrders', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { setDraft({ ...newDraft('whatsapp'), fulfillment: 'delivery' }); setDialog({ k: 'customer' }); }}>＋ {pt('newOrderBtn', locale)}</button></>}>
+        footer={<><button className="btn" onClick={() => { const id = dialog.order.id; setDialog(null); if (onOrder) onOrder(id); else onGo('orders'); }}>📥 {pt('openThisOrder', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { setDraft({ ...newDraft('whatsapp'), fulfillment: 'delivery' }); setDialog({ k: 'customer' }); }}>＋ {pt('newOrderBtn', locale)}</button></>}>
         <div className="stack" style={{ gap: 8 }}>
           <div>👤 <strong>{dialog.order.customer_name || '—'}</strong> <span className="muted" dir="ltr">{dialog.order.customer_phone}</span> · {dialog.order.fulfillment === 'pickup' ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)} · <strong className="num">{fmtUsd(num(dialog.order.total_cents))}</strong></div>
           <div className="order-items-line" style={{ maxWidth: 'none' }}>{dialog.lines.filter(l => !l.voided).map(l => `${num(l.quantity)}${l.unit ? ' ' + l.unit : '×'} ${text(l.name, locale)}`).join('، ')}</div>

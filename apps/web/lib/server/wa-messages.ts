@@ -3,7 +3,9 @@ import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type Di
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
 export type OrderEvent = {
-  event: 'order.created' | 'order.status' | 'order.edited';
+  event: 'order.created' | 'order.status' | 'order.edited' | 'order.driver';
+  /** order.status only: false = the same driver was already on the order before this change (he has his message). */
+  driver_changed?: boolean;
   channel?: 'online' | 'walkin' | 'whatsapp' | 'phone';
   old_status?: string | null;
   order: { id: string; number: string; status: string; basket_id?: string | null; fulfillment?: 'delivery' | 'pickup'; notify_customer?: boolean; customer_name: string; customer_phone: string; customer_notes?: string | null;

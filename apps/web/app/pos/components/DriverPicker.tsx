@@ -6,7 +6,7 @@ import type { Booted } from '../lib/boot';
 import Modal from './Modal';
 
 /** "مين عم يوصّل؟" — one tap sends the order out: a driver (who gets the order on WhatsApp), or the shop itself. */
-export default function DriverPicker({ boot, locale, order, onPick, onClose }: { boot: Booted; locale: L; order: Order; onPick: (d: Driver | null) => void; onClose: () => void }) {
+export default function DriverPicker({ boot, locale, order, early, onPick, onClose }: { early?: boolean; boot: Booted; locale: L; order: Order; onPick: (d: Driver | null) => void; onClose: () => void }) {
   const [drivers, setDrivers] = useState<Driver[]>([]); const [adding, setAdding] = useState(false);
   const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [err, setErr] = useState<string | null>(null);
   const load = () => availableDrivers(boot.db).then(setDrivers);
@@ -19,7 +19,7 @@ export default function DriverPicker({ boot, locale, order, onPick, onClose }: {
   return (
     <Modal open onClose={onClose} title={`${pt('whoDelivers', locale)} · ${order.number ?? order.local_number ?? ''}`}
       footer={<><button className="btn" onClick={() => setAdding(a => !a)}>＋ {pt('newDriver', locale)}</button><span style={{ flex: 1 }} /><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button></>}>
-      <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>{online ? pt('driverGetsWa', locale) : pt('driverOffline', locale)}</p>
+      <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>{online ? pt(early ? 'driverGetsWaEarly' : 'driverGetsWa', locale) : pt('driverOffline', locale)}</p>
       {adding && <div className="row" style={{ gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
         <input className="input" placeholder={pt('driverFullName', locale)} value={name} onChange={e => setName(e.target.value)} style={{ flex: 1, minWidth: 120 }} autoFocus />
         <input className="input" dir="ltr" inputMode="tel" placeholder="70 123 456" value={phone} onChange={e => setPhone(e.target.value)} style={{ flex: 1, minWidth: 120 }} />

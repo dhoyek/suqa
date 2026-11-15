@@ -58,6 +58,8 @@ export default function Shell(props: {
   const [stockFocus, setStockFocus] = useState<{ id: string; n: number } | null>(null);
   const [purPreset, setPurPreset] = useState<{ supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null>(null);
   const canStock = viewsFor(roleOf(staff)).includes('stock');
+  const [orderFocus, setOrderFocus] = useState<{ id: string; n: number } | null>(null);
+  const openOrder = (id: string) => { setOrderFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('orders'); };
   const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
   const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
@@ -83,8 +85,8 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <Sell {...props} onGo={setView} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} />}
-        {view === 'orders' && <OrdersView {...props} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}
+        {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} />}
+        {view === 'orders' && <OrdersView {...props} focus={orderFocus} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}
         {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
         {view === 'items' && <ItemsView {...props} />}

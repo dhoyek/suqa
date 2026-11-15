@@ -26,6 +26,20 @@ export async function setOrderStatus(db: PosDb, order: Order, status: OrderStatu
   return updated;
 }
 
+/** Line a driver up for a delivery that is still in the shop (null = the shop delivers itself). The status does not move;
+ *  the server messages the driver so he can come for it, and "out for delivery" later needs no second choice. */
+export async function assignDriver(db: PosDb, order: Order, driver: { id: string; name: string } | null): Promise<Order> {
+  // a different driver starts clean: the confirmations belonged to the one before
+  const changed = (driver?.id ?? null) !== (order.driver_id ?? null);
+  const updated: Order = { ...order, driver_id: driver?.id ?? null, courier_name: driver?.name ?? null,
+    ...(changed ? { driver_ack_at: null, driver_picked_at: null, driver_delivered_at: null } : {}), updated_at: new Date().toISOString() };
+  await db.transaction('rw', [db.orders, db.outbox], async () => {
+    await db.orders.put(updated);
+    await enqueue(db, 'order.status', { id: order.id, status: order.status, driver_id: driver?.id ?? null });
+  });
+  return updated;
+}
+
 /** For an added line (`product`), the optional fields carry what the cart line had: its note, a changed price and a line discount. */
 export interface LineEdit { id?: string; qty?: number; voided?: boolean; void_reason?: string; product?: Product; new_qty?: number; notes?: string | null; unit_price_cents?: number; unit_price_lbp?: number; discount_cents?: number }
 /** Edit lines of an open order: qty change, void, or add (substitute). Recomputes totals locally; the server does the same and notifies the customer. */

@@ -51,11 +51,15 @@ export async function POST(req: Request) {
   } else if (e.event === 'order.status') {
     if (shouldNotifyCustomer(e)) to(e.order.customer_phone, customerStatus(e, origin), 'customer', customerStatusTpl(e, origin));
     // the shop's own driver (drivers-lite): assigned together with "out for delivery"
-    if (e.order.status === 'out_for_delivery' && e.driver?.phone && e.old_status !== 'out_for_delivery') to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
+    // … unless he was already lined up (and messaged) while the order was still in the shop — see 'order.driver' below
+    if (e.order.status === 'out_for_delivery' && e.driver?.phone && e.old_status !== 'out_for_delivery' && e.driver_changed !== false) to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
     if (e.order.status === 'ready' && e.order.fulfillment !== 'pickup' && e.tenant?.courier_enabled && e.tenant.delivery_mode === 'courier') {
       const msg = courierReady(e, origin); const tpl = courierReadyTpl(e, origin);
       for (const p of new Set(e.couriers ?? [])) to(p, msg, 'courier', tpl);
     }
+  } else if (e.event === 'order.driver') {
+    // a driver chosen (or changed) without a status change: he gets the order now so he can come for it
+    if (e.driver?.phone) to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
   }
   await Promise.all(sends);
   return NextResponse.json({ ok: true, sent: sends.length });

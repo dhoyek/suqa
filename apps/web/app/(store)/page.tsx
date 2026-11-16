@@ -14,7 +14,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
   const { cats, shops } = await getHomeData(tenant.id);
   const L = await getLocale(tenant);
   const cards = shops.map(s => ({
-    id: s.id, slug: s.slug, name: s.name, known_as: (s as { known_as?: string | null }).known_as ?? null, description: s.description, category_id: s.category_id, min_order_usd: Number(s.min_order_usd), logo_url: s.logo_url ?? null,
+    id: s.id, slug: s.slug, name: s.name, known_as: (s as { known_as?: string | null }).known_as ?? null, known_as_en: (s as { known_as_en?: string | null }).known_as_en ?? null, description: s.description, category_id: s.category_id, min_order_usd: Number(s.min_order_usd), logo_url: s.logo_url ?? null,
     open: isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone),
   }));
   return <ShopGrid cats={cats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id}

@@ -20,7 +20,8 @@ create table if not exists suqa.shops (
   pickup_enabled   boolean not null default true,              -- customers may collect from the shop (20_fulfillment)
   -- POS (21_pos)
   pos_enabled          boolean not null default false,         -- tenant switches the POS on per shop
-  known_as             text check (known_as is null or length(known_as) <= 60),   -- 69: what people call the shop (often the owner)
+  known_as             text check (known_as is null or length(known_as) <= 60),   -- 69: what people call the shop (often the owner), Arabic
+  known_as_en          text check (known_as_en is null or length(known_as_en) <= 60),   -- 72: the same in English
   default_delivery_fee_usd numeric(12,2) not null default 0,     -- pre-filled delivery fee for WhatsApp/phone orders (28_pos_customers)
   default_margin_pct   numeric(5,2) not null default 0,            -- proposes selling price from cost (31_pos_m11)
   scale_prefix         text,                                       -- weighed-item barcode prefix, null = off (31_pos_m11)

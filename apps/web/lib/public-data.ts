@@ -12,10 +12,11 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
   const list = (c: string) => sb.from('shops').select(c).eq('tenant_id', tenantId).eq('status', 'active').order('sort_order');
   const [{ data: cats }, first] = await Promise.all([
     sb.from('categories').select('id,name').eq('tenant_id', tenantId).order('sort_order'),
-    list(`${cols},known_as`),
+    list(`${cols},known_as,known_as_en`),
   ]);
-  // known_as arrives with schema 69: a database that does not have it yet still lists its shops
-  const shops = first.error ? (await list(cols)).data : first.data;
+  // known_as arrives with schema 69 and known_as_en with 72: a database that does not have them yet still lists its shops
+  let shops = first.data;
+  if (first.error) { const second = await list(`${cols},known_as`); shops = second.error ? (await list(cols)).data : second.data; }
   return { cats: (cats as Category[] | null) ?? [], shops: (shops as Shop[] | null) ?? [] };
 }, ['home-data'], { revalidate: 60, tags: ['home'] });
 

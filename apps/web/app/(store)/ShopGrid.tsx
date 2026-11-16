@@ -6,7 +6,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import FavoriteButton from '@/components/FavoriteButton';
 
 type Cat = { id: string; name: LocalizedText };
-type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; logo_url: string | null };
+type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; logo_url: string | null };
 
 // Category chips filter in the browser: the home page is fetched once and every tap is instant.
 // The selected category is mirrored into ?c= so links/refresh keep it, without a server round-trip.
@@ -35,7 +35,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
   const list = useMemo(() => {
     const base = c === 'fav' ? shops.filter(s => favs?.has(s.id)) : c ? shops.filter(s => s.category_id === c) : shops;
     const n = fold(q.trim()); if (!n) return base;
-    return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
+    return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.known_as_en, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c, shops, favs, q]);
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
@@ -60,7 +60,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
                     <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs?.has(s.id)} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
                   </span>
                 </div>
-                {s.known_as && <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-primary)' }}>{s.known_as}</div>}
+                {(L === 'en' ? s.known_as_en || s.known_as : s.known_as || s.known_as_en) && <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-primary)' }}>{L === 'en' ? s.known_as_en || s.known_as : s.known_as || s.known_as_en}</div>}
                 <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
               </div>
             </div>

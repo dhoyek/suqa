@@ -21,7 +21,7 @@ export default function ShopEditor(props: {
   const sb = useMemo(() => supabaseBrowser(), []);
   const notify = useNotify();
   const [f, setF] = useState({
-    name_ar: shop?.name.ar ?? '', name_en: shop?.name.en ?? '', known_as: (shop as unknown as { known_as?: string | null } | null)?.known_as ?? '', slug: shop?.slug ?? '', category_id: shop?.category_id ?? categories[0]?.id ?? '',
+    name_ar: shop?.name.ar ?? '', name_en: shop?.name.en ?? '', known_as: (shop as unknown as { known_as?: string | null } | null)?.known_as ?? '', known_as_en: (shop as unknown as { known_as_en?: string | null } | null)?.known_as_en ?? '', slug: shop?.slug ?? '', category_id: shop?.category_id ?? categories[0]?.id ?? '',
     phone: shop?.phone ?? '', whatsapp: shop?.whatsapp ?? '', address_text: shop?.address_text ?? '', min_order_usd: String(shop?.min_order_usd ?? 0),
     prep_minutes: String(shop?.prep_minutes ?? 30), commission_rate: shop?.commission_rate == null ? '' : String(Number(shop.commission_rate) * 100),
   });
@@ -50,6 +50,7 @@ export default function ShopEditor(props: {
       tenant_id: tenantId, slug: f.slug || slugify(f.name_en || f.name_ar), name: { ar: f.name_ar.trim() || f.name_en.trim(), en: f.name_en.trim() || f.name_ar.trim() },
       category_id: f.category_id || null,
       // only sent when used, so saving still works on a database without the column (schema 69)
+      ...(f.known_as_en.trim() || (shop as unknown as { known_as_en?: string | null } | null)?.known_as_en ? { known_as_en: f.known_as_en.trim().slice(0, 60) || null } : {}),
       ...(f.known_as.trim() || (shop as unknown as { known_as?: string | null } | null)?.known_as ? { known_as: f.known_as.trim().slice(0, 60) || null } : {}),
       phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
       min_order_usd: Number(f.min_order_usd) || 0, prep_minutes: Number(f.prep_minutes) || 30,
@@ -109,7 +110,10 @@ export default function ShopEditor(props: {
           <div style={{ flex: 1 }}><label className="label">{labels.category}</label>
             <select className="input" value={f.category_id} onChange={e => setF({ ...f, category_id: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         </div>
-        <div>{field('known_as', ar ? 'معروف باسم (اختياري) — مثلاً: أبو إيلي، عند جورج' : 'Known as (optional) — e.g. the owner’s name', 'rtl')}
+        <div><div className="row" style={{ alignItems: 'stretch' }}>
+          <div style={{ flex: 1 }}>{field('known_as', ar ? 'معروف باسم — عربي (اختياري) — مثلاً: أبو إيلي' : 'Known as — Arabic (optional)', 'rtl')}</div>
+          <div style={{ flex: 1 }}>{field('known_as_en', ar ? 'معروف باسم — إنكليزي (اختياري) — مثلاً: Abou Elie' : 'Known as — English (optional) — e.g. Abou Elie', 'ltr')}</div>
+        </div>
           <small className="muted">{ar ? 'يظهر تحت اسم المتجر في القائمة ويُبحث به. اتركه فارغاً إن لم يرغب صاحب المتجر بإظهار اسمه.' : 'Shown under the shop name in the list and searchable. Leave empty if the owner prefers not to show a name.'}</small></div>
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}>{field('phone', labels.phone, 'ltr')}</div>

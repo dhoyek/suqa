@@ -29,13 +29,14 @@ export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   if (!process.env.WHATSAPP_WABA_ID || !process.env.WHATSAPP_TOKEN) return NextResponse.json({ error: 'WHATSAPP_WABA_ID / WHATSAPP_TOKEN missing' }, { status: 500 });
   const waba = new URL(req.url).searchParams.get('waba') || process.env.WHATSAPP_WABA_ID;
+  const origin = `https://${req.headers.get('x-forwarded-host') ?? new URL(req.url).host}`;   // button links point at the site that submits
   const have = await existing(waba).catch(() => []);
   const results: Record<string, unknown> = {};
   for (const d of TEMPLATES) {
     if (have.some(t => t.name === d.name && t.language === d.language)) { results[d.name] = 'exists'; continue; }
     const res = await fetch(`${GRAPH}/${waba}/message_templates`, {
       method: 'POST', headers: { ...auth(), 'content-type': 'application/json' },
-      body: JSON.stringify({ name: d.name, language: d.language, category: d.category, components: templateComponents(d) }),
+      body: JSON.stringify({ name: d.name, language: d.language, category: d.category, components: templateComponents(d, origin) }),
     });
     const json = await res.json().catch(() => ({}));
     results[d.name] = res.ok ? json : { error: json.error?.error_user_msg ?? json.error?.message ?? json };

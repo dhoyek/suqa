@@ -139,7 +139,7 @@ export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   // the template already says "طلبك رقم {{2}}" and ends with "شكراً لتعاملك معنا" → drop the number and the thanks from the status line
   const line = text.split('\n')[0].split(` ${o.number}`).join('').replace(/\s*(شكراً!|Thank you!)\s*$/, '').trim();
   // compact template with a tracking button; the older order_status template is the fallback until v2 is approved
-  return { name: 'order_update_v2', lang: 'ar', params: [shop, P(o.number), P(line)], button: o.basket_id ?? o.id,
+  return { name: 'order_update_v3', lang: 'ar', params: [shop, P(o.number), P(line)], button: o.basket_id ?? o.id,
     fallback: { name: 'order_status', lang: 'ar', params: [shop, P(o.number), P(text.split('\n')[0]), P(link)] } };
 }
 /** Confirmation for an order the shop typed in from the POS (WhatsApp / phone): it is already accepted, so the customer gets the accepted line. */
@@ -156,7 +156,7 @@ export function customerEditedTpl(e: OrderEvent, origin: string): Tpl {
   const link = o.basket_id ? `${origin}/orders/b/${o.basket_id}` : `${origin}/orders`;
   const summary = `${ar ? '✏️ تم تعديل الطلب' : '✏️ Order updated'}${o.shop_notes ? ` (${o.shop_notes})` : ''}: ${itemsOneLine(e, L)} ${ar ? RLM : ''}— ${ar ? RLM : ''}${money(e, o.total_usd)}`;
   const shop = P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name);
-  return { name: 'order_update_v2', lang: 'ar', params: [shop, P(o.number), P(summary)], button: o.basket_id ?? o.id, fallback: { name: 'order_status', lang: 'ar', params: [shop, P(o.number), P(summary), P(link)] } };
+  return { name: 'order_update_v3', lang: 'ar', params: [shop, P(o.number), P(summary)], button: o.basket_id ?? o.id, fallback: { name: 'order_status', lang: 'ar', params: [shop, P(o.number), P(summary), P(link)] } };
 }
 export function courierReadyTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order; const a = o.address as Record<string, unknown>;
@@ -191,6 +191,6 @@ export function driverDispatchTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const ar = L === 'ar'; const o = e.order;
   const dest = [addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ');
   const shopPhone = tel(e.shop?.whatsapp || e.shop?.phone);
-  return { name: 'driver_dispatch', lang: 'ar', params: [P(`${e.shop ? t(e.shop.name, L) : e.tenant?.brand_name}${shopPhone ? ` ${shopPhone}` : ''}`), P(o.number), P(`${o.customer_name || ''} ${tel(o.customer_phone)}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)} (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})`)], button: `d-${o.id}`,
+  return { name: 'driver_dispatch_v2', lang: 'ar', params: [P(`${e.shop ? t(e.shop.name, L) : e.tenant?.brand_name}${shopPhone ? ` ${shopPhone}` : ''}`), P(o.number), P(`${o.customer_name || ''} ${tel(o.customer_phone)}`.trim()), P(dest || '—'), P(`${itemsOneLine(e, L)} — ${money(e, o.total_usd)} (${ar ? 'توصيل' : 'delivery'} ${money(e, o.delivery_fee_usd)})`)], button: `d-${o.id}`,
     fallback: { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(`${o.customer_name || ''} ${tel(o.customer_phone)} — ${dest || ''} — ${money(e, o.total_usd)}`), P(`${origin}/d/${o.id}`)] } };
 }

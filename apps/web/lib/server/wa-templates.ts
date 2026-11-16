@@ -2,7 +2,7 @@ import 'server-only';
 
 // Meta utility templates used for order notifications (mirrors docs/whatsapp-templates.md).
 // Submitted with POST /api/wa/templates (secret-protected); Meta reviews them, usually within minutes.
-export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[]; button?: { text: string; url: string; example: string } };
+export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[]; button?: { text: string; /** path on this site, e.g. /t/{{1}} */ url: string; example: string } };
 
 export const TEMPLATES: TemplateDef[] = [
   // Sign-in code. Meta fixes the wording of authentication templates; we only choose the options
@@ -25,24 +25,24 @@ export const TEMPLATES: TemplateDef[] = [
   },
   {
     // POS receipt (M2). v1 ('receipt') was rejected INVALID_FORMAT with the link as a body variable; v2 puts it in a URL button.
-    name: 'receipt_v2', language: 'ar', category: 'UTILITY',
+    name: 'receipt_v3', language: 'ar', category: 'UTILITY',
     text: 'شكراً لتسوّقكم من {{1}}. هذا إيصال عمليّة الشراء رقم {{2}}.\nالأصناف التي اشتريتموها: {{3}}\nالمبلغ الإجمالي بالدولار والليرة: {{4}}\nطريقة الدفع المستخدمة: {{5}}\nيمكنكم فتح الإيصال الكامل وحفظه من الزر أدناه. نتمنى أن نراكم قريباً.',
     samples: ['سمانة أبو إيلي', 'BAT-000021', '3× لبنة بلدية، 1× خبز عربي', '$10.50 · 939,750 ل.ل.', 'نقدي $10 + 100,000 ل.ل.'],
-    button: { text: 'عرض الإيصال', url: 'https://suqa-dev.netlify.app/r/{{1}}', example: 'https://suqa-dev.netlify.app/r/0193a000-0000-7000-8000-00000000c001' },
+    button: { text: 'عرض الإيصال', url: '/r/{{1}}', example: '/r/0193a000-0000-7000-8000-00000000c001' },
   },
   {
     // Compact order update (replaces order_status): one line of status, tracking button. {{1}} shop, {{2}} order no, {{3}} status line.
-    name: 'order_update_v2', language: 'ar', category: 'UTILITY',
+    name: 'order_update_v3', language: 'ar', category: 'UTILITY',
     text: 'مرحباً، تحديث من {{1}} بخصوص طلبك رقم {{2}}:\n{{3}}\nشكراً لتعاملك معنا.',
     samples: ['سمانة أبو إيلي', 'BAT-000030', '✅ تم قبول طلبك: 2× لبنة، 1× خبز — $8.50 — توصيل خلال 30 دقيقة'],
-    button: { text: 'تتبّع الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
+    button: { text: 'تتبّع الطلب', url: '/t/{{1}}', example: '/t/0193a000-0000-7000-8000-00000000c001' },
   },
   {
     // Drivers-lite: the shop's driver gets the order when it is sent out with him. {{1}} shop, {{2}} order no, {{3}} customer, {{4}} address, {{5}} items + amount.
-    name: 'driver_dispatch', language: 'ar', category: 'UTILITY',
+    name: 'driver_dispatch_v2', language: 'ar', category: 'UTILITY',
     text: 'مرحباً، لديك طلب للتوصيل من {{1}} رقم {{2}}.\nالزبون: {{3}}\nالعنوان: {{4}}\nالطلب: {{5}}\nشكراً لك.',
     samples: ['سمانة أبو إيلي', 'BAT-000030', 'Dan +96170483148', 'بيت داني حويك، حي الحرية — https://maps.google.com/?q=34.25,35.66', '2× لبنة، 1× خبز — $8.50'],
-    button: { text: 'تفاصيل الطلب', url: 'https://suqa-dev.netlify.app/t/{{1}}', example: 'https://suqa-dev.netlify.app/t/0193a000-0000-7000-8000-00000000c001' },
+    button: { text: 'تفاصيل الطلب', url: '/t/{{1}}', example: '/t/0193a000-0000-7000-8000-00000000c001' },
   },
   {
     // POS M9: ask a customer for their location pin (delivery orders typed in at the POS).
@@ -58,13 +58,15 @@ export const TEMPLATES: TemplateDef[] = [
 ];
 
 /** Graph API components for a template definition. Authentication templates have a fixed Meta-defined body. */
-export function templateComponents(d: TemplateDef) {
+export function templateComponents(d: TemplateDef, origin: string) {
   if (d.category === 'AUTHENTICATION') return [
     { type: 'BODY', add_security_recommendation: true },
     { type: 'FOOTER', code_expiration_minutes: 5 },
     { type: 'BUTTONS', buttons: [{ type: 'OTP', otp_type: 'COPY_CODE' }] },
   ];
   const comps: unknown[] = [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }];
-  if (d.button) comps.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: d.button.text, url: d.button.url, example: [d.button.example] }] });
+  // A URL button's domain is fixed inside the template at Meta, so it is the site that submits it (each site has its own
+  // WhatsApp account: dev → test number, prod → the real one). v3 / v2 names: the earlier ones were created with the dev address.
+  if (d.button) comps.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: d.button.text, url: origin + d.button.url, example: [origin + d.button.example] }] });
   return comps;
 }

@@ -1,5 +1,5 @@
 'use client';
-import { LS_SHOP } from './lib/boot';
+import { LS_SHOP, myMemberships } from './lib/boot';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { META, daysOffline, getMeta, hashPin, isValidPin, offlineUnlockAllowed, verifyPin, type Staff, type SyncStatus } from '@suqa/pos-core';
@@ -85,7 +85,12 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
           <span className="muted" style={{ fontSize: 14 }}>{pt('noStaffHint', locale)}</span>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <a className="btn" href={`/admin/shops/${boot.shop.id}`}>👥 {pt('noStaffAdd', locale)}</a>
-            <button className="btn ghost" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>
+            <button className="btn ghost" onClick={async () => {
+              // only leave this shop when there is another one with the POS switched on; otherwise say so
+              const others = (await myMemberships(sb).catch(() => [])).filter(m => m.shop_id !== boot.shop.id);
+              if (!others.length) { setErr(pt('noOtherShop', locale)); return; }
+              localStorage.removeItem(LS_SHOP); window.location.reload();
+            }}>🏪 {pt('otherShop', locale)}</button>
           </div>
         </div>}
         <div className="staff-tiles">

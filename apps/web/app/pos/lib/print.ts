@@ -43,7 +43,7 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
   const no = opts.serverNumber ?? o.number ?? o.local_number ?? '';
   const rows = lines.filter(l => !l.voided).map(l => {
     const unit = l.price_currency === 'usd' ? fmtUsd(num(l.unit_price_cents)) : fmtLbp(num(l.unit_price_lbp), L);
-    return `<tr><td class="q">${num(l.quantity)}${l.unit ? esc(l.unit) : '×'}</td><td>${esc(text(l.name, L))}${l.discount_cents ? ` <small>−${fmtUsd(num(l.discount_cents))}</small>` : ''}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}<div class="u">${ltr(unit)}</div></td><td class="a">${ltr(fmtUsd(num(l.line_total_cents)))}</td></tr>`;
+    return `<tr><td class="q"><i>${esc(sheetQty(num(l.quantity), l.unit))}</i></td><td>${esc(text(l.name, L))}${l.discount_cents ? ` <small>−${fmtUsd(num(l.discount_cents))}</small>` : ''}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}<div class="u">${ltr(unit)}</div></td><td class="a">${ltr(fmtUsd(num(l.line_total_cents)))}</td></tr>`;
   }).join('');
   const pays = payments.map(p => `<div class="ft">${esc(pt(p.tender, L))}${p.unpaid_name ? ' · ' + esc(p.unpaid_name) : ''}: ${ltr(p.currency === 'lbp' ? fmtLbp(num(p.amount), L) : fmtUsd(num(p.amount)))}</div>`).join('');
   const change = num(o.change_usd_cents) || num(o.change_lbp) ? `<div class="ft">${esc(pt('change', L))}: ${ltr(num(o.change_usd_cents) ? fmtUsd(num(o.change_usd_cents)) : fmtLbp(num(o.change_lbp), L))}</div>` : '';
@@ -60,12 +60,15 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
     <div class="ft">${esc(shop.receipt_footer || pt('thanks', L))}</div>${cutBlock(st)}</div>`;
 }
 
-/** Order sheet for the packer / kitchen: big items with notes, no prices. */
+/** Quantity as the packer reads it: "2 x", "1 pack", and "1 x 400 g" when the unit is itself a size (never "1400 g"). */
+const sheetQty = (q: number, unit?: string | null) => { const u = (unit ?? '').trim(); return !u ? `${q} x` : /^\d/.test(u) ? `${q} x ${u}` : `${q} ${u}`; };   // letter x: the × sign flips sides on an RTL receipt
+
+/** Order sheet for the packer / kitchen: items with notes and a tick box, no prices. Sized to fit a 58 mm roll. */
 export function orderSheetHtml(o: Order, lines: OrderLine[], shop: Shop, L: L, st: PrintSettings): string {
   const rows = lines.filter(l => !l.voided).map(l => `<tr><td class="q">${num(l.quantity)}${l.unit ? esc(l.unit) : '×'}</td><td>${esc(text(l.name, L))}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}</td><td class="a">☐</td></tr>`).join('');
   const a = (o.address ?? {}) as Record<string, unknown>;
   const addr = [a.line1, a.line2, a.area, a.city].filter(Boolean).map(String).join(', ');
-  return `<div class="vch">
+  return `<div class="vch sheet">
     <div class="club">${esc(text(shop.name, L))}</div><div class="ev">${esc(pt('printSheet', L))}</div><hr>
     <div class="no">${esc(o.number ?? o.local_number ?? '')}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${o.needed_at ? ' · ⏰ ' + esc(fmtDT(o.needed_at, L)) : ''}</div>
     <div class="kiosk">${o.fulfillment === 'pickup' ? '🛍 ' + esc(pt('pickupBadge', L)) : '🛵 ' + esc(pt('deliveryBadge', L))}</div>

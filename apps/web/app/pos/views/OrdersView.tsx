@@ -177,7 +177,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                 {firstLater && <div className="later-divider">📅 {pt('laterGroup', locale)}</div>}
                 <article data-oid={o.id} className={`order-card ${later ? 'later' : ''} ${open ? 'open' : ''} ${flash === o.id ? 'flash' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
                   <div className="row spread" style={{ alignItems: 'center' }}>
-                    <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}{!o.closed_at && <AgePill o={o} prep={num((boot.shop as unknown as { prep_minutes?: number }).prep_minutes) || 30} locale={locale} />}</strong>
+                    <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}{!o.needed_at && !o.closed_at && <span className="pill" style={{ marginInlineStart: 6 }} title={pt('expectedHint', locale)}>🕒 {pt('asap', locale)} · ~{expectedLabel(o, num((boot.shop as unknown as { prep_minutes?: number }).prep_minutes) || 30, locale)}</span>}{!o.closed_at && <AgePill o={o} prep={num((boot.shop as unknown as { prep_minutes?: number }).prep_minutes) || 30} locale={locale} />}</strong>
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <span className="row" style={{ gap: 6, display: 'inline-flex', alignItems: 'center' }}><span dir="ltr">{o.customer_phone}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(o.customer_phone)}`} title={pt('call', locale)} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(o.customer_phone)}`} target="_blank" rel="noreferrer" title="WhatsApp" onClick={e => e.stopPropagation()}>💬</a></span>}</div>
@@ -370,6 +370,13 @@ function neededLabel(iso: string, locale: L): string {
   const t = d.toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) + (sameDay ? '' : ' ' + d.toLocaleDateString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }));
   const rel = Math.abs(diff) >= 120 ? `${Math.round(Math.abs(diff) / 60)} ${pt('hour', locale)}` : `${Math.abs(diff)} ${pt('min', locale)}`;
   return diff < 0 ? `${t} · ${pt('late', locale)} ${rel}` : `${t} · ${pt('inTime', locale)} ${rel}`;
+}
+
+/** No time was asked for: when the customer can expect it — order time + the order's estimate (or the shop's preparation time). */
+function expectedLabel(o: Order, prep: number, locale: L): string {
+  const d = new Date(new Date(o.placed_at).getTime() + (Number((o as unknown as { eta_minutes?: number | null }).eta_minutes) || prep) * 60000);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) + (sameDay ? '' : ' ' + d.toLocaleDateString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }));
 }
 
 /** wa.me / tel want the international number without '+': 70 483 148 → 96170483148. */

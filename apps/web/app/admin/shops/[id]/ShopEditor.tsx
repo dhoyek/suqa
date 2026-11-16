@@ -159,7 +159,7 @@ export default function ShopEditor(props: {
             </div>
           ))}
           <div className="row">
-            <input className="input" style={{ flex: 1 }} dir="ltr" type="text" inputMode="email" placeholder={ar ? 'رقم واتساب (70 123 456) أو بريد إلكتروني' : 'WhatsApp number (70 123 456) or email'} value={email} onChange={e => setEmail(e.target.value)} />
+            <input className="input" style={{ flex: 1 }} dir="ltr" type="text" inputMode="email" placeholder={ar ? 'رقم واتساب (⁦70 123 456⁩) أو بريد إلكتروني' : 'WhatsApp number (70 123 456) or email'} value={email} onChange={e => setEmail(e.target.value)} />
             <select className="input" style={{ width: 'auto' }} value={role} onChange={e => setRole(e.target.value as any)}><option value="owner">{labels.owner}</option><option value="staff">{labels.staff}</option></select>
             <button className="btn" onClick={addMember} disabled={!email.trim()}>+</button>
           </div>

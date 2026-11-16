@@ -48,7 +48,10 @@ export default function ShopEditor(props: {
     setBusy(true); setMsg(null);
     const row = {
       tenant_id: tenantId, slug: f.slug || slugify(f.name_en || f.name_ar), name: { ar: f.name_ar.trim() || f.name_en.trim(), en: f.name_en.trim() || f.name_ar.trim() },
-      category_id: f.category_id || null, known_as: f.known_as.trim().slice(0, 60) || null, phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
+      category_id: f.category_id || null,
+      // only sent when used, so saving still works on a database without the column (schema 69)
+      ...(f.known_as.trim() || (shop as unknown as { known_as?: string | null } | null)?.known_as ? { known_as: f.known_as.trim().slice(0, 60) || null } : {}),
+      phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
       min_order_usd: Number(f.min_order_usd) || 0, prep_minutes: Number(f.prep_minutes) || 30,
       commission_rate: f.commission_rate.trim() === '' ? null : Number(f.commission_rate) / 100, location: pointToEwkt(loc),
     };

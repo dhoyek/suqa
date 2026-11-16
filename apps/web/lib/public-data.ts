@@ -8,10 +8,14 @@ const anon = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.e
 
 export const getHomeData = unstable_cache(async (tenantId: string) => {
   const sb = anon();
-  const [{ data: cats }, { data: shops }] = await Promise.all([
+  const cols = 'id,slug,name,description,category_id,min_order_usd,opening_hours,is_open_override,logo_url';
+  const list = (c: string) => sb.from('shops').select(c).eq('tenant_id', tenantId).eq('status', 'active').order('sort_order');
+  const [{ data: cats }, first] = await Promise.all([
     sb.from('categories').select('id,name').eq('tenant_id', tenantId).order('sort_order'),
-    sb.from('shops').select('id,slug,name,known_as,description,category_id,min_order_usd,opening_hours,is_open_override,logo_url').eq('tenant_id', tenantId).eq('status', 'active').order('sort_order'),
+    list(`${cols},known_as`),
   ]);
+  // known_as arrives with schema 69: a database that does not have it yet still lists its shops
+  const shops = first.error ? (await list(cols)).data : first.data;
   return { cats: (cats as Category[] | null) ?? [], shops: (shops as Shop[] | null) ?? [] };
 }, ['home-data'], { revalidate: 60, tags: ['home'] });
 

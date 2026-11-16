@@ -39,7 +39,7 @@ export default function CouriersList({ tenantId, canEdit, initial, locale: L, la
       <strong>🛵 {labels.couriers}</strong>
       {list.map(c => (
         <div className="row spread" key={c.user_id}>
-          <span>{c.full_name || '—'} <span className="muted" style={{ fontSize: 13 }}>{c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
+          <span>{c.full_name || '—'} <span className="muted" style={{ fontSize: 13 }}>{c.email}{c.phone ? <> · <bdi dir="ltr">{c.phone}</bdi></> : ''}</span>
             {c.active_deliveries > 0 && <span className="badge out_for_delivery" style={{ marginInlineStart: 6 }}>{c.active_deliveries} {labels.activeDeliveries}</span>}</span>
           <span className="row" style={{ gap: 6 }}>
             <button className={`switch ${c.is_active ? 'on' : ''}`} aria-pressed={c.is_active} aria-label={labels.active} disabled={!canEdit} onClick={() => toggle(c)} />

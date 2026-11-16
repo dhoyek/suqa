@@ -27,7 +27,7 @@ export default function ShopsList({ initial, locale: L, labels }: { initial: Row
         <div className="product" key={s.id}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Link href={`/admin/shops/${s.id}`} className="name" style={{ textDecoration: 'none' }}>{tr(s.name, L)}</Link>
-            <div className="muted" style={{ fontSize: 13 }}>{s.categoryName}{s.whatsapp ? ` · ${s.whatsapp}` : ''}{s.min_order_usd > 0 ? ` · ${labels.minOrder} $${Number(s.min_order_usd).toFixed(0)}` : ''}</div>
+            <div className="muted" style={{ fontSize: 13 }}>{s.categoryName}{s.whatsapp ? <> · <bdi dir="ltr">{s.whatsapp}</bdi></> : ''}{s.min_order_usd > 0 ? ` · ${labels.minOrder} $${Number(s.min_order_usd).toFixed(0)}` : ''}</div>
           </div>
           <span className={`badge ${badge(s.status)}`}>{(SHOP_STATUS_LABEL[s.status] as any)[L]}</span>
           <div className="row">

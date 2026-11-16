@@ -37,7 +37,7 @@ export default function MembersList({ tenantId, canEdit, initial, labels }: { te
       <section className="card stack">
         {staff.map(p => (
           <div className="row spread" key={p.user_id}>
-            <span>{p.full_name || '—'} <span className="muted" style={{ fontSize: 13 }}>{p.email}{p.phone ? ` · ${p.phone}` : ''}</span></span>
+            <span>{p.full_name || '—'} <span className="muted" style={{ fontSize: 13 }}>{p.email}{p.phone ? <> · <bdi dir="ltr">{p.phone}</bdi></> : ''}</span></span>
             <span className="row"><span className="badge">{p.tenant_role === 'admin' ? labels.tenantAdmin : labels.tenantOps}</span>{canEdit && <button className="btn ghost muted" onClick={() => remove(p)}>✕</button>}</span>
           </div>
         ))}
@@ -52,7 +52,7 @@ export default function MembersList({ tenantId, canEdit, initial, labels }: { te
       <section className="card">
         {shopPeople.map(p => (
           <div className="product" key={`${p.user_id}-${p.shop_id}`}>
-            <div style={{ flex: 1 }}><div className="name">{p.full_name || '—'}</div><div className="muted" style={{ fontSize: 13 }}>{p.email}{p.phone ? ` · ${p.phone}` : ''}</div></div>
+            <div style={{ flex: 1 }}><div className="name">{p.full_name || '—'}</div><div className="muted" style={{ fontSize: 13 }}>{p.email}{p.phone ? <> · <bdi dir="ltr">{p.phone}</bdi></> : ''}</div></div>
             <span className="muted" style={{ fontSize: 13 }}>{p.shop_name}</span>
             <span className="badge">{p.shop_role === 'owner' ? labels.owner : labels.staff}</span>
           </div>

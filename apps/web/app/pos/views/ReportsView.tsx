@@ -8,7 +8,7 @@ import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 import type { Staff } from '@suqa/pos-core';
 import { fmtTime } from '../lib/boot';
-import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
+import { doPrint, loadPrintSettings, receiptHtml, stockValueHtml } from '../lib/print';
 import { downloadCsv, downloadXlsx, flat, usd, type Row } from '../lib/export';
 
 type Today = Awaited<ReturnType<typeof todaySummary>>;
@@ -81,6 +81,8 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
     s[pt('byItem', locale)] = rep.by_item.map(i => ({ [pt('items', locale)]: text(i.name, locale), [pt('qtySold', locale)]: i.qty, [pt('sales', locale)]: usd(i.cents), [pt('cost', locale)]: usd(i.cost_cents), [pt('grossMargin', locale)]: usd(i.cents - i.cost_cents) }));
     s[pt('bySection', locale)] = rep.by_section.map(i => ({ [pt('section', locale)]: i.section || '—', [pt('qtySold', locale)]: i.qty, [pt('sales', locale)]: usd(i.cents) }));
     s[pt('slowMovers', locale)] = rep.slow.map(i => ({ [pt('items', locale)]: text(i.name, locale), [pt('onHand', locale)]: i.on_hand, [pt('cost', locale)]: usd(num(i.cost_cents)) }));
+    s[pt('stockValue', locale)] = [...rep.stock.by_section.map(x => ({ [pt('section', locale)]: x.section || '—', [pt('skus', locale)]: x.skus, [pt('units', locale)]: x.units, [pt('atCost', locale)]: usd(x.cost_cents), [pt('atRetail', locale)]: usd(x.retail_cents), [pt('expectedProfit', locale)]: usd(x.retail_cents - x.cost_cents) })),
+      { [pt('section', locale)]: pt('total', locale), [pt('skus', locale)]: rep.stock.skus, [pt('units', locale)]: rep.stock.units, [pt('atCost', locale)]: usd(rep.stock.cost_cents), [pt('atRetail', locale)]: usd(rep.stock.retail_cents), [pt('expectedProfit', locale)]: usd(rep.stock.retail_cents - rep.stock.cost_cents) }];
     s[pt('unpaidList', locale)] = rep.unpaid.map(u => ({ [pt('when', locale)]: u.at, [pt('orderNo', locale)]: u.number ?? '', [pt('customerName', locale)]: u.name ?? '', [pt('customerPhone', locale)]: u.phone ?? '', [pt('amount', locale)]: u.currency === 'lbp' ? u.amount : usd(u.amount), [pt('currency', locale)]: u.currency }));
     s[pt('shiftsList', locale)] = rep.shifts.map(x => ({ [pt('openedAt', locale)]: x.opened_at, [pt('closedAt', locale)]: x.closed_at ?? '', ['USD ' + pt('expected', locale)]: usd(num(x.expected_usd_cents)), ['USD ' + pt('counted', locale)]: usd(num(x.counted_usd_cents)), ['USD ' + pt('diff', locale)]: usd(num(x.diff_usd_cents)), ['LBP ' + pt('expected', locale)]: num(x.expected_lbp), ['LBP ' + pt('counted', locale)]: num(x.counted_lbp), ['LBP ' + pt('diff', locale)]: num(x.diff_lbp) }));
     return s;
@@ -129,7 +131,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
             <span style={{ flex: 1 }} />
             {sheets && <>
               <button className="btn" disabled={busy} onClick={() => void downloadXlsx(title, sheets)}>📗 {pt('exportExcel', locale)}</button>
-              <button className="btn ghost" disabled={busy} onClick={() => downloadCsv(title, sheets[pt(tab === 'overview' ? 'byDay' : tab === 'items' ? 'byItem' : tab === 'sections' ? 'bySection' : tab === 'slow' ? 'slowMovers' : tab === 'unpaid' ? 'unpaidList' : tab === 'shifts' ? 'shiftsList' : 'overview', locale)] ?? [])}>CSV</button>
+              <button className="btn ghost" disabled={busy} onClick={() => downloadCsv(title, sheets[pt(tab === 'overview' ? 'byDay' : tab === 'items' ? 'byItem' : tab === 'sections' ? 'bySection' : tab === 'slow' ? 'slowMovers' : tab === 'stock' ? 'stockValue' : tab === 'unpaid' ? 'unpaidList' : tab === 'shifts' ? 'shiftsList' : 'overview', locale)] ?? [])}>CSV</button>
             </>}
           </div>
           {rep?.partial && <p className="pill warn" style={{ marginTop: 8 }}>{pt('partialReport', locale)}</p>}
@@ -174,8 +176,21 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 <div className="kpi"><span>{pt('skus', locale)}</span><strong>{rep.stock.skus}</strong><small>{rep.stock.units} {pt('units', locale)}</small></div>
                 <div className="kpi"><span>{pt('atCost', locale)}</span><strong>{N(rep.stock.cost_cents)}</strong></div>
                 <div className="kpi"><span>{pt('atRetail', locale)}</span><strong>{N(rep.stock.retail_cents)}</strong></div>
+                <div className="kpi"><span>{pt('expectedProfit', locale)}</span><strong>{N(rep.stock.retail_cents - rep.stock.cost_cents)}</strong></div>
                 <div className="kpi"><span>{pt('lowStockCount', locale)}</span><strong>{rep.stock.low}</strong></div>
               </div>}
+              {tab === 'stock' && <>
+                {(rep.stock.no_cost > 0 || rep.stock.negative > 0) && <div className="pill warn" style={{ display: 'block', margin: '10px 0', whiteSpace: 'normal' }}>⚠ {[rep.stock.no_cost > 0 ? `${rep.stock.no_cost} ${pt('stockNoCost', locale)}` : '', rep.stock.negative > 0 ? `${rep.stock.negative} ${pt('stockNegative', locale)}` : ''].filter(Boolean).join(' · ')}</div>}
+                <table className="table stack-sm" style={{ marginTop: 10 }}>
+                  <thead><tr><th style={{ textAlign: 'start' }}>{pt('section', locale)}</th><th className="num">{pt('skus', locale)}</th><th className="num">{pt('units', locale)}</th><th className="num">{pt('atCost', locale)}</th><th className="num">{pt('atRetail', locale)}</th><th className="num">{pt('expectedProfit', locale)}</th></tr></thead>
+                  <tbody>
+                    {rep.stock.by_section.map(s => <tr key={s.section || '_'}><td>{s.section || '—'}{s.no_cost > 0 && <span className="muted" title={pt('stockNoCost', locale)}> ⚠{s.no_cost}</span>}</td><td className="num">{s.skus}</td><td className="num">{s.units}</td><td className="num">{N(s.cost_cents)}</td><td className="num">{N(s.retail_cents)}</td><td className="num">{N(s.retail_cents - s.cost_cents)}</td></tr>)}
+                    <tr style={{ fontWeight: 700, borderTop: '2px solid #111' }}><td>{pt('total', locale)}</td><td className="num">{rep.stock.skus}</td><td className="num">{rep.stock.units}</td><td className="num">{N(rep.stock.cost_cents)}</td><td className="num">{N(rep.stock.retail_cents)}</td><td className="num">{N(rep.stock.retail_cents - rep.stock.cost_cents)}</td></tr>
+                  </tbody>
+                </table>
+                <button className="btn" style={{ marginTop: 10 }} onClick={() => doPrint(stockValueHtml(rep.stock, boot.shop, locale))}>🖨 {pt('print', locale)}</button>
+                <small className="muted" style={{ display: 'block', marginTop: 6 }}>{pt('stockValueNote', locale)}</small>
+              </>}
               {tab === 'unpaid' && <table className="table"><tbody>
                 {rep.unpaid.map((u, n) => <tr key={n}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}

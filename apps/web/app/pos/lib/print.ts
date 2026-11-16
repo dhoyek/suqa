@@ -158,3 +158,17 @@ export function driverStatementHtml(name: string, t: { from: string; to: string;
     <div class="kv"><span>${esc(pt('drvOwed', L))}</span>${ltr(fmtUsd(t.owed_cents))}</div>
     <div class="kv tot"><span>${esc(pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', L))}</span>${ltr(fmtUsd(Math.abs(net)))}</div>${cutBlock(st)}</div>`;
 }
+
+/** Shop value report (A4-friendly, also fine on a roll): stock at cost / at selling price per section, with the total. */
+export function stockValueHtml(st: { skus: number; units: number; cost_cents: number; retail_cents: number; no_cost: number; negative: number; by_section: { section: string; skus: number; units: number; cost_cents: number; retail_cents: number }[] },
+  shop: Pick<Shop, 'name'>, L: 'ar' | 'en'): string {
+  const m = (c: number) => fmtUsd(c);
+  const row = (a: string, s: { skus: number; units: number; cost_cents: number; retail_cents: number }, bold = false) =>
+    `<tr${bold ? ' style="font-weight:700;border-top:2px solid #000"' : ''}><td>${esc(a)}</td><td class="a">${s.skus}</td><td class="a">${s.units}</td><td class="a"><i>${m(s.cost_cents)}</i></td><td class="a"><i>${m(s.retail_cents)}</i></td><td class="a"><i>${m(s.retail_cents - s.cost_cents)}</i></td></tr>`;
+  return `<div class="vch report">
+    <div class="club">${esc(text(shop.name, L))}</div><div class="ev">${esc(pt('stockValue', L))} — ${new Date().toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB')}</div><hr>
+    <table><tr style="font-weight:700"><td>${esc(pt('section', L))}</td><td class="a">${esc(pt('skus', L))}</td><td class="a">${esc(pt('units', L))}</td><td class="a">${esc(pt('atCost', L))}</td><td class="a">${esc(pt('atRetail', L))}</td><td class="a">${esc(pt('expectedProfit', L))}</td></tr>
+    ${st.by_section.map(s => row(s.section || '—', s)).join('')}${row(pt('total', L), st, true)}</table>
+    ${st.no_cost || st.negative ? `<div class="ft">⚠ ${[st.no_cost ? `${st.no_cost} ${esc(pt('stockNoCost', L))}` : '', st.negative ? `${st.negative} ${esc(pt('stockNegative', L))}` : ''].filter(Boolean).join(' · ')}</div>` : ''}
+    <div class="ft">${esc(pt('stockValueNote', L))}</div></div>`;
+}

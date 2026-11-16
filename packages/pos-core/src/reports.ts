@@ -1,6 +1,6 @@
 import type { PosDb } from './db';
 import { num } from './types';
-import type { Channel, Localized, Tender } from './types';
+import type { Channel, Localized, Product, Tender } from './types';
 
 /** Shape returned by `suqa.pos_report` (server) and by `localReport` (offline fallback from the mirror). */
 export interface Report {
@@ -13,7 +13,10 @@ export interface Report {
   by_item: { product_id: string | null; name: Localized; qty: number; cents: number; cost_cents: number }[];
   by_section: { section: string; qty: number; cents: number }[];
   slow: { product_id: string; name: Localized; on_hand: number; cost_cents: number | null }[];
-  stock: { skus: number; units: number; cost_cents: number; retail_cents: number; low: number };
+  /** Value of what is on the shelves now (tracked items; negative stock counts as zero). `by_section` breaks the same totals down. */
+  stock: { skus: number; units: number; cost_cents: number; retail_cents: number; low: number;
+    /** items in stock with no cost entered (they count as zero at cost) */ no_cost: number; /** items whose stock is below zero */ negative: number;
+    by_section: { section: string; skus: number; units: number; cost_cents: number; retail_cents: number; no_cost: number }[] };
   unpaid: { order_id: string; number: string | null; at: string; name: string | null; phone: string | null; amount: number; currency: string }[];
   shifts: { id: string; opened_at: string; closed_at: string | null; device_id: string; expected_usd_cents: number | null; counted_usd_cents: number | null; diff_usd_cents: number | null; expected_lbp: number | null; counted_lbp: number | null; diff_lbp: number | null }[];
 }
@@ -65,13 +68,27 @@ export async function localReport(db: PosDb, from: string, to: string): Promise<
     by_item: [...byItem.values()].sort((a, b) => b.cents - a.cents).slice(0, 100),
     by_section: [...bySection].map(([section, v]) => ({ section, ...v })).sort((a, b) => b.cents - a.cents),
     slow: tracked.filter(p => num(p.on_hand) > 0 && !sold.has(p.id)).sort((a, b) => num(b.on_hand) - num(a.on_hand)).slice(0, 100).map(p => ({ product_id: p.id, name: p.name, on_hand: num(p.on_hand), cost_cents: p.cost_cents ?? null })),
-    stock: {
-      skus: tracked.length, units: sum(tracked.map(p => num(p.on_hand))),
-      cost_cents: sum(tracked.map(p => Math.round(num(p.cost_cents) * num(p.on_hand)))),
-      retail_cents: sum(tracked.map(p => Math.round((p.price_currency === 'usd' ? num(p.price_usd) * 100 : (num(p.price_lbp) / rate) * 100) * num(p.on_hand)))),
-      low: tracked.filter(p => num(p.on_hand) <= num(p.min_stock)).length,
-    },
+    stock: stockValue(tracked, rate),
     unpaid: payments.filter(p => p.tender === 'unpaid').map(p => { const o = orders.find(x => x.id === p.order_id); return { order_id: p.order_id, number: o?.number ?? o?.local_number ?? null, at: p.at, name: p.unpaid_name ?? null, phone: p.unpaid_phone ?? null, amount: num(p.amount), currency: p.currency }; }).sort((a, b) => b.at.localeCompare(a.at)),
     shifts: shifts.sort((a, b) => b.opened_at.localeCompare(a.opened_at)).map(s => ({ id: s.id, opened_at: s.opened_at, closed_at: s.closed_at ?? null, device_id: s.device_id, expected_usd_cents: s.expected_usd_cents ?? null, counted_usd_cents: s.counted_usd_cents ?? null, diff_usd_cents: s.diff_usd_cents ?? null, expected_lbp: s.expected_lbp ?? null, counted_lbp: s.counted_lbp ?? null, diff_lbp: s.diff_lbp ?? null })),
   };
+}
+
+/** Shop value: what the tracked stock is worth at cost and at selling price, in total and per section. */
+export function stockValue(tracked: Product[], rate: number): Report['stock'] {
+  const retail = (p: Product) => (p.price_currency === 'usd' ? num(p.price_usd) * 100 : (num(p.price_lbp) / rate) * 100);
+  const secs = new Map<string, Report['stock']['by_section'][number]>();
+  const tot = { skus: tracked.length, units: 0, cost_cents: 0, retail_cents: 0, low: 0, no_cost: 0, negative: 0 };
+  for (const p of tracked) {
+    const have = num(p.on_hand); const q = Math.max(0, have);   // negative stock is a counting error, not negative value
+    const c = Math.round(num(p.cost_cents) * q), r = Math.round(retail(p) * q); const missing = q > 0 && !num(p.cost_cents) ? 1 : 0;
+    const key = p.section || '';
+    const s = secs.get(key) ?? { section: key, skus: 0, units: 0, cost_cents: 0, retail_cents: 0, no_cost: 0 };
+    s.skus += 1; s.units += q; s.cost_cents += c; s.retail_cents += r; s.no_cost += missing; secs.set(key, s);
+    tot.units += q; tot.cost_cents += c; tot.retail_cents += r; tot.no_cost += missing;
+    if (have < 0) tot.negative += 1;
+    if (have <= num(p.min_stock)) tot.low += 1;
+  }
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  return { ...tot, units: r3(tot.units), by_section: [...secs.values()].map(x => ({ ...x, units: r3(x.units) })).sort((a, b) => b.cost_cents - a.cost_cents || b.retail_cents - a.retail_cents) };
 }

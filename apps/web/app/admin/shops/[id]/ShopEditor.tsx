@@ -1,6 +1,6 @@
 'use client';
 import { useConfirm, useNotify } from '@/components/ConfirmProvider';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import MapPicker from '@/components/MapPicker';
@@ -31,6 +31,15 @@ export default function ShopEditor(props: {
     const s = props.served.find(x => x.zone_id === z.id); return [z.id, { on: !!s, fee: s?.fee_usd == null ? '' : String(s.fee_usd) }];
   })));
   const [members, setMembers] = useState<Member[]>(props.members);
+  // people added by number who have not signed in yet: their role waits for them (shown so the box is not mistaken for empty)
+  type Invite = { id: string; phone: string; role: string; display_name: string | null };
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const loadInvites = async () => {
+    if (!props.shop) return;
+    const { data } = await sb.from('staff_invites').select('id,phone,role,display_name').eq('shop_id', props.shop.id).is('claimed_at', null).order('created_at');
+    setInvites((data as Invite[] | null) ?? []);
+  };
+  useEffect(() => { void loadInvites(); }, [props.shop?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [email, setEmail] = useState(''); const [role, setRole] = useState<'owner' | 'staff'>('owner');
   const [pos, setPos] = useState<boolean>(!!(shop as unknown as { pos_enabled?: boolean } | null)?.pos_enabled);
   // the tenant switches the point of sale on per shop; without it the shop's people cannot open /pos
@@ -75,7 +84,7 @@ export default function ShopEditor(props: {
       if (error) { notify(error.message); return; }
       const applied = (data as { status?: string } | null)?.status === 'applied';
       notify(applied ? labels.saved : (ar ? 'الرقم غير مسجّل بعد — سيُضاف تلقائياً عند أول دخول له.' : 'Number not signed up yet — it will be added on its first sign-in.'));
-      setEmail(''); if (applied) window.location.reload();
+      setEmail(''); if (applied) window.location.reload(); else void loadInvites();
       return;
     }
     const { data, error } = await sb.rpc('find_user_by_email', { p_tenant: tenantId, p_email: email });
@@ -156,6 +165,17 @@ export default function ShopEditor(props: {
             <div className="row spread" key={m.user_id}>
               <span>{m.full_name || '—'} <span className="muted" style={{ fontSize: 13 }}>{m.email}</span></span>
               <span className="row"><span className="badge">{m.role === 'owner' ? labels.owner : labels.staff}</span><button className="btn ghost muted" onClick={() => removeMember(m)}>✕</button></span>
+            </div>
+          ))}
+          {invites.map(i => (
+            <div className="row spread" key={i.id}>
+              <span>{i.display_name ? i.display_name + ' ' : ''}<bdi dir="ltr">+{i.phone}</bdi> <span className="muted" style={{ fontSize: 13 }}>· ⏳ {ar ? 'بانتظار أول دخول له' : 'waiting for first sign-in'}</span></span>
+              <span className="row"><span className="badge">{i.role === 'owner' ? labels.owner : labels.staff}</span><button className="btn ghost muted" onClick={async () => {
+                if (!(await ask(`${labels.remove} +${i.phone}?`, { danger: true }))) return;
+                const { error } = await sb.from('staff_invites').delete().eq('id', i.id);
+                if (error) { notify(error.message); return; }
+                setInvites(prev => prev.filter(x => x.id !== i.id));
+              }}>✕</button></span>
             </div>
           ))}
           <div className="row">

@@ -88,7 +88,7 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured, st
           <strong style={{ fontSize: 14 }}>{labels.legalSection}</strong>
           <div className="row" style={{ alignItems: 'stretch' }}>
             <div style={{ flex: 1 }}><label className="label">{labels.legalOperator}</label><input className="input" disabled={dis} value={f.legal_operator} onChange={e => setF({ ...f, legal_operator: e.target.value })} placeholder="Purple Digits (Lebanon)" /></div>
-            <div style={{ flex: 1 }}><label className="label">{labels.legalEmail}</label><input className="input" dir="ltr" type="email" disabled={dis} value={f.legal_email} onChange={e => setF({ ...f, legal_email: e.target.value })} placeholder="privacy@yorgoinc.com" /></div>
+            <div style={{ flex: 1 }}><label className="label">{labels.legalEmail}</label><input className="input" dir="ltr" type="email" disabled={dis} value={f.legal_email} onChange={e => setF({ ...f, legal_email: e.target.value })} placeholder="support@purpledigits.com" /></div>
           </div>
         </div>
         {canEdit && (

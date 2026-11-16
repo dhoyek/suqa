@@ -22,7 +22,14 @@ export default function PhoneLogin({ next, tenantId, brand, labels }: { next: st
     setBusy(true);
     const { error } = await supabaseBrowser().auth.signInWithOtp({ phone: `+${n}`, options: { channel: 'sms', data: { tenant_id: tenantId, brand } } });
     setBusy(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      // the WhatsApp message could not be delivered (number without WhatsApp, or not allowed on a test line): say so plainly
+      const ar = typeof document !== 'undefined' && document.documentElement.lang === 'ar';
+      setError(/hook|whatsapp delivery/i.test(error.message)
+        ? (ar ? 'تعذّر إرسال الرمز عبر واتساب إلى هذا الرقم. تأكد أن الرقم صحيح وعليه واتساب، أو ادخل عبر البريد.' : 'The code could not be sent to this number on WhatsApp. Check the number has WhatsApp, or sign in by email.')
+        : error.message);
+      return;
+    }
     setSentTo(`+${n}`);
   }
   async function verify(e: React.FormEvent) {

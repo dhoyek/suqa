@@ -18,6 +18,12 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
   const [err, setErr] = useState<string | null>(null);
   const [lastOnline, setLastOnline] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // the same account can work in several shops (a cashier with two jobs, an owner with two businesses): offer the switch.
+  // Remembered on the device so the button is also there offline.
+  const [multi, setMulti] = useState(() => { try { return localStorage.getItem('suqa-pos-multi') === '1'; } catch { return false; } });
+  useEffect(() => {
+    myMemberships(sb).then(ms => { const m = ms.some(x => x.shop_id !== boot.shop.id); setMulti(m); try { localStorage.setItem('suqa-pos-multi', m ? '1' : '0'); } catch { /* private mode */ } }).catch(() => {});
+  }, [sb, boot.shop.id]);
 
   useEffect(() => {
     (async () => {
@@ -122,7 +128,12 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
           <button onClick={() => setPin(p => p.slice(0, -1))} className="muted">⌫</button>
         </div>
         <div className="row spread" style={{ marginTop: 14 }}>
-          <a className="btn ghost muted" href="/shop">{pt('backToShop', locale)}</a>
+          <span className="row" style={{ gap: 4 }}>
+            {boot.role === 'setup'
+              ? <a className="btn ghost muted" href={`/admin/shops/${boot.shop.id}`}>{pt('adminArea', locale)}</a>
+              : <a className="btn ghost muted" href="/shop">{pt('backToShop', locale)}</a>}
+            {multi && <button className="btn ghost muted" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>}
+          </span>
           <span className="muted" style={{ fontSize: 12 }}>{pt('lastSync', locale)}: {status?.lastSyncAt ? new Date(status.lastSyncAt).toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) : pt('never', locale)}</span>
         </div>
       </div>

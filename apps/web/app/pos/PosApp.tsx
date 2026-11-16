@@ -37,6 +37,7 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
       // another number on this browser): stop showing stale data as if it were fine
       if (e.status.error && /not_a_member/.test(e.status.error)) setPhase(p => p.k === 'noAccess' ? p : { k: 'noAccess' });
     }
+    else if (e.type === 'role') window.location.reload();        // another kind of account on this device: start clean (lock screen, fresh copy)
     else if (e.type === 'applied') setTick(t => t + 1);
     else if (e.type === 'order.new') { setTick(t => t + 1); void playDing(); }
     else if (e.type === 'revoked') { downloadJson(`suqa-pos-unsynced-${new Date().toISOString().slice(0, 19)}.json`, e.outbox); setPhase({ k: 'revoked' }); }
@@ -81,7 +82,7 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
   useEffect(() => { void start(); }, [start]);
   // the person at the till follows the staff list: a role or name changed elsewhere applies at once, a removed / deactivated one is locked out
   useEffect(() => {
-    if (!boot || !staff) return;
+    if (!boot || !staff || staff.role === 'setup') return;      // the setup tile is not a staff row
     let on = true;
     void boot.db.staff.get(staff.user_id).then(s => {
       if (!on) return;

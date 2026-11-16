@@ -12,6 +12,7 @@ export type SyncEvent =
   | { type: 'order.new'; orderId: string }                      // a new online/other-device order arrived
   | { type: 'op.rejected'; op: OutboxOp; error: string }
   | { type: 'resync' }
+  | { type: 'role'; role: string }
   | { type: 'revoked'; outbox: OutboxOp[] };
 
 export interface EngineOptions {
@@ -92,6 +93,14 @@ export class SyncEngine {
       const cursor = (await getMeta<number>(this.db, META.cursor)) ?? 0;
       const res = await this.t.pull(this.deviceId, cursor, 1000);
       if (res.resync) { this.emit({ type: 'resync' }); const snap = await this.t.snapshot(this.deviceId); await this.applySnapshot(snap); return applied; }
+      // another kind of account signed in on this device (shop person ↔ association admin in setup mode): what the device may
+      // hold is different, so start again from a fresh copy instead of continuing the feed
+      if (res.role) {
+        const prev = await getMeta<string>(this.db, META.role);
+        if (prev && (prev === 'setup') !== (res.role === 'setup')) {
+          const snap = await this.t.snapshot(this.deviceId); await this.applySnapshot(snap); this.emit({ type: 'role', role: res.role }); return applied;
+        }
+      }
       if (res.rows.length) { await this.applyRows(res.rows, res.cursor); applied += res.rows.length; }
       else await setMeta(this.db, META.cursor, res.cursor);
       if (res.devices?.length) { await this.db.devices.bulkPut(res.devices as never[]); this.emit({ type: 'applied', rows: [] }); }

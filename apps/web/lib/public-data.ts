@@ -19,10 +19,13 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
   return { cats: (cats as Category[] | null) ?? [], shops: (shops as Shop[] | null) ?? [] };
 }, ['home-data'], { revalidate: 60, tags: ['home'] });
 
+// The public key may read these item columns only (schema 71): cost, margin and supplier are the shop's own business.
+const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_currency,price_lbp,unit,unit_kind,decimal_qty,image_url,is_available,is_active,sort_order,section,sku,vat,track_stock,visible_online,on_hand,reserved,available_days,created_at,updated_at';
+
 /** Shop + its active products in one round-trip. Cached briefly; a merchant's availability toggle shows within ~15 s. */
 export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string) => {
   const sb = anon();
-  const { data } = await sb.from('shops').select('*, products(*)').eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active')
+  const { data } = await sb.from('shops').select(`*, products(${PRODUCT_COLS})`).eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active')
     .eq('products.is_active', true).order('section', { referencedTable: 'products', ascending: true, nullsFirst: false }).order('sort_order', { referencedTable: 'products' }).maybeSingle();
   if (!data) return null;
   const { products, ...shop } = data as Shop & { products: (Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string })[]; hide_online_when_zero?: boolean };

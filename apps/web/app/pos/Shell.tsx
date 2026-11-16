@@ -53,7 +53,7 @@ export default function Shell(props: {
   const [newOrderReq, setNewOrderReq] = useState(0);
   const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);
   const allowed = viewsFor(roleOf(staff));
-  useEffect(() => { if (!allowed.includes(view)) setView('sell'); }, [allowed, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!allowed.includes(view)) setView(allowed[0] ?? 'sell'); }, [allowed, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [custFocus, setCustFocus] = useState<{ phone: string; name: string; n: number } | null>(null);
   const [stockFocus, setStockFocus] = useState<{ id: string; n: number } | null>(null);
   const [purPreset, setPurPreset] = useState<{ supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null>(null);

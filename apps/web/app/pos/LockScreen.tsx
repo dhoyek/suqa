@@ -69,6 +69,23 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // an association admin who is not one of the shop's people: one tile, no PIN (his sign-in is the key, and this device
+  // holds nothing private in setup mode — schema 71)
+  if (boot.role === 'setup') return (
+    <main className="pos-lock">
+      <div className="pos-lock-card">
+        <div className="brand">{boot.shop.name?.[locale] ?? boot.shop.name?.ar}</div>
+        <h2 style={{ margin: '12px 0 8px' }}>🛠️ {pt('setupTitle', locale)}</h2>
+        <p className="muted" style={{ fontSize: 14, marginTop: 0 }}>{pt('setupHint', locale)}</p>
+        <button className="btn primary big" onClick={() => onUnlock({ user_id: boot.userId, shop_id: boot.shop.id, role: 'setup', display_name: pt('role_setup', locale), active: true })}>{pt('setupEnter', locale)}</button>
+        <div className="row spread" style={{ marginTop: 14 }}>
+          <a className="btn ghost muted" href={`/admin/shops/${boot.shop.id}`}>{pt('adminArea', locale)}</a>
+          <button className="btn ghost muted" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>
+        </div>
+      </div>
+    </main>
+  );
+
   const name = (s: Staff) => s.display_name || s.full_name || s.user_id.slice(0, 8);
   const roleLabel = (s: Staff) => pt((`role_${s.role}` as 'role_owner'), locale);
 

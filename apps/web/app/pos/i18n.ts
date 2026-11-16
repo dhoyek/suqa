@@ -76,7 +76,9 @@ const T = {
   storage: { ar: 'التخزين', en: 'Storage' },
   persistent: { ar: 'دائم', en: 'persistent' },
   notPersistent: { ar: 'غير دائم — ثبّت التطبيق على الشاشة الرئيسية', en: 'not persistent — add the app to your home screen' },
-  role_owner: { ar: 'صاحب المحل', en: 'Owner' }, role_cashier: { ar: 'كاشير', en: 'Cashier' }, role_stock: { ar: 'مخزون', en: 'Stock' }, role_staff: { ar: 'كاشير', en: 'Cashier' },
+  role_owner: { ar: 'صاحب المحل', en: 'Owner' }, role_cashier: { ar: 'كاشير', en: 'Cashier' }, role_stock: { ar: 'مخزون', en: 'Stock' }, role_staff: { ar: 'كاشير', en: 'Cashier' }, role_setup: { ar: 'الإدارة (إعداد)', en: 'Admin (setup)' },
+  setupTitle: { ar: 'وضع الإعداد', en: 'Setup mode' }, setupEnter: { ar: 'دخول للإعداد', en: 'Enter setup' },
+  setupHint: { ar: 'أنت داخل كإدارة الجمعية لمساعدة المحل: الأصناف والأسعار، إعدادات المحل، الموظفون والأجهزة. المبيعات والطلبات داخل المحل، الكلفة، المشتريات، الموردون، الديون والتقارير خاصة بصاحب المحل ولا تظهر هنا.', en: 'You are here as the association admin to help set the shop up: items and prices, shop settings, staff and devices. In-shop sales and orders, costs, purchases, suppliers, debts and reports belong to the shop owner and are not shown here.' },
   cancel: { ar: 'إلغاء', en: 'Cancel' }, save: { ar: 'حفظ', en: 'Save' }, ok: { ar: 'تم', en: 'OK' }, back: { ar: 'رجوع', en: 'Back' },
   // sell
   all: { ar: 'الكل', en: 'All' },

@@ -60,6 +60,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
       description: { ar: dAr.trim(), en: dEn.trim() },
     };
     if (owner) fields.cost_cents = cost === '' ? null : Math.round(Number(cost) * 100);
+    if (boot.role === 'setup') { delete fields.supplier_id; delete fields.margin_pct; }
     return fields;
   };
   const save = async (approvedBy?: string | null) => {
@@ -108,8 +109,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
           </div>
           <label className="label">{pt('unit', locale)}<select className="input" value={unit} onChange={e => setUnit(e.target.value)}>{UNITS.map(u => <option key={u} value={u}>{pt(u, locale)}</option>)}</select></label>
           <label className="label">{pt('minStock', locale)}<input className="input" dir="ltr" inputMode="decimal" value={min} onChange={e => setMin(e.target.value)} disabled={!track} /></label>
-          <label className="label">{pt('defaultSupplier', locale)}<select className="input" value={supplierId} onChange={e => setSupplierId(e.target.value)}><option value="">—</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          <label className="label">{pt('itemMargin', locale)}<input className="input" dir="ltr" inputMode="decimal" value={margin} onChange={e => setMargin(e.target.value)} placeholder={`${pt('shopDefault', locale)} ${Number(boot.shop.default_margin_pct) || 0}%`} /></label>
+          {boot.role !== 'setup' && <label className="label">{pt('defaultSupplier', locale)}<select className="input" value={supplierId} onChange={e => setSupplierId(e.target.value)}><option value="">—</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
+          {boot.role !== 'setup' && <label className="label">{pt('itemMargin', locale)}<input className="input" dir="ltr" inputMode="decimal" value={margin} onChange={e => setMargin(e.target.value)} placeholder={`${pt('shopDefault', locale)} ${Number(boot.shop.default_margin_pct) || 0}%`} /></label>}
           {product?.next_expiry && <div className="label">{pt('nextExpiry', locale)}<div className={new Date(product.next_expiry) < new Date() ? 'bad' : ''} dir="ltr">{product.next_expiry}</div></div>}
           <div className="checks" style={{ gridColumn: '1 / -1' }}>
             <label><input type="checkbox" checked={track} onChange={e => setTrack(e.target.checked)} /> {pt('trackStock', locale)}</label>

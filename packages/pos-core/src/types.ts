@@ -7,7 +7,8 @@ export type Channel = 'online' | 'walkin' | 'whatsapp' | 'phone';
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'rejected' | 'cancelled';
 export type Tender = 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'unpaid';
 export type StockKind = 'purchase' | 'purchase_return' | 'sale' | 'return' | 'receive' | 'adjust' | 'count' | 'damaged' | 'reserve' | 'release';
-export type Role = 'owner' | 'cashier' | 'stock';
+/** 'setup' = an association admin helping to configure a shop he is not a member of: items and settings only, no business data (schema 71). */
+export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
 
 export interface Product {
   id: string; tenant_id: string; shop_id: string;
@@ -26,7 +27,7 @@ export interface Barcode { product_id: string; shop_id: string; barcode: string;
 export interface Category { id: string; tenant_id: string; name: Localized; parent_id?: string | null; sort_order: number; icon?: string | null }
 export interface QuickButton { id: string; shop_id: string; product_id: string | null; label?: string | null; color?: string | null; sort_order: number }
 export interface Rate { id: string; shop_id: string; lbp_per_usd: number; effective_at: string }
-export interface Staff { user_id: string; shop_id: string; role: 'owner' | 'staff' | 'cashier' | 'stock'; display_name?: string | null; full_name?: string | null; pin_hash?: string | null; pin_salt?: string | null; active: boolean }
+export interface Staff { user_id: string; shop_id: string; role: 'owner' | 'staff' | 'cashier' | 'stock' | 'setup'; display_name?: string | null; full_name?: string | null; pin_hash?: string | null; pin_salt?: string | null; active: boolean }
 export interface Device { id: string; shop_id: string; name: string; prefix: string; last_sync_at?: string | null; pending_count?: number; revoked_at?: string | null }
 export interface Shop {
   id: string; tenant_id: string; slug: string; name: Localized; pos_enabled: boolean; offline_days: number; max_discount_pct: number | string;

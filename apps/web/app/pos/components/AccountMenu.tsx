@@ -6,7 +6,7 @@ import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 
-type Staff = { display_name?: string | null; full_name?: string | null; role?: 'owner' | 'cashier' | 'staff' | 'stock' };
+type Staff = { display_name?: string | null; full_name?: string | null; role?: 'owner' | 'cashier' | 'staff' | 'stock' | 'setup' };
 
 /**
  * The avatar in the POS bar: a dropdown under it (same shape as the storefront's profile menu) — who is at the till and with which
@@ -52,7 +52,7 @@ export default function AccountMenu({ sb, boot, staff, locale, setLocale, onLock
         <a className="item" href="/account">👤 {pt('account', locale)}</a>
         <a className="item" href="/orders">🧾 {pt('myPurchases', locale)}</a>
         {role === 'owner' && <a className="item" href="/shop/settings">🏪 {pt('backToShop', locale)}</a>}
-        {admin && role === 'owner' && <a className="item" href="/admin">🛠️ {pt('adminArea', locale)}</a>}
+        {admin && (role === 'owner' || role === 'setup') && <a className="item" href="/admin">🛠️ {pt('adminArea', locale)}</a>}
         <a className="item" href="/">🏠 {pt('backHome', locale)}</a>
         <div className="item lang">
           <span className="muted">{pt('language', locale)}</span>

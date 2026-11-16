@@ -24,7 +24,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
   const [ps, setPs] = useState<PrintSettings>(() => loadPrintSettings());
   const upd = (patch: Partial<PrintSettings>) => { const n = { ...ps, ...patch }; setPs(n); savePrintSettings(n); };
   const confirm = useConfirm();
-  const role = roleOf(staff); const owner = can(role, 'settings.shop'); const seeDevices = can(role, 'settings.devices'); const seeOps = can(role, 'settings.ops');
+  const role = roleOf(staff); const owner = can(role, 'settings.shop'); const seeDevices = can(role, 'settings.devices'); const seeOps = can(role, 'settings.ops'); const priv = can(role, 'settings.private'); const setup = role === 'setup';
   const online = status?.online ?? true;
   const [conflicts, setConflicts] = useState<Conflict[]>([]); const [rejected, setRejected] = useState<OutboxOp[]>([]);
   const loadRejected = () => boot.db.outbox.where('state').equals('rejected').toArray().then(r => setRejected(r.sort((a, b) => b.created_at.localeCompare(a.created_at))));
@@ -86,7 +86,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           {members.filter(m => m.active).map(m => <li key={m.user_id}>{m.display_name || m.full_name || m.user_id.slice(0, 8)} <span className="muted">· {pt((`role_${m.role}` as 'role_owner'), locale)}</span></li>)}
         </ul>}
         <div className="row" style={{ marginTop: 10, gap: 10, alignItems: 'center' }}>
-          <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>{pinMsg && !pinDlg && <span className="muted">{pinMsg}</span>}
+          {!setup && <button className="btn" onClick={changePin}>{pt('changePin', locale)}</button>}{pinMsg && !pinDlg && <span className="muted">{pinMsg}</span>}
           {pinDlg && <Modal open onClose={() => setPinDlg(false)} title={pt('changePin', locale)} footer={<><button className="btn ghost" onClick={() => setPinDlg(false)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={pinA.length < 4} onClick={savePin}>{pt('save', locale)}</button></>}>
             <label className="label">{pt('setPin', locale)}<input className="input" dir="ltr" inputMode="numeric" type="password" maxLength={4} autoFocus value={pinA} onChange={e => setPinA(e.target.value.replace(/\D/g, ''))} /></label>
             <label className="label">{pt('confirmPin', locale)}<input className="input" dir="ltr" inputMode="numeric" type="password" maxLength={4} value={pinB} onChange={e => setPinB(e.target.value.replace(/\D/g, ''))} /></label>
@@ -95,7 +95,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         </div>
       </section>
       {staff.role === 'owner' && <ApprovalPinPanel boot={boot} sb={sb} locale={locale} me={staff} online={online} />}
-      {owner && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
+      {priv && <DriversPanel boot={boot} locale={locale} tick={tick} sb={sb} online={online} />}
       {owner && <ShopSettings boot={boot} sb={sb} locale={locale} online={online} />}
       {staff.role === 'owner' && <BackupPanel boot={boot} sb={sb} locale={locale} online={online} />}
       <section className="card">
@@ -138,14 +138,14 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           {rejected.map(op => <tr key={op.seq}><td className="muted">{fmtTime(op.created_at, locale)}</td><td>{pt(`a_${op.kind.replace('.', '_')}` as Key, locale)}</td><td className="muted" style={{ whiteSpace: 'normal' }}>{op.last_error}</td><td><button className="btn ghost" onClick={() => dropRejected(op.seq)}>✕</button></td></tr>)}
         </tbody></table> : <p className="muted">—</p>}
       </section>}
-      {owner && <section className="card">
+      {priv && <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><h3 style={{ margin: 0 }}>{pt('conflicts', locale)}{conflicts.some(c => !c.seen) ? <span className="pill bad" style={{ marginInlineStart: 8 }}>{conflicts.filter(c => !c.seen).length}</span> : null}</h3>{conflicts.some(c => !c.seen) && <button className="btn ghost" onClick={markSeen}>{pt('markSeen', locale)}</button>}</div>
         <p className="muted" style={{ fontSize: 12 }}>{pt('conflictHint', locale)}</p>
         {conflicts.length ? <table className="table"><tbody>
           {conflicts.map(c => <tr key={c.id} className={c.seen ? 'muted' : ''}><td className="muted">{fmtTime(c.at, locale)}</td><td>{c.tbl} · {c.field}</td><td dir="ltr" style={{ fontSize: 12 }}>{JSON.stringify(c.old_value)} → <strong>{JSON.stringify(c.new_value)}</strong></td><td className="muted" style={{ fontSize: 12 }}>{devices.find(d => d.id === c.by_device)?.name ?? ''}</td></tr>)}
         </tbody></table> : <p className="muted">{pt('noConflicts', locale)}</p>}
       </section>}
-      {owner && <section className="card">
+      {priv && <section className="card">
         <h3 style={{ marginTop: 0 }}>{pt('auditLog', locale)}</h3>
         {!online ? <p className="muted">{pt('needOnline', locale)}</p> : audit === null ? <p className="muted">…</p> : <>
           <table className="table"><tbody>

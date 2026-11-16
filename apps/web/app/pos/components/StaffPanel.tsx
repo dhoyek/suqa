@@ -28,7 +28,7 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
   const [msg, setMsg] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [lastInvite, setLastInvite] = useState<{ phone: string; name: string } | null>(null);
   const confirm = useConfirm();
   const load = useCallback(async () => {
-    if (!online) { const local = await boot.db.staff.toArray(); setMembers(local.map(m => ({ user_id: m.user_id, role: m.role, display_name: m.display_name ?? null, full_name: m.full_name ?? null, phone: null, active: m.active, pin: !!m.pin_hash }))); return; }
+    if (!online) { const local = await boot.db.staff.toArray(); setMembers(local.map(m => ({ user_id: m.user_id, role: m.role as Member['role'], display_name: m.display_name ?? null, full_name: m.full_name ?? null, phone: null, active: m.active, pin: !!m.pin_hash }))); return; }
     const { data, error } = await sb.rpc('pos_staff_list', { p_shop: boot.shop.id });
     if (error) { setMsg(error.message); return; }
     const d = data as { members: Member[]; invites: Invite[] }; setMembers(d.members); setInvites(d.invites);

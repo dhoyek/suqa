@@ -1,4 +1,5 @@
 'use client';
+import { LS_SHOP } from './lib/boot';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { META, daysOffline, getMeta, hashPin, isValidPin, offlineUnlockAllowed, verifyPin, type Staff, type SyncStatus } from '@suqa/pos-core';
@@ -79,6 +80,14 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
           <span className={`pill ${online ? 'ok' : 'warn'}`}>{online ? pt('online', locale) : pt('offline', locale)}{!online && days !== Infinity ? ` · ${days} ${pt('daysOffline', locale)}` : ''}</span>
         </div>
         <h2 style={{ margin: '12px 0 8px' }}>{pt('whoIsThis', locale)}</h2>
+        {staff.length === 0 && <div className="stack" style={{ gap: 8, padding: '10px 12px', border: '1px dashed #d97706', borderRadius: 10, background: '#fffbeb' }}>
+          <b>{pt('noStaffTitle', locale)}</b>
+          <span className="muted" style={{ fontSize: 14 }}>{pt('noStaffHint', locale)}</span>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <a className="btn" href={`/admin/shops/${boot.shop.id}`}>👥 {pt('noStaffAdd', locale)}</a>
+            <button className="btn ghost" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>
+          </div>
+        </div>}
         <div className="staff-tiles">
           {staff.map(s => <button key={s.user_id} className={`tile ${who?.user_id === s.user_id ? 'active' : ''}`} onClick={() => { setWho(s); clear(); setConfirm(null); }}>
             <div className="tile-name">{name(s)}</div><div className="muted" style={{ fontSize: 12 }}>{roleLabel(s)}{!s.pin_hash ? ' · ' + pt('setPin', locale).split(' ')[0] : ''}</div>

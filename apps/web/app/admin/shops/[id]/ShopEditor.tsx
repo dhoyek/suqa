@@ -16,7 +16,7 @@ export default function ShopEditor(props: {
   categories: { id: string; name: string }[]; zones: { id: string; name: string; fee_usd: number }[];
   served: { zone_id: string; fee_usd: number | null }[]; members: Member[]; labels: Labels;
 }) {
-  const { tenantId, shop, categories, zones, labels } = props;
+  const { tenantId, shop, categories, zones, labels } = props; const ar = props.locale === 'ar';
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
   const notify = useNotify();
@@ -32,6 +32,14 @@ export default function ShopEditor(props: {
   })));
   const [members, setMembers] = useState<Member[]>(props.members);
   const [email, setEmail] = useState(''); const [role, setRole] = useState<'owner' | 'staff'>('owner');
+  const [pos, setPos] = useState<boolean>(!!(shop as unknown as { pos_enabled?: boolean } | null)?.pos_enabled);
+  // the tenant switches the point of sale on per shop; without it the shop's people cannot open /pos
+  async function togglePos(on: boolean) {
+    if (!shop) return;
+    const { error } = await sb.from('shops').update({ pos_enabled: on }).eq('id', shop.id);
+    if (error) { notify(error.message); return; }
+    setPos(on);
+  }
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
 
   const slugify = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -57,6 +65,15 @@ export default function ShopEditor(props: {
 
   async function addMember() {
     if (!shop) return;
+    // a phone / WhatsApp number: attach that account now, or keep the role waiting for the number's first sign-in
+    if (!email.includes('@')) {
+      const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: email.trim(), p_name: null, p_tenant_role: null, p_shop: shop.id, p_shop_role: role });
+      if (error) { notify(error.message); return; }
+      const applied = (data as { status?: string } | null)?.status === 'applied';
+      notify(applied ? labels.saved : (ar ? 'الرقم غير مسجّل بعد — سيُضاف تلقائياً عند أول دخول له.' : 'Number not signed up yet — it will be added on its first sign-in.'));
+      setEmail(''); if (applied) window.location.reload();
+      return;
+    }
     const { data, error } = await sb.rpc('find_user_by_email', { p_tenant: tenantId, p_email: email });
     const u = Array.isArray(data) ? data[0] : data;
     if (error || !u) { notify(labels.userNotFound); return; }
@@ -115,6 +132,16 @@ export default function ShopEditor(props: {
 
       {shop && (
         <section className="card stack">
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={pos} onChange={e => togglePos(e.target.checked)} />
+            <strong>🖥️ {ar ? 'نقطة البيع (POS) مفعّلة لهذا المتجر' : 'Point of sale (POS) enabled for this shop'}</strong>
+          </label>
+          <small className="muted">{ar ? 'عند التفعيل يستطيع صاحب المتجر وموظفوه فتح /pos. كل شخص يختار رمزه السري عند أول دخول.' : 'When on, the owner and staff below can open /pos. Each person chooses a PIN on first use.'}</small>
+        </section>
+      )}
+
+      {shop && (
+        <section className="card stack">
           <strong>{labels.owners}</strong>
           {members.map(m => (
             <div className="row spread" key={m.user_id}>
@@ -123,7 +150,7 @@ export default function ShopEditor(props: {
             </div>
           ))}
           <div className="row">
-            <input className="input" style={{ flex: 1 }} dir="ltr" type="email" placeholder={labels.addByEmail} value={email} onChange={e => setEmail(e.target.value)} />
+            <input className="input" style={{ flex: 1 }} dir="ltr" type="text" inputMode="email" placeholder={ar ? 'رقم واتساب (70 123 456) أو بريد إلكتروني' : 'WhatsApp number (70 123 456) or email'} value={email} onChange={e => setEmail(e.target.value)} />
             <select className="input" style={{ width: 'auto' }} value={role} onChange={e => setRole(e.target.value as any)}><option value="owner">{labels.owner}</option><option value="staff">{labels.staff}</option></select>
             <button className="btn" onClick={addMember} disabled={!email.trim()}>+</button>
           </div>

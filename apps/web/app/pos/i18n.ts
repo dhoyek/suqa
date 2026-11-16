@@ -16,6 +16,9 @@ const T = {
   offlineNoSetup: { ar: 'لا إنترنت ولم يُجهّز هذا الجهاز بعد', en: 'No internet and this device is not set up yet' },
   retry: { ar: 'إعادة المحاولة', en: 'Retry' },
   // lock
+  noStaffTitle: { ar: 'لا يوجد موظفون على هذا المحل بعد', en: 'No staff on this shop yet' },
+  noStaffHint: { ar: 'أضِف صاحب المحل أو موظفاً برقم الواتساب من: الإدارة ← المتاجر ← هذا المحل ← المالكون. يظهر اسمه هنا ويختار رمزه السري عند أول دخول.', en: 'Add the owner or a staff member by WhatsApp number in Admin → Shops → this shop → Owners. Their name then appears here and they choose a PIN on first use.' },
+  noStaffAdd: { ar: 'إضافة أشخاص للمحل', en: 'Add people to the shop' }, otherShop: { ar: 'فتح محل آخر', en: 'Open another shop' },
   whoIsThis: { ar: 'مين عم يشتغل؟', en: 'Who is working?' },
   enterPin: { ar: 'أدخل الرمز السري (4 أرقام)', en: 'Enter your 4-digit PIN' },
   wrongPin: { ar: 'الرمز غلط', en: 'Wrong PIN' },

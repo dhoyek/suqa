@@ -26,15 +26,16 @@ export const getMyShops = cache(async (): Promise<(Shop & { role: 'owner' | 'sta
   const sb = await supabaseServer();
   const user = await getUser();
   if (!user) return [];
-  const { data } = await sb.from('shop_members').select('role, active, shop:shops(*)').eq('user_id', user.id);
+  // the two lookups go out together (each is a round trip to the database)
+  const [{ data }, { data: tm }] = await Promise.all([
+    sb.from('shop_members').select('role, active, shop:shops(*)').eq('user_id', user.id),
+    sb.from('tenant_members').select('tenant_id, role').eq('user_id', user.id).eq('role', 'admin'),
+  ]);
   const mine = ((data as any[]) ?? []).filter(r => r.shop && r.active !== false).map(r => ({ ...(r.shop as Shop), role: r.role as 'owner' | 'staff' }));
   // association admins can open every shop's dashboard (as owner); RLS already lets them read/write tenant data
   {
-    const { data: tm } = await sb.from('tenant_members').select('tenant_id, role').eq('user_id', user.id).eq('role', 'admin');
-    for (const t of (tm as { tenant_id: string }[]) ?? []) {
-      const { data: all } = await sb.from('shops').select('*').eq('tenant_id', t.tenant_id);
-      for (const s of (all as Shop[]) ?? []) if (!mine.some(m => m.id === s.id)) mine.push({ ...s, role: 'owner' });
-    }
+    const lists = await Promise.all(((tm as { tenant_id: string }[]) ?? []).map(t => sb.from('shops').select('*').eq('tenant_id', t.tenant_id)));
+    for (const { data: all } of lists) for (const s of (all as Shop[]) ?? []) if (!mine.some(m => m.id === s.id)) mine.push({ ...s, role: 'owner' });
   }
   return mine.sort((a, b) => a.sort_order - b.sort_order);
 });

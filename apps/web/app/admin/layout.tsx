@@ -11,9 +11,7 @@ import AdminNav from './AdminNav';
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   await requireUser('/admin');
   const tenant = await getTenant();
-  const role = await getTenantRole(tenant.id);
-  const L = await getLocale(tenant);
-  const myShops = await getMyShops();
+  const [role, L, myShops] = await Promise.all([getTenantRole(tenant.id), getLocale(tenant), getMyShops()]);   // together, not one after the other
   const pos = role === 'admin' || myShops.some(s => (s as unknown as { pos_enabled?: boolean }).pos_enabled);
   const tabs = [
     { href: '/admin', label: ui('dashboard', L) }, { href: '/admin/shops', label: ui('shops', L) }, { href: '/admin/orders', label: ui('orders', L) },

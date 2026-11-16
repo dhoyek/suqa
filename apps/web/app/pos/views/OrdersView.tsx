@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
@@ -21,6 +21,8 @@ import { orderSheetHtml } from '../lib/print';
 type Col = 'new' | 'active' | 'onway' | 'done' | 'cancelled';
 const COLS: Col[] = ['new', 'active', 'onway', 'done', 'cancelled'];
 const ASSIGNABLE: OrderStatus[] = ['accepted', 'preparing', 'ready'];   // a driver can be lined up while the order is still in the shop
+/** Open order wanted on a later calendar day than today (this device's clock). */
+const isLater = (o?: Order) => { if (!o?.needed_at || o.closed_at) return false; const d = new Date(o.needed_at), t = new Date(); t.setHours(23, 59, 59, 999); return d.getTime() > t.getTime(); };
 const COL_OF: Record<OrderStatus, Col> = { pending: 'new', accepted: 'active', preparing: 'active', ready: 'active', out_for_delivery: 'onway', delivered: 'done', rejected: 'cancelled', cancelled: 'cancelled' };
 const LS_COLS = 'suqa-pos-order-cols';
 const loadCols = (): Set<Col> => { try { const v = JSON.parse(localStorage.getItem(LS_COLS) ?? 'null'); if (Array.isArray(v) && v.length) return new Set(v as Col[]); } catch {} return new Set<Col>(['new', 'active', 'onway', 'done']); };
@@ -48,7 +50,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     const all = (await boot.db.orders.toArray()).filter(o => o.channel !== 'walkin' && !o.parked && (!o.closed_at || o.closed_at > since));
     // open orders: the ones wanted soonest first (scheduled ones by their time, ASAP ones by when they came in); closed ones newest first
     const open = (o: Order) => !o.closed_at; const k = (o: Order) => o.needed_at ?? o.placed_at;
-    all.sort((a, b) => open(a) && open(b) ? (k(a) < k(b) ? -1 : 1) : (a.placed_at < b.placed_at ? 1 : -1));
+    // open orders: today's by the time they are wanted, then the ones wanted on a later day (by that day)
+    all.sort((a, b) => open(a) && open(b) ? (isLater(a) !== isLater(b) ? (isLater(a) ? 1 : -1) : k(a) < k(b) ? -1 : 1) : (a.placed_at < b.placed_at ? 1 : -1));
     // a driver just confirmed one of our orders → chime + toast (only for confirmations that arrive while the board is open)
     const stepKey = (o: Order) => `${o.id}:${o.driver_ack_at ? 1 : 0}${o.driver_picked_at ? 1 : 0}${o.driver_delivered_at ? 1 : 0}`;
     const acked = new Set(all.filter(o => o.driver_ack_at).map(stepKey));
@@ -105,7 +108,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
       }
       c[col].push(o);
     }
-    c.new.sort((a, b) => (a.needed_at ?? a.placed_at) < (b.needed_at ?? b.placed_at) ? -1 : 1);   // waiting longest first
+    c.new.sort((a, b) => isLater(a) !== isLater(b) ? (isLater(a) ? 1 : -1) : (a.needed_at ?? a.placed_at) < (b.needed_at ?? b.placed_at) ? -1 : 1);   // waiting longest first
     return c;
   }, [orders, q, range, unpaidOnly, staleOnly, lines, payments, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   // two open orders of one customer that can become one: the order that stays is the one already holding a payment, else the older
@@ -165,11 +168,14 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
           <section key={c} className={`orders-col ${c}`}>
             <h4 className="row spread"><span>{colLabel(c)} <span className="muted">{cols[c].length}</span></span>{!!cols[c].length && <span className="muted num" style={{ fontWeight: 400, fontSize: 12 }}>{fmtUsd(cols[c].reduce((s, o) => s + num(o.total_cents), 0))}{c === 'done' ? ` · ${cols[c].filter(o => !isPaid(o)).length} ${pt('unpaidOrder', locale)}` : ''}</span>}</h4>
             {!cols[c].length && <p className="muted" style={{ fontSize: 13 }}>{pt('noOrders', locale)}</p>}
-            {cols[c].map(o => {
+            {cols[c].map((o, idx) => {
+              // wanted on a later day: grouped under a "later" divider at the end of the column, out of today's work
+              const later = isLater(o), firstLater = later && !isLater(cols[c][idx - 1]);
               const ls = (lines[o.id] ?? []).filter(l => !l.voided); const open = sel === o.id; const pickup = o.fulfillment === 'pickup';
               const steps = NEXT[o.status].filter(n => n !== 'rejected' && n !== 'cancelled' && !(pickup && n === 'out_for_delivery'));
-              return (
-                <article key={o.id} data-oid={o.id} className={`order-card ${open ? 'open' : ''} ${flash === o.id ? 'flash' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
+              return (<Fragment key={o.id}>
+                {firstLater && <div className="later-divider">📅 {pt('laterGroup', locale)}</div>}
+                <article data-oid={o.id} className={`order-card ${later ? 'later' : ''} ${open ? 'open' : ''} ${flash === o.id ? 'flash' : ''} ch-${o.channel}`} onClick={() => setSel(open ? null : o.id)}>
                   <div className="row spread" style={{ alignItems: 'center' }}>
                     <strong>{o.number ?? o.local_number}{o.needed_at && !o.closed_at && <span className={`pill ${new Date(o.needed_at).getTime() < Date.now() ? 'bad' : 'warn'}`} style={{ marginInlineStart: 6 }}>⏰ {neededLabel(o.needed_at, locale)}</span>}{!o.closed_at && <AgePill o={o} prep={num((boot.shop as unknown as { prep_minutes?: number }).prep_minutes) || 30} locale={locale} />}</strong>
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
@@ -213,7 +219,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                       </span>}
                     </div>
                   )}
-                </article>
+                </article></Fragment>
               );
             })}
           </section>

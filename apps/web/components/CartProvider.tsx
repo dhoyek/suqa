@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LocalizedText } from '@suqa/shared';
 
-export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string };
+export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string;
+  /** weekdays the item is sold on (0 = Sunday); absent / null = every day */ days?: number[] | null };
 export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number; pickup_enabled?: boolean };
 export type CartShop = ShopRef & { lines: CartLine[]; selected: boolean };
 /** v2: one cart, grouped by shop. `selected` = included in the next checkout (AliExpress-style). */

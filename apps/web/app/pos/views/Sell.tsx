@@ -1,10 +1,10 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
+import { addToDraft, availableOn, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
-import { pt, type L } from '../i18n';
+import { pt, daysLabel, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
@@ -199,6 +199,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             return (
               <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''}`} onClick={() => add(p, 1, { weigh: true, ask: true })}>
                 <div className="item-name">{text(p.name, locale)}</div>
+                {/* sold on some weekdays only: still sellable here, the note is for the cashier (day = when the order is wanted) */}
+                {!availableOn(p, draft.needed_at ? new Date(draft.needed_at) : new Date()) && <small className="pill warn" style={{ alignSelf: 'start', fontSize: 11 }}>{pt('notToday', locale)} · {daysLabel(p.available_days, locale)}</small>}
                 <div className="row spread" style={{ alignItems: 'center', marginTop: 'auto' }}>
                   <div className="item-price">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}{p.decimal_qty && p.unit ? <span className="muted" style={{ fontWeight: 400 }}> /{p.unit}</span> : ''}</div>
                   {stock && (stock === 'neg' && onStock

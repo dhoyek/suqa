@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { commonDays, weekdayName, weekdaysLabel } from '@/lib/weekdays';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -45,6 +46,28 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
   // per shop: zone fee + ETA, or 'outside' when the address is not served by that shop
   const [fees, setFees] = useState<Record<string, { fee_usd: number; eta_minutes: number | null } | 'outside'>>({});
   const [notes, setNotes] = useState('');
+  // When the order is wanted: as soon as possible, or a chosen day + time (up to a week ahead).
+  // Items sold on some weekdays only decide which days can be picked.
+  const ar = L === 'ar';
+  const allowedDays = useMemo(() => commonDays(shops.flatMap(s => s.lines)), [shops]);
+  const dayOptions = useMemo(() => Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + i); return d; }), []);
+  const dayOk = (d: Date) => !allowedDays || allowedDays.includes(d.getDay());
+  const todayOk = dayOk(new Date());
+  const [later, setLater] = useState(false);
+  const [day, setDay] = useState<number | null>(null);          // index into dayOptions
+  const [time, setTime] = useState('');
+  const mustSchedule = !todayOk;                                  // a weekday-only item that is not sold today
+  const isLater = later || mustSchedule;
+  const timeOptions = useMemo(() => {
+    const out: string[] = []; const now = new Date(); const soon = now.getHours() * 60 + now.getMinutes() + 45;
+    for (let m = 7 * 60; m <= 23 * 60 + 30; m += 30) if (day !== 0 || m >= soon) out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+    return out;
+  }, [day]);
+  useEffect(() => { if (time && !timeOptions.includes(time)) setTime(''); }, [timeOptions, time]);
+  useEffect(() => { if (day != null && !dayOk(dayOptions[day])) setDay(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [allowedDays]);
+  const neededAt = isLater && day != null && time ? (() => { const d = new Date(dayOptions[day]); const [h, m] = time.split(':').map(Number); d.setHours(h, m, 0, 0); return d.toISOString(); })() : null;
+  const whenOk = allowedDays?.length === 0 ? false : isLater ? !!neededAt : true;
+  const limitedNames = shops.flatMap(s => s.lines).filter(l => l.days?.length).map(l => `${tr(l.name, L)} (${weekdaysLabel(l.days!, L)})`);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,11 +124,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
     try {
       if (shops.length === 1) {
         const s = shops[0];
-        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
+        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/${order.id}?placed=1`);
       } else {
-        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery');
+        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/b/${basket.id}?placed=1`);
       }
@@ -120,7 +143,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
   const maxZoneFee = shops.reduce((m, s) => { const f = fees[s.id]; return Math.max(m, f && f !== 'outside' ? f.fee_usd : 0); }, 0);
   const courier = shops.length > 1 && deliveryMode === 'courier';
   const feeUsd = pickup ? 0 : courier ? (courierFee ?? maxZoneFee) : perShopFees;
-  const canOrder = (pickup || !!selected) && phoneOk && feesReady && !anyOutside && !busy && (!draft || pickup);
+  const canOrder = (pickup || !!selected) && phoneOk && feesReady && !anyOutside && !busy && (!draft || pickup) && whenOk;
   const shopSub = (lines: { price_usd: number; qty: number }[]) => Math.round(lines.reduce((a, l) => a + l.price_usd * l.qty, 0) * 100) / 100;
 
   return (
@@ -178,6 +201,32 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
           </div>
         )}
       </section>}
+
+      <section className="card stack">
+        <strong>{ar ? 'متى تريد الطلب؟' : 'When do you want it?'}</strong>
+        {!!limitedNames.length && <div style={{ fontSize: 13, color: '#b45309' }}>📅 {limitedNames.join(ar ? ' · ' : ' · ')}</div>}
+        {allowedDays?.length === 0
+          ? <div className="error">{ar ? 'في سلتك أصناف لا تُباع في يوم مشترك — اطلبها في طلبين منفصلين.' : 'Your cart has items with no day in common — please order them separately.'}</div>
+          : <>
+            <div className="seg" role="tablist">
+              <button type="button" role="tab" aria-selected={!isLater} disabled={mustSchedule} className={!isLater ? 'active' : ''} onClick={() => setLater(false)}>⚡ {ar ? 'في أقرب وقت' : 'As soon as possible'}</button>
+              <button type="button" role="tab" aria-selected={isLater} className={isLater ? 'active' : ''} onClick={() => setLater(true)}>📅 {ar ? 'اختر يوماً ووقتاً' : 'Pick a day and time'}</button>
+            </div>
+            {mustSchedule && <div className="muted" style={{ fontSize: 13 }}>{ar ? 'هذا الطلب غير متوفّر اليوم — اختر يوماً من الأيام المتاحة.' : 'This order is not available today — pick one of the available days.'}</div>}
+            {isLater && <>
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                {dayOptions.map((d, i) => <button type="button" key={i} className={`btn ${day === i ? 'primary' : ''}`} disabled={!dayOk(d)} style={{ padding: '6px 10px', fontSize: 14, opacity: dayOk(d) ? 1 : .4 }} onClick={() => setDay(i)}>
+                  {i === 0 ? (ar ? 'اليوم' : 'Today') : i === 1 ? (ar ? 'غداً' : 'Tomorrow') : weekdayName(d.getDay(), L)} <span className="muted" dir="ltr" style={{ fontSize: 12 }}>{d.getDate()}/{d.getMonth() + 1}</span>
+                </button>)}
+              </div>
+              {day != null && <select className="input" value={time} onChange={e => setTime(e.target.value)} aria-label={ar ? 'الوقت' : 'Time'}>
+                <option value="">{ar ? 'اختر الوقت' : 'Choose a time'}</option>
+                {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>}
+              <div className="muted" style={{ fontSize: 12 }}>{ar ? 'المتجر يؤكّد الموعد عند قبول الطلب.' : 'The shop confirms the time when it accepts the order.'}</div>
+            </>}
+          </>}
+      </section>
 
       {shops.map(s => {
         const f = fees[s.id];

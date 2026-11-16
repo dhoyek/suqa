@@ -21,7 +21,7 @@ export default function ShopEditor(props: {
   const sb = useMemo(() => supabaseBrowser(), []);
   const notify = useNotify();
   const [f, setF] = useState({
-    name_ar: shop?.name.ar ?? '', name_en: shop?.name.en ?? '', slug: shop?.slug ?? '', category_id: shop?.category_id ?? categories[0]?.id ?? '',
+    name_ar: shop?.name.ar ?? '', name_en: shop?.name.en ?? '', known_as: (shop as unknown as { known_as?: string | null } | null)?.known_as ?? '', slug: shop?.slug ?? '', category_id: shop?.category_id ?? categories[0]?.id ?? '',
     phone: shop?.phone ?? '', whatsapp: shop?.whatsapp ?? '', address_text: shop?.address_text ?? '', min_order_usd: String(shop?.min_order_usd ?? 0),
     prep_minutes: String(shop?.prep_minutes ?? 30), commission_rate: shop?.commission_rate == null ? '' : String(Number(shop.commission_rate) * 100),
   });
@@ -48,7 +48,7 @@ export default function ShopEditor(props: {
     setBusy(true); setMsg(null);
     const row = {
       tenant_id: tenantId, slug: f.slug || slugify(f.name_en || f.name_ar), name: { ar: f.name_ar.trim() || f.name_en.trim(), en: f.name_en.trim() || f.name_ar.trim() },
-      category_id: f.category_id || null, phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
+      category_id: f.category_id || null, known_as: f.known_as.trim().slice(0, 60) || null, phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
       min_order_usd: Number(f.min_order_usd) || 0, prep_minutes: Number(f.prep_minutes) || 30,
       commission_rate: f.commission_rate.trim() === '' ? null : Number(f.commission_rate) / 100, location: pointToEwkt(loc),
     };
@@ -106,6 +106,8 @@ export default function ShopEditor(props: {
           <div style={{ flex: 1 }}><label className="label">{labels.category}</label>
             <select className="input" value={f.category_id} onChange={e => setF({ ...f, category_id: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         </div>
+        <div>{field('known_as', ar ? 'معروف باسم (اختياري) — مثلاً: أبو إيلي، عند جورج' : 'Known as (optional) — e.g. the owner’s name', 'rtl')}
+          <small className="muted">{ar ? 'يظهر تحت اسم المتجر في القائمة ويُبحث به. اتركه فارغاً إن لم يرغب صاحب المتجر بإظهار اسمه.' : 'Shown under the shop name in the list and searchable. Leave empty if the owner prefers not to show a name.'}</small></div>
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}>{field('phone', labels.phone, 'ltr')}</div>
           <div style={{ flex: 1 }}>{field('whatsapp', labels.whatsapp, 'ltr')}</div>

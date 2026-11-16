@@ -159,6 +159,9 @@ const T = {
   sku: { ar: 'رمز الصنف (SKU)', en: 'SKU' }, barcodes: { ar: 'الباركود', en: 'Barcodes' }, addBarcode: { ar: 'أضف باركود (امسح أو اكتب)', en: 'Add barcode (scan or type)' },
   unit: { ar: 'الوحدة', en: 'Unit' }, piece: { ar: 'قطعة', en: 'piece' }, kg: { ar: 'كغ', en: 'kg' }, g: { ar: 'غرام', en: 'g' }, l: { ar: 'لتر', en: 'litre' }, ml: { ar: 'مل', en: 'ml' }, pack: { ar: 'عبوة', en: 'pack' },
   decimalQty: { ar: 'كمية عشرية (وزن)', en: 'Decimal quantity (weighed)' }, vat: { ar: 'خاضع للضريبة', en: 'VAT' }, trackStock: { ar: 'تتبّع المخزون', en: 'Track stock' }, minStock: { ar: 'الحد الأدنى', en: 'Min stock' },
+  daysSold: { ar: 'أيام البيع', en: 'Days sold' }, everyDay: { ar: 'كل الأيام', en: 'Every day' },
+  daysSoldHint: { ar: 'يُطلب أونلاين فقط لهذه الأيام (يمكن طلبه مسبقاً ليوم منها). في نقطة البيع يبقى قابلاً للبيع مع تنبيه.', en: 'Online it can only be ordered for these days (ordering ahead is fine). At the POS it stays sellable, with a note.' },
+  notToday: { ar: 'ليس اليوم', en: 'Not today' }, laterGroup: { ar: 'لاحقاً', en: 'Later' },
   visibleOnline: { ar: 'يظهر في المتجر الإلكتروني', en: 'Visible online' }, sellable: { ar: 'متاح للبيع الآن', en: 'Available now' }, active: { ar: 'فعّال', en: 'Active' }, archived: { ar: 'مؤرشف', en: 'Archived' },
   saved: { ar: 'تم الحفظ', en: 'Saved' }, readOnly: { ar: 'للاطلاع فقط — تعديل الأصناف لصاحب المحل أو مسؤول المخزون', en: 'Read-only — editing is for the owner or stock role' },
   barcodeExists: { ar: 'هذا الباركود مستخدم لصنف آخر', en: 'This barcode belongs to another item' }, createFromBarcode: { ar: 'إنشاء صنف بهذا الباركود', en: 'Create an item with this barcode' },
@@ -339,3 +342,9 @@ export const pt = (k: Key, l: L): string => T[k]?.[l] ?? T[k]?.ar ?? String(k);
 export function posErr(message: string, locale: L): string {
   return /not_owner|owner_only/.test(message) ? pt('ownerAccountNeeded', locale) : message;
 }
+
+/** Weekdays, Monday first as people here read a week (numbers are JS getDay: 0 = Sunday). */
+export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+const DAY_NAMES: Record<L, string[]> = { ar: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'], en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] };
+export const dayName = (d: number, locale: L) => DAY_NAMES[locale]?.[d] ?? DAY_NAMES.en[d];
+export const daysLabel = (days: number[] | null | undefined, locale: L) => !days?.length ? '' : DAY_ORDER.filter(d => days.includes(d)).map(d => dayName(d, locale)).join(locale === 'ar' ? '، ' : ', ');

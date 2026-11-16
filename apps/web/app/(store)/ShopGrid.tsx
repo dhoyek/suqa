@@ -6,7 +6,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import FavoriteButton from '@/components/FavoriteButton';
 
 type Cat = { id: string; name: LocalizedText };
-type ShopCard = { id: string; slug: string; name: LocalizedText; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; logo_url: string | null };
+type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; logo_url: string | null };
 
 // Category chips filter in the browser: the home page is fetched once and every tap is instant.
 // The selected category is mirrored into ?c= so links/refresh keep it, without a server round-trip.
@@ -29,7 +29,15 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
       setFavs(new Set((rows ?? []).map(r => r.shop_id as string)));
     });
   }, []);
-  const list = useMemo(() => c === 'fav' ? shops.filter(s => favs?.has(s.id)) : c ? shops.filter(s => s.category_id === c) : shops, [c, shops, favs]);
+  const [q, setQ] = useState('');
+  // search by shop name (both languages), what people call it, or its description; Arabic letter variants are folded
+  const fold = (t: string) => t.toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+  const list = useMemo(() => {
+    const base = c === 'fav' ? shops.filter(s => favs?.has(s.id)) : c ? shops.filter(s => s.category_id === c) : shops;
+    const n = fold(q.trim()); if (!n) return base;
+    return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c, shops, favs, q]);
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
   return (
     <>
@@ -38,6 +46,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
         {favs && <button type="button" className={`chip ${c === 'fav' ? 'active' : ''}`} onClick={() => setC('fav')}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
         {cats.map(cat => <button type="button" key={cat.id} className={`chip ${c === cat.id ? 'active' : ''}`} onClick={() => setC(cat.id)}>{tr(cat.name, L)}</button>)}
       </nav>
+      {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه…' : '🔍 Search a shop or its owner…'} style={{ marginBottom: 12 }} />}
       <section className="grid">
         {list.map(s => (
           <Link key={s.id} href={`/s/${s.slug}`} className="card shop-card" prefetch>
@@ -51,6 +60,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
                     <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs?.has(s.id)} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
                   </span>
                 </div>
+                {s.known_as && <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-primary)' }}>{s.known_as}</div>}
                 <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
               </div>
             </div>

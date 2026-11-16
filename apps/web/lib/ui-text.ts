@@ -304,6 +304,8 @@ const T = {
   err_too_many_lines: { en: 'Too many different items in one order', ar: 'عدد الأصناف في الطلب كبير جداً' },
   err_notes_too_long: { en: 'Notes are too long', ar: 'الملاحظات طويلة جداً' },
   err_product_unavailable: { en: 'An item in your cart is no longer available — please remove it', ar: 'أحد الأصناف في سلتك لم يعد متوفراً — يرجى حذفه' },
+  err_product_not_that_day: { en: 'An item in your cart is not sold on that day — choose one of its days for the order', ar: 'أحد الأصناف في سلتك لا يُباع في هذا اليوم — اختر يوماً من أيامه لموعد الطلب' },
+  err_bad_needed_at: { en: 'Please choose a time from now up to two weeks ahead', ar: 'يرجى اختيار موعد من الآن وحتى أسبوعين' },
   err_bad_quantity: { en: 'Please check the quantities', ar: 'يرجى التحقق من الكميات' },
   err_min_order: { en: 'The order is below the shop minimum', ar: 'الطلب أقل من الحد الأدنى للمتجر' },
   err_order_locked: { en: 'This order can no longer be changed', ar: 'لم يعد بالإمكان تعديل هذا الطلب' },

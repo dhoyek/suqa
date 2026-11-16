@@ -499,4 +499,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 }
 .pos div.pill, .pos p.pill, .pos small.pill { white-space: normal; border-radius: 12px; max-width: 100%; }
 
+.later-divider { margin: 10px 0 4px; padding: 4px 8px; font-size: 13px; font-weight: 700; color: #6b7280; border-top: 2px dashed #d1d5db; }
+.order-card.later { opacity: .85; background: #fafafa; }
 .merge-hint { display: block; width: 100%; text-align: start; border: 1px dashed #0e7490; background: #ecfeff; color: #155e75; border-radius: 8px; padding: 6px 10px; margin: 4px 0; font: inherit; font-size: 13px; cursor: pointer; }

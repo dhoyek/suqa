@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff, type Supplier } from '@suqa/pos-core';
-import { pt, type L } from '../i18n';
+import { pt, dayName, DAY_ORDER, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import ImageUpload from '@/components/ImageUpload';
@@ -36,6 +36,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   const [supplierId, setSupplierId] = useState(product?.supplier_id ?? ''); const [margin, setMargin] = useState(product?.margin_pct != null ? String(Number(product.margin_pct)) : ''); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   useEffect(() => { boot.db.suppliers.toArray().then(ss => setSuppliers(ss.filter(x => x.active).sort((a, b) => a.name.localeCompare(b.name)))); }, [boot]);
   const [vis, setVis] = useState(product?.visible_online ?? true); const [avail, setAvail] = useState(product?.is_available ?? true); const [active, setActive] = useState(product?.is_active ?? true);
+  const [days, setDays] = useState<number[]>(product?.available_days ?? []);   // empty = every day
   const [gate, setGate] = useState(false); const [err, setErr] = useState<string | null>(null);
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index]);
   const original = useMemo(() => (product ? index.barcodes(product.id) : []), [product, index]);
@@ -55,7 +56,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
       price_usd: cur === 'usd' ? priceNum : Number(product?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(product?.price_lbp ?? 0),
       sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
-      visible_online: vis, is_available: avail, is_active: active, image_url: img,
+      visible_online: vis, is_available: avail, is_active: active, image_url: img, available_days: days.length && days.length < 7 ? [...days].sort() : null,
       description: { ar: dAr.trim(), en: dEn.trim() },
     };
     if (owner) fields.cost_cents = cost === '' ? null : Math.round(Number(cost) * 100);
@@ -117,6 +118,14 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
             <label><input type="checkbox" checked={vis} onChange={e => setVis(e.target.checked)} /> {pt('visibleOnline', locale)}</label>
             <label><input type="checkbox" checked={avail} onChange={e => setAvail(e.target.checked)} /> {pt('sellable', locale)}</label>
             <label><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /> {pt('active', locale)}</label>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div className="label">{pt('daysSold', locale)}</div>
+            <div className="seg wrap">
+              <button type="button" className={days.length === 0 || days.length === 7 ? 'active' : ''} onClick={() => setDays([])}>{pt('everyDay', locale)}</button>
+              {DAY_ORDER.map(d => <button type="button" key={d} className={days.length > 0 && days.length < 7 && days.includes(d) ? 'active' : ''} onClick={() => setDays(x => x.includes(d) ? x.filter(y => y !== d) : [...x, d])}>{dayName(d, locale)}</button>)}
+            </div>
+            {days.length > 0 && days.length < 7 && <small className="muted">{pt('daysSoldHint', locale)}</small>}
           </div>
         </div>
       </Modal>

@@ -1,5 +1,6 @@
 'use client';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { weekdaysLabel } from '@/lib/weekdays';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
@@ -79,12 +80,13 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
                   {p.image_url && <img className="thumb lg" src={p.image_url} alt="" loading="lazy" />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="name">{tr(p.name, L)}</div>
+                    {!!(p as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((p as { available_days?: number[] }).available_days!, L)}</div>}
                     {tr(p.description, L) && <div className="muted" style={{ fontSize: 13 }}>{tr(p.description, L)}</div>}
                     <div style={{ fontSize: 14 }}>{money(Number(p.price_usd))}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
                   </div>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd) }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
+                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(shop.id, p.id, q - 1)} aria-label="−">−</button>
                         <span className="qty">{q}</span>

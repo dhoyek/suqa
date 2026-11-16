@@ -20,6 +20,7 @@ create table if not exists suqa.shops (
   pickup_enabled   boolean not null default true,              -- customers may collect from the shop (20_fulfillment)
   -- POS (21_pos)
   pos_enabled          boolean not null default false,         -- tenant switches the POS on per shop
+  known_as             text check (known_as is null or length(known_as) <= 60),   -- 69: what people call the shop (often the owner)
   default_delivery_fee_usd numeric(12,2) not null default 0,     -- pre-filled delivery fee for WhatsApp/phone orders (28_pos_customers)
   default_margin_pct   numeric(5,2) not null default 0,            -- proposes selling price from cost (31_pos_m11)
   scale_prefix         text,                                       -- weighed-item barcode prefix, null = off (31_pos_m11)
@@ -103,6 +104,7 @@ create table if not exists suqa.products (
   vat            boolean not null default false,
   track_stock    boolean not null default false,
   min_stock      numeric(12,3) not null default 0,
+  available_days smallint[] check (available_days is null or (cardinality(available_days) between 1 and 7 and available_days <@ array[0,1,2,3,4,5,6]::smallint[])),   -- 69: null = every day; else weekdays sold (0 = Sunday)
   visible_online boolean not null default true,                  -- listed in the public catalog (is_available = sellable right now)
   on_hand        numeric(12,3) not null default 0,               -- Σ stock_moves (trigger-maintained)
   supplier_id       uuid,                                -- 39: default supplier (fk added in 39)

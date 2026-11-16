@@ -16,6 +16,8 @@ export interface Product {
   price_currency: Currency; price_lbp: number; cost_cents?: number | null; supplier_id?: string | null; margin_pct?: number | string | null; next_expiry?: string | null;
   sku?: string | null; unit?: string | null; unit_kind: string; decimal_qty: boolean; vat: boolean;
   track_stock: boolean; min_stock: number | string; visible_online: boolean; is_available: boolean; is_active: boolean;
+  /** weekdays the item is sold on (0 = Sunday … 6 = Saturday); null / absent = every day */
+  available_days?: number[] | null;
   on_hand: number | string; reserved: number | string; needs_review: boolean;
   category_id?: string | null; section?: string | null; image_url?: string | null; sort_order?: number;
   updated_at: string;

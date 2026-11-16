@@ -10,7 +10,7 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
   const sb = anon();
   const [{ data: cats }, { data: shops }] = await Promise.all([
     sb.from('categories').select('id,name').eq('tenant_id', tenantId).order('sort_order'),
-    sb.from('shops').select('id,slug,name,description,category_id,min_order_usd,opening_hours,is_open_override,logo_url').eq('tenant_id', tenantId).eq('status', 'active').order('sort_order'),
+    sb.from('shops').select('id,slug,name,known_as,description,category_id,min_order_usd,opening_hours,is_open_override,logo_url').eq('tenant_id', tenantId).eq('status', 'active').order('sort_order'),
   ]);
   return { cats: (cats as Category[] | null) ?? [], shops: (shops as Shop[] | null) ?? [] };
 }, ['home-data'], { revalidate: 60, tags: ['home'] });

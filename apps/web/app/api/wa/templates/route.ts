@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { timingSafeEqual } from 'node:crypto';
+import { operatorAuthorized } from '@/lib/server/operator-auth';
 import { TEMPLATES, templateComponents } from '@/lib/server/wa-templates';
 
 export const runtime = 'nodejs';
@@ -7,11 +7,7 @@ export const dynamic = 'force-dynamic';
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 // Operator tool: GET = status of our templates in Meta, POST = submit any that are missing.
-// Protected by the shared SUQA_EVENTS_SECRET (x-suqa-secret header). Needs WHATSAPP_WABA_ID + WHATSAPP_TOKEN.
-function authorized(req: Request) {
-  const want = process.env.SUQA_EVENTS_SECRET, got = req.headers.get('x-suqa-secret');
-  return !!want && !!got && want.length === got.length && timingSafeEqual(Buffer.from(want), Buffer.from(got));
-}
+// Protected: the shared SUQA_EVENTS_SECRET (x-suqa-secret header) or a signed-in tenant admin. Needs WHATSAPP_WABA_ID + WHATSAPP_TOKEN.
 const auth = () => ({ authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` });
 
 async function existing(waba = process.env.WHATSAPP_WABA_ID) {
@@ -22,7 +18,7 @@ async function existing(waba = process.env.WHATSAPP_WABA_ID) {
 }
 
 export async function GET(req: Request) {
-  if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   try {
     const all = await existing(new URL(req.url).searchParams.get('waba') || undefined);
     return NextResponse.json(all.filter(t => TEMPLATES.some(d => d.name === t.name)));
@@ -30,7 +26,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   if (!process.env.WHATSAPP_WABA_ID || !process.env.WHATSAPP_TOKEN) return NextResponse.json({ error: 'WHATSAPP_WABA_ID / WHATSAPP_TOKEN missing' }, { status: 500 });
   const waba = new URL(req.url).searchParams.get('waba') || process.env.WHATSAPP_WABA_ID;
   const have = await existing(waba).catch(() => []);

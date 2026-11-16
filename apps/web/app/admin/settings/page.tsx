@@ -2,6 +2,7 @@ import { getTenant } from '@/lib/tenant';
 import { getTenantRole } from '@/lib/admin';
 import { ui, STATUS_LABEL } from '@/lib/ui-text';
 import SettingsForm from './SettingsForm';
+import WhatsAppSetup from './WhatsAppSetup';
 import { waConfigured } from '@/lib/server/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -12,5 +13,5 @@ export default async function AdminSettings() {
   const L = tenant.default_locale;
   const keys = ['settings', 'brandName', 'fxRate', 'displayCurrencyLabel', 'defaultCommission', 'supportPhone', 'whatsapp', 'primaryColor', 'accentColor', 'save', 'saved', 'notAllowed', 'multiShopCart', 'deliveryMode', 'perShopDelivery', 'courierDelivery', 'courierFee', 'couriersEnabled', 'legalOperator', 'legalEmail', 'legalSection', 'waTestSection', 'waTestPhone', 'waTestSend', 'waTestSent', 'maxOpenOrders', 'notifyStages'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
-  return <SettingsForm tenant={tenant} canEdit={role === 'admin'} labels={labels} waConfigured={waConfigured()} statusLabels={Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]))} />;
+  return <><SettingsForm tenant={tenant} canEdit={role === 'admin'} labels={labels} waConfigured={waConfigured()} statusLabels={Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]))} />{role === 'admin' && <WhatsAppSetup ar={L === 'ar'} />}</>;
 }

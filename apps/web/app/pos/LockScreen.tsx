@@ -2,7 +2,7 @@
 import { LS_SHOP, myMemberships } from './lib/boot';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { META, daysOffline, getMeta, hashPin, isValidPin, offlineUnlockAllowed, verifyPin, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { META, daysOffline, getMeta, setMeta, hashPin, isValidPin, offlineUnlockAllowed, verifyPin, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 
@@ -21,7 +21,13 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
 
   useEffect(() => {
     (async () => {
-      const rows = (await boot.db.staff.toArray()).filter(s => s.active !== false);
+      let rows = (await boot.db.staff.toArray()).filter(s => s.active !== false);
+      // an association admin who is not one of the shop's people (schema 71): one "setup" tile with its own PIN, kept on this
+      // device (the shop's staff list is not sent to a setup device)
+      if (boot.role === 'setup') {
+        const p = await getMeta<{ hash: string; salt: string }>(boot.db, setupPinKey(boot.userId));
+        rows = [{ user_id: boot.userId, shop_id: boot.shop.id, role: 'setup', display_name: pt('role_setup', locale), pin_hash: p?.hash ?? null, pin_salt: p?.salt ?? null, active: true }];
+      }
       setStaff(rows);
       // pre-select the signed-in account only once; later status ticks must not undo a tap on another tile
       setWho(w => (w && rows.some(s => s.user_id === w.user_id) ? w : rows.find(s => s.user_id === boot.userId) ?? rows[0] ?? null));
@@ -43,11 +49,15 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
       setBusy(true);
       try {
         if (settingPin) {
-          if (!online) { setErr(pt('pinNeedsOnline', locale)); setPin(''); return; }
+          if (!online && who.role !== 'setup') { setErr(pt('pinNeedsOnline', locale)); setPin(''); return; }
           if (confirm === null) { setConfirm(pin); setPin(''); return; }
           if (confirm !== pin) { setErr(pt('pinMismatch', locale)); setConfirm(null); setPin(''); return; }
           if (who.user_id !== boot.userId && boot.role !== 'owner') { setErr(pt('pinNeedsOnline', locale)); setPin(''); return; }
           const { hash, salt } = await hashPin(pin);
+          if (who.role === 'setup') {
+            await setMeta(boot.db, setupPinKey(boot.userId), { hash, salt });
+            setConfirm(null); setPin(''); onUnlock({ ...who, pin_hash: hash, pin_salt: salt }); return;
+          }
           const { error } = await sb.rpc('pos_set_pin', { p_shop: boot.shop.id, p_user: who.user_id, p_hash: hash, p_salt: salt });
           if (error) { setErr(error.message); setPin(''); setConfirm(null); return; }
           const updated = { ...who, pin_hash: hash, pin_salt: salt };
@@ -68,23 +78,6 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
     const h = (e: KeyboardEvent) => { if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') setPin(p => p.slice(0, -1)); else if (e.key === 'Escape') clear(); };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // an association admin who is not one of the shop's people: one tile, no PIN (his sign-in is the key, and this device
-  // holds nothing private in setup mode — schema 71)
-  if (boot.role === 'setup') return (
-    <main className="pos-lock">
-      <div className="pos-lock-card">
-        <div className="brand">{boot.shop.name?.[locale] ?? boot.shop.name?.ar}</div>
-        <h2 style={{ margin: '12px 0 8px' }}>🛠️ {pt('setupTitle', locale)}</h2>
-        <p className="muted" style={{ fontSize: 14, marginTop: 0 }}>{pt('setupHint', locale)}</p>
-        <button className="btn primary big" onClick={() => onUnlock({ user_id: boot.userId, shop_id: boot.shop.id, role: 'setup', display_name: pt('role_setup', locale), active: true })}>{pt('setupEnter', locale)}</button>
-        <div className="row spread" style={{ marginTop: 14 }}>
-          <a className="btn ghost muted" href={`/admin/shops/${boot.shop.id}`}>{pt('adminArea', locale)}</a>
-          <button className="btn ghost muted" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>
-        </div>
-      </div>
-    </main>
-  );
 
   const name = (s: Staff) => s.display_name || s.full_name || s.user_id.slice(0, 8);
   const roleLabel = (s: Staff) => pt((`role_${s.role}` as 'role_owner'), locale);
@@ -110,6 +103,7 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
             }}>🏪 {pt('otherShop', locale)}</button>
           </div>
         </div>}
+        {boot.role === 'setup' && <p className="muted" style={{ fontSize: 13, margin: '0 0 8px' }}>🛠️ {pt('setupHint', locale)}</p>}
         <div className="staff-tiles">
           {staff.map(s => <button key={s.user_id} className={`tile ${who?.user_id === s.user_id ? 'active' : ''}`} onClick={() => { setWho(s); clear(); setConfirm(null); }}>
             <div className="tile-name">{name(s)}</div><div className="muted" style={{ fontSize: 12 }}>{roleLabel(s)}{!s.pin_hash ? ' · ' + pt('setPin', locale).split(' ')[0] : ''}</div>
@@ -136,3 +130,4 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
   );
 }
 export const pinOk = isValidPin;
+const setupPinKey = (userId: string) => `setup_pin_${userId}`;

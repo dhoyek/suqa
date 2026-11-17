@@ -25,6 +25,23 @@ export async function uploadShopImage(sb: SuqaClient, shopId: string, kind: 'log
   return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+/** The association's logo: scaled to 512 px, kept as PNG so a transparent background stays transparent. media/tenants/<tenantId>/logo-<ts>.png */
+export async function uploadBrandLogo(sb: SuqaClient, tenantId: string, file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  let blob: Blob = file; let ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/jpeg' ? 'jpg' : 'png';
+  if (bitmap) {
+    const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const png: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (png) { blob = png; ext = 'png'; }
+  }
+  const path = `tenants/${tenantId}/logo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/png', cacheControl: '31536000', upsert: false });
+  if (error) throw error;
+  return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
 /** Best-effort delete of a previously uploaded file (by its public URL). */
 export async function deleteShopImage(sb: SuqaClient, url: string | null | undefined) {
   if (!url) return;

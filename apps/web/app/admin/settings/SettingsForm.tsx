@@ -1,9 +1,10 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import type { Tenant } from '@suqa/shared';
 import { sendTestWhatsApp } from './actions';
+import { uploadBrandLogo } from '@/lib/upload';
 
 type Labels = Record<'settings' | 'brandName' | 'fxRate' | 'displayCurrencyLabel' | 'defaultCommission' | 'supportPhone' | 'whatsapp' | 'primaryColor' | 'accentColor' | 'save' | 'saved' | 'notAllowed'
   | 'multiShopCart' | 'deliveryMode' | 'perShopDelivery' | 'courierDelivery' | 'courierFee' | 'couriersEnabled' | 'legalOperator' | 'legalEmail' | 'legalSection' | 'waTestSection' | 'waTestPhone' | 'waTestSend' | 'waTestSent' | 'maxOpenOrders' | 'notifyStages', string>;
@@ -14,6 +15,7 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured, st
   const [f, setF] = useState({
     brand_name: tenant.brand_name, fx: String(tenant.fx_lbp_rate), display: tenant.display_currency, commission: String(Number(tenant.commission_rate) * 100),
     support_phone: tenant.settings.support_phone ?? '', whatsapp_number: tenant.settings.whatsapp_number ?? '',
+    logo_url: tenant.branding.logo_url ?? null as string | null,
     primary: tenant.branding.colors?.primary ?? '#0E7490', accent: tenant.branding.colors?.accent ?? '#F59E0B',
     multi_shop_cart: !!tenant.settings.multi_shop_cart, delivery_mode: tenant.settings.delivery_mode ?? 'per_shop',
     courier_fee: tenant.settings.courier_fee_usd != null ? String(tenant.settings.courier_fee_usd) : '', courier_enabled: !!tenant.settings.courier_enabled,
@@ -29,6 +31,17 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured, st
     setTestBusy(false); setTestMsg(r.ok ? labels.waTestSent : r.error);
   }
 
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const ar = typeof document !== 'undefined' ? document.documentElement.lang === 'ar' : true;
+  async function pickLogo(file: File | undefined) {
+    if (!file) return;
+    setLogoBusy(true); setMsg(null);
+    try { const url = await uploadBrandLogo(sb, tenant.id, file); setF(prev => ({ ...prev, logo_url: url })); }
+    catch (e) { setMsg((e as Error).message); }
+    setLogoBusy(false); if (logoInput.current) logoInput.current.value = '';
+  }
+
   async function save() {
     setBusy(true); setMsg(null);
     const { error } = await sb.from('tenants').update({
@@ -37,7 +50,7 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured, st
         multi_shop_cart: f.multi_shop_cart, delivery_mode: f.delivery_mode, courier_fee_usd: f.courier_fee.trim() === '' ? null : Number(f.courier_fee), courier_enabled: f.courier_enabled,
         legal_operator: f.legal_operator.trim() || null, legal_email: f.legal_email.trim() || null,
         max_open_orders: f.max_open_orders.trim() === '' ? null : Math.max(0, Math.floor(Number(f.max_open_orders) || 0)), notify_stages: f.notify_stages },
-      branding: { ...tenant.branding, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
+      branding: { ...tenant.branding, logo_url: f.logo_url, colors: { ...(tenant.branding.colors ?? {}), primary: f.primary, accent: f.accent } },
     }).eq('id', tenant.id);
     setBusy(false);
     if (error) { setMsg(error.message); return; }
@@ -101,6 +114,20 @@ export default function SettingsForm({ tenant, canEdit, labels, waConfigured, st
             {testMsg && <div className={testMsg === labels.waTestSent ? 'muted' : 'error'} dir="ltr">{testMsg}</div>}
           </div>
         )}
+        <div className="row" style={{ alignItems: 'center', gap: 12 }}>
+          {f.logo_url
+            ? <img src={f.logo_url} alt="" style={{ height: 48, maxWidth: 160, objectFit: 'contain', borderRadius: 8, background: '#fff', border: '1px solid var(--line)', padding: 4 }} />
+            : <span className="muted" style={{ fontSize: 13 }}>{ar ? 'لا يوجد شعار' : 'No logo yet'}</span>}
+          <span className="stack" style={{ gap: 4 }}>
+            <strong style={{ fontSize: 14 }}>{ar ? 'شعار الموقع' : 'Site logo'}</strong>
+            <span className="muted" style={{ fontSize: 12 }}>{ar ? 'يظهر بجانب الاسم في أعلى الموقع. يُفضّل PNG بخلفية شفافة، مربع أو أفقي.' : 'Shown next to the name at the top of the site. A PNG with a transparent background works best, square or wide.'}</span>
+            {canEdit && <span className="row">
+              <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e => void pickLogo(e.target.files?.[0])} />
+              <button type="button" className="btn" disabled={logoBusy} onClick={() => logoInput.current?.click()}>{logoBusy ? '…' : f.logo_url ? (ar ? 'تغيير' : 'Change') : (ar ? '+ شعار' : '+ Logo')}</button>
+              {f.logo_url && <button type="button" className="btn ghost muted" disabled={logoBusy} onClick={() => setF({ ...f, logo_url: null })}>{ar ? 'إزالة' : 'Remove'}</button>}
+            </span>}
+          </span>
+        </div>
         <div className="row">
           <label className="row">{labels.primaryColor} <input type="color" disabled={dis} value={f.primary} onChange={e => setF({ ...f, primary: e.target.value })} /></label>
           <label className="row">{labels.accentColor} <input type="color" disabled={dis} value={f.accent} onChange={e => setF({ ...f, accent: e.target.value })} /></label>

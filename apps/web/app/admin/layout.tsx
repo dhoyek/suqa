@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     <>
       <header className="topbar">
         <div className="container" style={{ flexWrap: 'wrap' }}>
-          <Link href="/admin" className="brand">{tenant.brand_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· {ui('admin', L)}</span></Link>
+          <Link href="/admin" className="brand">{tenant.branding?.logo_url && <img className="brand-logo" src={tenant.branding.logo_url} alt="" />}{tenant.brand_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· {ui('admin', L)}</span></Link>
           <AdminNav tabs={tabs} signOut={ui('signOut', L)} />
         </div>
         <div className="container module-links">

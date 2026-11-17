@@ -324,3 +324,7 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .shop-card.is-closed .shop-logo { filter: grayscale(.6); opacity: .8; }
 .closed-note { font-size: 12px; margin-top: 6px; color: #92400e; font-weight: 600; }
 .open-pill { color: #374151; }
+
+/* one line of chips that slides sideways instead of wrapping (shops list: the filter button stays beside it) */
+.chips-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 8px; padding-block: 2px; }
+.chips-scroll::-webkit-scrollbar { display: none; }

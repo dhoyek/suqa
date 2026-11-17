@@ -48,13 +48,16 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
   return (
     <>
-      <nav className="row chips" style={{ marginBottom: sel.size ? 8 : 14, alignItems: 'center' }}>
+      {/* the filter button keeps its place at the end of the first line; the chips beside it slide sideways if the screen is narrow */}
+      <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: sel.size ? 8 : 14 }}>
+      <nav className="row chips-scroll" style={{ flex: 1, minWidth: 0 }}>
         <button type="button" className={`chip ${!fav && !st && !sel.size ? 'active' : ''}`} onClick={reset}>{labels.all}</button>
         {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
         <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>{L === 'ar' ? 'مفتوح' : 'Open'}</button>
         <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>{L === 'ar' ? 'مغلق' : 'Closed'}</button>
-        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
       </nav>
+        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} style={{ flex: 'none' }} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
+      </div>
       {sel.size > 0 && (
         <nav className="row chips" style={{ marginBottom: 14 }}>
           {cats.filter(x => sel.has(x.id)).map(x => <button type="button" key={x.id} className="chip active" onClick={() => toggleCat(x.id)}>{tr(x.name, L)} ✕</button>)}

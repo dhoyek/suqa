@@ -114,6 +114,7 @@ create table if not exists suqa.products (
   next_expiry       date,                                -- 39: earliest expiry from purchase lines
   reserved       numeric(12,3) not null default 0,               -- open online orders (trigger-maintained)
   needs_review   boolean not null default false,                 -- on_hand went negative
+  aliases        text[] not null default '{}' check (cardinality(aliases) <= 40),   -- 75: other names people use ("khebez", "rabta"); public like the name, feeds match_items
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );

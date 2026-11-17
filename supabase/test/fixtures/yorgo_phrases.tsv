@@ -1,0 +1,85 @@
+بيبسي	PEPSI	ar
+بيبسي دايت تنك	PEPSI.*DIET	ar
+خبز عربي	Arabic bread	ar
+خبز	Arabic bread	ar
+مارلبورو أحمر	MARLBORO RED	ar
+دخان سيدرز	CEDARS	ar
+فحم يحيى	YAHYA	ar
+تونا حارة	TUNA.*(HOT|CHILLI)	ar
+رز بسمتي	BASMATI	ar
+رز مصري	EGIPTIAN RICE	ar
+عدس	LENTILS	ar
+حمص حب	CHICK PEAS	ar
+قهوة نجار	NAJJAR	ar
+نسكافيه ٣ في ١	NESCAFE 3IN1	ar
+بيرة المازة	ALMAZA	ar
+عرق	ARAK	ar
+كاتشب	KETCHU+P	ar
+بيض	Eggs	ar
+مياه تنورين	TANNOURINE	ar
+شمع	CANDLE|chame3	ar
+برغل	CRUSHED WHEAT	ar
+زيت دوار الشمس	SUNFLOWER OIL	ar
+معجون اسنان كولغيت	COLGATE	ar
+شامبو هيد اند شولدرز	H&S	ar
+سنيكرز	SNICKERS	ar
+كيندر بوينو	kinder bueno	ar
+بطاريات	BATT|AAA|DURACELL	ar
+فول مدمس	foul mdamas	ar
+سبع بهارات	SEVEN SPICES	ar
+بوظة شوكولا	ICE CREAM	ar
+علبة تونا	TUNA	ar
+bebsi	PEPSI	arabizi
+khebez	Arabic bread	arabizi
+5ebez 3arabe	Arabic bread	arabizi
+fa7em	FA(H|7)EM|charcoal	arabizi
+3adas	LENTILS	arabizi
+7ommos	HUMMUS|HOMMOS|CHICK PEAS	arabizi
+2ahwe najjar	NAJJAR	arabizi
+rez masre	EGIPTIAN RICE	arabizi
+bayd	Eggs	arabizi
+dekhan marlboro	MARLBORO	arabizi
+zet	OIL|zet	arabizi
+tuna 7arra	TUNA.*(HOT|CHILLI)	arabizi
+bira almaza	ALMAZA	arabizi
+3arak	ARAK	arabizi
+cham3	CANDLE|chame3	arabizi
+bourghol	CRUSHED WHEAT	arabizi
+may tannourine	TANNOURINE	arabizi
+ma3joun snan	COLGATE|SIGNAL	arabizi
+batariyet	BATT|AAA|DURACELL	arabizi
+foul	FOUL|FAVA	arabizi
+ketchap	KETCHU+P	arabizi
+sab3 bharat	SEVEN SPICES	arabizi
+pepsi can	PEPSI.*CAN	en
+marlboro red	MARLBORO RED	en
+snickers	SNICKERS	en
+kinder bueno	kinder bueno	en
+basmati rice	BASMATI	en
+sunflower oil	SUNFLOWER	en
+ketchup	KETCHU+P	en
+eggs	Eggs	en
+arabic bread	Arabic bread	en
+nescafe 3 in 1	NESCAFE 3IN1	en
+colgate	COLGATE	en
+head and shoulders shampoo	H&S	en
+duracell AA	DURACELL	en
+twix	twix	en
+pringles ketchup	PRINGLES.*KETCHUP	en
+almaza light	ALMAZA.*LIGHT	en
+galaxy	galaxy	en
+fairy	fairy	en
+gillette	GILLETTE	en
+lipton ice tea	LIPTON ICE TEA	en
+tannourine 1.5	TANNOURINE 1.5L	en
+oreo	OREO	en
+indomie	INDOMI	en
+snikers	SNICKERS	typo
+malboro	MARLBORO	typo
+colgat	COLGATE	typo
+nescafé gold	NESCAFE GOLD	typo
+شيبس pringles	PRINGLES	mixed
+pepsi دايت	PEPSI.*DIET	mixed
+tuna بالزيت	TUNA.*OIL|TOPNOTCH IN OIL|tuna zet	mixed
+قهوة najjar	NAJJAR	mixed
+rice مصري	EGIPTIAN RICE	mixed

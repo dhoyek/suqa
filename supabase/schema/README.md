@@ -76,4 +76,5 @@ source of truth.
 | 72_known_as_en.sql | `shops.known_as_en` — the shop's "known as" name in English (69 keeps the Arabic one). |
 | 73_brand_logo_storage.sql | Association admins may upload to `media/tenants/<tenant_id>/…` (the association's logo, kept in `tenants.branding.logo_url`). Replaces `can_manage_shop_media`. |
 | 74_section_names.sql | `shops.section_names` — Arabic / English display names for a shop's item sections (`products.section` stays the key). |
+| 75_item_matching.sql | **Item matching (Yorgo milestone 1).** `products.aliases`; `norm_text` / `skel_text` (Arabic, Arabizi and Latin spellings folded to one form); `product_search` (trigger-kept, trigram-indexed, no direct access); `match_items(tenant, phrases[], shop?, limit?)` — ranked candidates with price and availability, public catalog only unless the caller is staff of the shop; `alias_suggestions` + `alias_suggest` / `alias_decide` (owner, stock or setup approve; audited). Needs `pg_trgm`. Patches `pos_restore_finish` to fold restored items. Test: `test/yorgo_match.sql`. |
 | ../seed/batroun.sql | first tenant |

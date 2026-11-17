@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import ImageUpload from '@/components/ImageUpload';
+import CategoryPick from '@/components/CategoryPick';
 import type { Locale, Shop } from '@suqa/shared';
 
 type Range = [string, string];
@@ -19,7 +20,7 @@ type Labels = Record<'myShop' | 'shopDetails' | 'nameAr' | 'nameEn' | 'descAr' |
   | 'zonesServed' | 'zonesServedHint' | 'feeOverride' | 'noZonesYet' | 'noZonesServed', string>;
 type Zone = { id: string; name: string; fee_usd: number };
 
-export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, served: served0 }: { shop: Shop; locale: Locale; canEdit: boolean; labels: Labels; zones: Zone[]; served: { zone_id: string; fee_usd: number | null }[] }) {
+export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, served: served0, admin }: { shop: Shop; locale: Locale; canEdit: boolean; admin?: { tenantId: string; categories: { id: string; name: string }[] } | null; labels: Labels; zones: Zone[]; served: { zone_id: string; fee_usd: number | null }[] }) {
   const sb = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   // which association zones this shop delivers to, with an optional fee of its own (empty = the zone's standard fee)
@@ -28,7 +29,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
   })));
   const servedCount = Object.values(served).filter(v => v.on).length;
   const [f, setF] = useState({
-    name_ar: shop.name.ar ?? '', name_en: shop.name.en ?? '', known_as: (shop as unknown as { known_as?: string | null }).known_as ?? '', known_as_en: (shop as unknown as { known_as_en?: string | null }).known_as_en ?? '', desc_ar: shop.description?.ar ?? '', desc_en: shop.description?.en ?? '',
+    name_ar: shop.name.ar ?? '', name_en: shop.name.en ?? '', slug: shop.slug ?? '', category_id: (shop as unknown as { category_id?: string | null }).category_id ?? '', known_as: (shop as unknown as { known_as?: string | null }).known_as ?? '', known_as_en: (shop as unknown as { known_as_en?: string | null }).known_as_en ?? '', desc_ar: shop.description?.ar ?? '', desc_en: shop.description?.en ?? '',
     phone: shop.phone ?? '', whatsapp: shop.whatsapp ?? '', address_text: shop.address_text ?? '',
     min_order: String(shop.min_order_usd ?? 0), prep: String(shop.prep_minutes ?? 30), pickup: shop.pickup_enabled !== false,
     logo_url: shop.logo_url ?? null as string | null, cover_url: shop.cover_url ?? null as string | null,
@@ -50,7 +51,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
     return (keys.f ?? []).some(k => b.f[k] !== f[k]) || (!!keys.hours && JSON.stringify(b.hours) !== JSON.stringify(hours)) || (!!keys.served && JSON.stringify(b.served) !== JSON.stringify(served));
   };
   const tabDirty: Record<Tab, boolean> = {
-    details: dirtyIn({ f: ['name_ar', 'name_en', 'known_as', 'known_as_en', 'desc_ar', 'desc_en', 'min_order', 'prep', 'pickup', 'logo_url', 'cover_url'] }),
+    details: dirtyIn({ f: ['name_ar', 'name_en', 'slug', 'category_id', 'known_as', 'known_as_en', 'desc_ar', 'desc_en', 'min_order', 'prep', 'pickup', 'logo_url', 'cover_url'] }),
     contact: dirtyIn({ f: ['phone', 'whatsapp', 'address_text'] }), zones: dirtyIn({ served: true }), hours: dirtyIn({ f: ['override'], hours: true }),
   };
   function discard() { const b = JSON.parse(base) as { f: typeof f; hours: Hours; served: typeof served }; setF(b.f); setHours(b.hours); setServed(b.served); setMsg(null); }
@@ -86,6 +87,8 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
     const { error } = await sb.from('shops').update({
       name: { ar: f.name_ar.trim() || f.name_en.trim(), en: f.name_en.trim() || f.name_ar.trim() },
       description: { ar: f.desc_ar.trim(), en: f.desc_en.trim() },
+      // link name and category belong to the association: only sent by its admins (the database refuses them from a shop's own people)
+      ...(admin ? { ...(f.slug.trim() ? { slug: f.slug.trim() } : {}), category_id: f.category_id || null } : {}),
       known_as: f.known_as.trim().slice(0, 60) || null, known_as_en: f.known_as_en.trim().slice(0, 60) || null,
       phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
       min_order_usd: Number(f.min_order) || 0, prep_minutes: Math.max(0, Number(f.prep) || 0), pickup_enabled: f.pickup,
@@ -131,6 +134,10 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
             <div><label className="label">{labels.nameEn}</label><input className="input" dir="ltr" disabled={dis} value={f.name_en} onChange={e => setF({ ...f, name_en: e.target.value })} /></div>
           </div>
         </div>
+        {admin && <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}><label className="label">{L === 'ar' ? 'اسم الرابط (أحرف لاتينية وشرطات)' : 'Link name (Latin letters and dashes)'}</label><input className="input" dir="ltr" value={f.slug} onChange={e => setF({ ...f, slug: e.target.value })} /></div>
+          <div style={{ flex: 1 }}><CategoryPick tenantId={admin.tenantId} locale={L === 'ar' ? 'ar' : 'en'} categories={admin.categories} value={f.category_id} onChange={id => setF(x => ({ ...x, category_id: id }))} label={L === 'ar' ? 'الفئة' : 'Category'} /></div>
+        </div>}
         <div><div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}><label className="label">{L === 'ar' ? 'معروف باسم — عربي (اختياري)' : 'Known as — Arabic (optional)'}</label><input className="input" dir="rtl" maxLength={60} disabled={dis} value={f.known_as} onChange={e => setF({ ...f, known_as: e.target.value })} /></div>
           <div style={{ flex: 1 }}><label className="label">{L === 'ar' ? 'معروف باسم — إنكليزي (اختياري)' : 'Known as — English (optional)'}</label><input className="input" dir="ltr" maxLength={60} disabled={dis} value={f.known_as_en} onChange={e => setF({ ...f, known_as_en: e.target.value })} /></div>

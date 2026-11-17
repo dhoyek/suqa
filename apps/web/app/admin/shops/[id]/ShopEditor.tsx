@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import MapPicker from '@/components/MapPicker';
 import ImageUpload from '@/components/ImageUpload';
+import CategoryPick from '@/components/CategoryPick';
 import { ui } from '@/lib/ui-text';
 import RestorePanel from './RestorePanel';
 import SectionNames from './SectionNames';
@@ -137,8 +138,7 @@ export default function ShopEditor(props: {
         </div>
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}>{field('slug', labels.shopSlug, 'ltr')}</div>
-          <div style={{ flex: 1 }}><label className="label">{labels.category}</label>
-            <select className="input" value={f.category_id} onChange={e => setF({ ...f, category_id: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{ flex: 1 }}><CategoryPick tenantId={tenantId} locale={ar ? 'ar' : 'en'} categories={categories} value={f.category_id} onChange={id => setF(x => ({ ...x, category_id: id }))} label={labels.category} /></div>
         </div>
         {shop ? <>
           <div><label className="label">{ui('cover', L)}</label>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import FilterIcon from '@/components/FilterIcon';
+import DoorIcon from '@/components/DoorIcon';
 import FavoriteButton from '@/components/FavoriteButton';
 
 type Cat = { id: string; name: LocalizedText };
@@ -54,8 +55,8 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
         <button type="button" className={`chip ${!fav && !st && !sel.size ? 'active' : ''}`} onClick={reset}>{labels.all}</button>
         {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
         {/* icons keep the row on one line on a phone; the words stay for screen readers and as a tooltip */}
-        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} title={L === 'ar' ? 'مفتوح الآن' : 'Open now'} aria-label={L === 'ar' ? 'مفتوح الآن' : 'Open now'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>🔓</button>
-        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} title={L === 'ar' ? 'مغلق الآن' : 'Closed now'} aria-label={L === 'ar' ? 'مغلق الآن' : 'Closed now'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>🔒</button>
+        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} title={L === 'ar' ? 'مفتوح الآن' : 'Open now'} aria-label={L === 'ar' ? 'مفتوح الآن' : 'Open now'} onClick={() => setSt(v => v === 'open' ? null : 'open')}><DoorIcon open /></button>
+        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} title={L === 'ar' ? 'مغلق الآن' : 'Closed now'} aria-label={L === 'ar' ? 'مغلق الآن' : 'Closed now'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}><DoorIcon open={false} /></button>
       </nav>
         {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} style={{ flex: 'none' }} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
       </div>

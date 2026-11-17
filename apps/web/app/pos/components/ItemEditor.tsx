@@ -78,7 +78,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
   return (
     <>
       <Modal open onClose={onClose} title={product ? pt('editItem', locale) : pt('newItem', locale)} wide
-        footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} />{err && <span className="bad">{err}</span>}<button className="btn primary" disabled={!valid} onClick={submit}>{pt('save', locale)}</button></>}>
+        actions={<button className="btn icon primary" disabled={!valid} onClick={submit} aria-label={pt('save', locale)} title={pt('save', locale)}>✓</button>}
+        footer={err ? <span className="bad">{err}</span> : undefined}>
         <div className="item-form">
           <label className="label">{pt('nameAr', locale)}<input className="input" value={ar} onChange={e => setAr(e.target.value)} autoFocus /></label>
           <label className="label">{pt('nameEn', locale)}<input className="input" dir="ltr" value={en} onChange={e => setEn(e.target.value)} /></label>

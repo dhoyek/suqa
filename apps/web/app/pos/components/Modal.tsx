@@ -2,7 +2,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
 /** Minimal modal: Esc closes, backdrop click closes, body scroll locked. */
-export default function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+// `actions`: icon buttons shown in the title bar beside ✕ — the bar never scrolls away, so on a phone Save stays reachable with the keyboard open.
+export default function Modal({ open, onClose, title, children, wide, footer, actions }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; wide?: boolean; footer?: ReactNode; actions?: ReactNode }) {
   // dialogs stack (a PIN prompt over the pay dialog): only the one on top answers Esc, otherwise Esc closed the dialog underneath
   const me = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -20,7 +21,7 @@ export default function Modal({ open, onClose, title, children, wide, footer }: 
   return (
     <div className="pos-modal-backdrop" ref={me} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`pos-modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true">
-        {title && <div className="pos-modal-title">{title}<button className="btn icon" onClick={onClose} aria-label="close">✕</button></div>}
+        {title && <div className="pos-modal-title"><span className="pos-modal-title-text">{title}</span><span className="pos-modal-actions">{actions}<button className="btn icon" onClick={onClose} aria-label="close" title="Esc">✕</button></span></div>}
         <div className="pos-modal-body">{children}</div>
         {footer && <div className="pos-modal-footer">{footer}</div>}
       </div>

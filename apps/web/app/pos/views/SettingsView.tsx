@@ -103,7 +103,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>{pt('onlineShopHint', locale)}</p>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <a className="btn" href={`/s/${boot.shop.slug}`} target="_blank" rel="noreferrer">👁 {pt('viewAsCustomer', locale)}</a>
-          {owner && <a className="btn" href="/shop/settings" target="_blank" rel="noreferrer">⚙ {pt('shopDashboard', locale)}</a>}
+          {owner && <a className="btn" href={`/shop/settings?shop=${boot.shop.id}`} target="_blank" rel="noreferrer">⚙ {pt('shopDashboard', locale)}</a>}
           <a className="btn ghost" href="/" target="_blank" rel="noreferrer">🏠 {pt('homePage', locale)}</a>
         </div>
       </section>

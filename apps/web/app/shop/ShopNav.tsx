@@ -8,6 +8,7 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
   const router = useRouter();
   const current = params.get('shop') ?? shops[0]?.id;
   const q = current && shops.length > 1 ? `?shop=${current}` : '';
+  const pq = current ? `?shop=${current}` : '';   // the point of sale opens the shop being managed here, not the one this browser used last
   const slug = shops.find(s => s.id === current)?.slug ?? shops[0]?.slug;
 
   return (
@@ -19,8 +20,8 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
         </select>
       )}
       <nav className="tabs">
-        <a href="/pos#orders" className="tab pos-tab">🧾 {labels.pos} · {labels.orders}</a>
-        <a href="/pos#items" className="tab">🏷 {labels.products}</a>
+        <a href={`/pos${pq}#orders`} className="tab pos-tab">🧾 {labels.pos} · {labels.orders}</a>
+        <a href={`/pos${pq}#items`} className="tab">🏷 {labels.products}</a>
         <Link href={`/shop/settings${q}`} className={`tab ${path.startsWith('/shop/settings') ? 'active' : ''}`}>⚙ {labels.myShop}</Link>
         {slug && <Link href={`/s/${slug}`} className="tab" title={labels.viewAsCustomer}>👁 {labels.viewAsCustomer}</Link>}
       </nav>

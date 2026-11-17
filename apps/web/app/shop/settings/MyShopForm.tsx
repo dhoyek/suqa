@@ -110,7 +110,7 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
   const paused = f.override === 'closed';
   return (
     <div className="stack">
-      <h1 style={{ margin: 0, fontSize: 20 }}>{labels.myShop}</h1>
+      <h1 style={{ margin: 0, fontSize: 20 }}>{labels.myShop} — {(L === 'ar' ? shop.name.ar : shop.name.en) || shop.name.ar || shop.name.en}</h1>
 
       <section className={`card row spread ${paused ? 'paused' : ''}`} style={{ alignItems: 'center' }}>
         <div><strong>{labels.pauseOrders}</strong><div className="muted" style={{ fontSize: 13 }}>{labels.pauseHint}</div></div>

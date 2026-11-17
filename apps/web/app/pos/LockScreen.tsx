@@ -131,7 +131,7 @@ export default function LockScreen({ boot, sb, locale, status, onUnlock }: { boo
           <span className="row" style={{ gap: 4 }}>
             {boot.role === 'setup'
               ? <a className="btn ghost muted" href={`/admin/shops/${boot.shop.id}`}>{pt('adminArea', locale)}</a>
-              : <a className="btn ghost muted" href="/shop">{pt('backToShop', locale)}</a>}
+              : <a className="btn ghost muted" href={`/shop/settings?shop=${boot.shop.id}`}>{pt('backToShop', locale)}</a>}
             {multi && <button className="btn ghost muted" onClick={() => { localStorage.removeItem(LS_SHOP); window.location.reload(); }}>🏪 {pt('otherShop', locale)}</button>}
           </span>
           <span className="muted" style={{ fontSize: 12 }}>{pt('lastSync', locale)}: {status?.lastSyncAt ? new Date(status.lastSyncAt).toLocaleTimeString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) : pt('never', locale)}</span>

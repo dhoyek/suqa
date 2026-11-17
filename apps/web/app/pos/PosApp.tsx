@@ -49,6 +49,19 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
     if (!session) { setPhase({ k: 'needSignIn' }); return; }
     const userId = session.user.id;
     let shopId = localStorage.getItem(LS_SHOP);
+    // opened from a shop's dashboard (/pos?shop=<id>): open THAT shop, never the one this browser used last.
+    // If the account cannot open it here (point of sale off, or no access), the shop is chosen by hand instead of guessed.
+    const asked = new URLSearchParams(window.location.search).get('shop');
+    if (asked) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      if (asked !== shopId) {
+        let shops: Membership[];
+        try { shops = await myMemberships(sb); }
+        catch (e) { setPhase({ k: 'error', msg: (e as Error).message, retry: () => { window.location.href = `/pos?shop=${asked}${window.location.hash}`; } }); return; }
+        if (shops.some(m => m.shop_id === asked)) { shopId = asked; localStorage.setItem(LS_SHOP, asked); }
+        else { localStorage.removeItem(LS_SHOP); if (!shops.length) { setPhase({ k: 'noAccess' }); return; } setPhase({ k: 'chooseShop', shops }); return; }
+      }
+    }
     if (!shopId) {
       let shops: Membership[];
       try { shops = await myMemberships(sb); }

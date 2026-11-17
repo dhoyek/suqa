@@ -66,6 +66,10 @@ export default function Shell(props: {
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
+  // an account that can open several shops always sees which one this is (an admin must never edit the wrong shop)
+  const shopName = boot.shop.name?.[locale] ?? boot.shop.name?.ar ?? boot.shop.name?.en ?? '';
+  const multiShop = (() => { try { return localStorage.getItem('suqa-pos-multi') === '1'; } catch { return false; } })();
+
   return (
     <div className="pos" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       <header className="pos-bar">
@@ -75,6 +79,7 @@ export default function Shell(props: {
           {viewsFor(roleOf(staff)).map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
+          {multiShop && <span className="pill pos-shopname" title={shopName}>🏪 {shopName}</span>}
           <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>
             <span className={`dot ${online ? 'on' : ''}`} />{online ? pt('online', locale) : pt('offline', locale)}
           </span>

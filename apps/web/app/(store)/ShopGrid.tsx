@@ -8,14 +8,20 @@ import FavoriteButton from '@/components/FavoriteButton';
 type Cat = { id: string; name: LocalizedText };
 type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; reopen?: string | null; logo_url: string | null };
 
-// Category chips filter in the browser: the home page is fetched once and every tap is instant.
-// The selected category is mirrored into ?c= so links/refresh keep it, without a server round-trip.
-// Signed-in users also get a ★ Favourites chip (their starred shops, loaded client-side so the page stays cacheable).
+// Filters run in the browser: the home page is fetched once and every tap is instant.
+// Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the 🗂 category
+// filter — the same sheet as inside a shop: type to narrow the list, tick several. Chosen categories are mirrored into ?c=.
 export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, labels }: {
   cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string;
-  labels: { all: string; minOrder: string; empty: string; favorites: string; noFavorites: string; addFavorite: string; removeFavorite: string };
+  labels: { all: string; minOrder: string; empty: string; favorites: string; noFavorites: string; addFavorite: string; removeFavorite: string; categories: string; clearFilter: string; typeToFilter: string; ok: string };
 }) {
-  const [c, setC] = useState<string | null>(initial);
+  const [sel, setSel] = useState<Set<string>>(() => new Set((initial ?? '').split(',').filter(id => cats.some(x => x.id === id))));
+  const [fav, setFav] = useState(false);
+  const [st, setSt] = useState<'open' | 'closed' | null>(null);
+  const [sheet, setSheet] = useState(false); const [catQ, setCatQ] = useState('');
+  const toggleCat = (id: string) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const reset = () => { setSel(new Set()); setFav(false); setSt(null); };
+  const c = [...sel].join(',');
   const [favs, setFavs] = useState<Set<string> | null>(null);     // null = not signed in / not loaded
   useEffect(() => {
     const url = c ? `/?c=${c}` : '/';
@@ -33,19 +39,39 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
   // search by shop name (both languages), what people call it, or its description; Arabic letter variants are folded
   const fold = (t: string) => t.toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   const list = useMemo(() => {
-    const base = c === 'fav' ? shops.filter(s => favs?.has(s.id)) : c ? shops.filter(s => s.category_id === c) : shops;
+    const base = shops.filter(s => (!fav || favs?.has(s.id)) && (!st || s.open === (st === 'open')) && (!sel.size || (s.category_id != null && sel.has(s.category_id))));
     const n = fold(q.trim()); if (!n) return base;
     return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.known_as_en, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c, shops, favs, q]);
+  }, [c, fav, st, shops, favs, q]);
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
   return (
     <>
-      <nav className="row chips" style={{ marginBottom: 14 }}>
-        <button type="button" className={`chip ${!c ? 'active' : ''}`} onClick={() => setC(null)}>{labels.all}</button>
-        {favs && <button type="button" className={`chip ${c === 'fav' ? 'active' : ''}`} onClick={() => setC('fav')}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
-        {cats.map(cat => <button type="button" key={cat.id} className={`chip ${c === cat.id ? 'active' : ''}`} onClick={() => setC(cat.id)}>{tr(cat.name, L)}</button>)}
+      <nav className="row chips" style={{ marginBottom: sel.size ? 8 : 14, alignItems: 'center' }}>
+        <button type="button" className={`chip ${!fav && !st && !sel.size ? 'active' : ''}`} onClick={reset}>{labels.all}</button>
+        {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
+        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>{L === 'ar' ? 'مفتوح' : 'Open'}</button>
+        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>{L === 'ar' ? 'مغلق' : 'Closed'}</button>
+        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}>🗂{sel.size ? ` ${sel.size}` : ''}</button>}
       </nav>
+      {sel.size > 0 && (
+        <nav className="row chips" style={{ marginBottom: 14 }}>
+          {cats.filter(x => sel.has(x.id)).map(x => <button type="button" key={x.id} className="chip active" onClick={() => toggleCat(x.id)}>{tr(x.name, L)} ✕</button>)}
+          <button type="button" className="chip" onClick={() => setSel(new Set())}>{labels.clearFilter}</button>
+        </nav>
+      )}
+      {sheet && (
+        <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setSheet(false); }}>
+          <div className="dlg card" role="dialog" aria-label={labels.categories}>
+            <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.categories}{sel.size ? ` (${sel.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
+            <input className="input" placeholder={labels.typeToFilter} value={catQ} onChange={e => setCatQ(e.target.value)} />
+            <div className="cat-list">
+              {cats.filter(x => !catQ.trim() || fold(`${x.name.ar ?? ''} ${x.name.en ?? ''}`).includes(fold(catQ.trim()))).map(x => <label key={x.id} className={`cat-row ${sel.has(x.id) ? 'active' : ''}`}><input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleCat(x.id)} /> <span>{tr(x.name, L)}</span></label>)}
+            </div>
+            <div className="row spread"><button type="button" className="btn" onClick={() => setSel(new Set())}>✕ {labels.clearFilter}</button><button type="button" className="btn primary" onClick={() => setSheet(false)}>{labels.ok}</button></div>
+          </div>
+        </div>
+      )}
       {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه…' : '🔍 Search a shop or its owner…'} style={{ marginBottom: 12 }} />}
       <section className="grid">
         {list.map(s => (
@@ -68,7 +94,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
             {s.min_order_usd > 0 && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{labels.minOrder}: ${s.min_order_usd.toFixed(2)}</div>}
           </Link>
         ))}
-        {!list.length && <p className="muted">{c === 'fav' ? labels.noFavorites : labels.empty}</p>}
+        {!list.length && <p className="muted">{fav && !st && !sel.size ? labels.noFavorites : labels.empty}</p>}
       </section>
     </>
   );

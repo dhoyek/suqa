@@ -305,9 +305,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .back-btn:active { background: #eef6f8; }
 .topbar .brand { min-width: 0; }
 .topbar .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sec-chips { position: sticky; top: 61px; z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; margin: 0 -16px; background: var(--bg); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.sec-chips::-webkit-scrollbar { display: none; }
-.sec-chips .chip { flex: none; }
 .thumb.ph, .shop-logo.ph { display: inline-flex; align-items: center; justify-content: center; font-weight: 800; color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 10%, #fff); border: 0; }
 .thumb.ph { width: 44px; height: 44px; font-size: 18px; }
 .shop-logo.ph { font-size: 20px; }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import MapPicker from '@/components/MapPicker';
 import RestorePanel from './RestorePanel';
+import SectionNames from './SectionNames';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
 
 type Member = { user_id: string; full_name: string | null; email: string; role: 'owner' | 'staff' };
@@ -185,6 +186,7 @@ export default function ShopEditor(props: {
           </div>
         </section>
       )}
+      {shop && <SectionNames shopId={shop.id} locale={props.locale} initial={(shop as unknown as { section_names?: Record<string, { ar?: string; en?: string }> | null }).section_names ?? null} />}
       {shop && <RestorePanel shopId={shop.id} locale={props.locale} />}
     </div>
   );

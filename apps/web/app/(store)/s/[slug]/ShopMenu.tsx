@@ -10,7 +10,7 @@ import { waLink } from '@/lib/whatsapp';
 type Labels = Record<'add' | 'soldOut' | 'replaceCart' | 'cart' | 'checkout' | 'items' | 'askOnWhatsapp' | 'waHello' | 'waAskItem' | 'waFrom' | 'searchItems' | 'noMatches' | 'all' | 'categories' | 'clearFilter' | 'typeToFilter' | 'showMore' | 'ok', string>;
 
 export default function ShopMenu({ shop, products, locale: L, fx, displayCurrency, labels }: {
-  shop: { id: string; slug: string; name: LocalizedText; min_order_usd: number; whatsapp: string | null; pickup_enabled?: boolean }; products: Product[];
+  shop: { id: string; slug: string; name: LocalizedText; min_order_usd: number; whatsapp: string | null; pickup_enabled?: boolean; section_names?: Record<string, { ar?: string; en?: string }> | null }; products: Product[];
   locale: Locale; fx: number; displayCurrency: DisplayCurrency; labels: Labels;
 }) {
   const { add, setQty, qtyOf: qtyIn, selectedCount, selectedSubtotal, shopOf, setSelected } = useCart();
@@ -20,6 +20,9 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
   const qtyOf = (id: string) => qtyIn(shop.id, id);
+  // a section's display name in the visitor's language (schema 74); the section key itself when the shop gave it no name
+  const secName = (x: string) => { const n = shop.section_names?.[x]; return (L === 'ar' ? n?.ar || n?.en : n?.en || n?.ar) || x; };
+  const secText = (x: string) => { const n = shop.section_names?.[x]; return `${x} ${n?.ar ?? ''} ${n?.en ?? ''}`; };
   // Category chips + substring search (any position, both languages, case-insensitive)
   const [secs, setSecs] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false); const [secQ, setSecQ] = useState('');
@@ -30,12 +33,12 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const visible = useMemo(() => {
     const needle = norm(q.trim());
     return products.filter(p => (secs.size === 0 || secs.has(p.section ?? ''))
-      && (!needle || norm(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.description?.ar ?? ''} ${p.description?.en ?? ''}`).includes(needle)));
+      && (!needle || norm(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.description?.ar ?? ''} ${p.description?.en ?? ''} ${secText(p.section ?? '')}`).includes(needle)));
   }, [products, secs, q]);
   useEffect(() => setLimit(60), [q, secs]);                       // a new search/filter starts from the top again
   const shown = visible.slice(0, limit);
   const visibleSections = sections.filter(s => shown.some(p => (p.section ?? '') === s));
-  const secMatches = sections.filter(Boolean).filter(x => !secQ.trim() || norm(x).includes(norm(secQ.trim())));
+  const secMatches = sections.filter(Boolean).filter(x => !secQ.trim() || norm(secText(x)).includes(norm(secQ.trim()))).sort((a, b) => secName(a).localeCompare(secName(b), L));
   // Prefilled WhatsApp message with the item's details and a link back to the shop page.
   const askLink = (p: Product) => waLink(shop.whatsapp, [
     `${labels.waHello} ${tr(shop.name, L)} 👋`, labels.waAskItem,
@@ -51,11 +54,10 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
           <input className="input search" type="search" placeholder={labels.searchItems} value={q} onChange={e => setQ(e.target.value)} aria-label={labels.searchItems} style={{ flex: 1 }} />
           {sections.filter(Boolean).length > 1 && <button type="button" className={`btn ${secs.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}>🗂{secs.size ? ` ${secs.size}` : ''}</button>}
         </div>
-        {/* sections in one swipeable row that stays under the top bar: one tap shows a section, another tap shows all again */}
-        {sections.filter(Boolean).length > 1 && (
-          <nav className="sec-chips" aria-label={labels.categories}>
-            <button type="button" className={`chip ${secs.size === 0 ? 'active' : ''}`} onClick={() => setSecs(new Set())}>{labels.all}</button>
-            {sections.filter(Boolean).map(x => <button type="button" key={x} className={`chip ${secs.has(x) ? 'active' : ''}`} onClick={() => { setSecs(prev => prev.size === 1 && prev.has(x) ? new Set() : new Set([x])); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{x}</button>)}
+        {secs.size > 0 && (
+          <nav className="row chips">
+            {[...secs].map(x => <button type="button" key={x} className="chip active" onClick={() => toggleSec(x)}>{secName(x)} ✕</button>)}
+            <button type="button" className="chip" onClick={() => setSecs(new Set())}>{labels.clearFilter}</button>
           </nav>
         )}
         {sheet && (
@@ -64,7 +66,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
               <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.categories}{secs.size ? ` (${secs.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
               <input className="input" placeholder={labels.typeToFilter} value={secQ} onChange={e => setSecQ(e.target.value)} />
               <div className="cat-list">
-                {secMatches.map(x => <label key={x} className={`cat-row ${secs.has(x) ? 'active' : ''}`}><input type="checkbox" checked={secs.has(x)} onChange={() => toggleSec(x)} /> <span>{x}</span></label>)}
+                {secMatches.map(x => <label key={x} className={`cat-row ${secs.has(x) ? 'active' : ''}`}><input type="checkbox" checked={secs.has(x)} onChange={() => toggleSec(x)} /> <span>{secName(x)}</span></label>)}
               </div>
               <div className="row spread"><button type="button" className="btn" onClick={() => setSecs(new Set())}>✕ {labels.clearFilter}</button><button type="button" className="btn primary" onClick={() => setSheet(false)}>{labels.ok}</button></div>
             </div>
@@ -73,7 +75,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
         {!visible.length && <p className="muted">{labels.noMatches}</p>}
         {visibleSections.map(sec => (
           <section className="card" key={sec || '_'}>
-            {sec && <div className="col-title" style={{ marginTop: 0 }}>{sec}</div>}
+            {sec && <div className="col-title" style={{ marginTop: 0 }}>{secName(sec)}</div>}
             {shown.filter(p => (p.section ?? '') === sec).map(p => {
               const q = qtyOf(p.id);
               return (

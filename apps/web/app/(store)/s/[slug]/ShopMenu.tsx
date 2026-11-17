@@ -1,4 +1,5 @@
 'use client';
+import FilterIcon from '@/components/FilterIcon';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
 import { useEffect, useMemo, useState } from 'react';
@@ -52,7 +53,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
       <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           <input className="input search" type="search" placeholder={labels.searchItems} value={q} onChange={e => setQ(e.target.value)} aria-label={labels.searchItems} style={{ flex: 1 }} />
-          {sections.filter(Boolean).length > 1 && <button type="button" className={`btn ${secs.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}>🗂{secs.size ? ` ${secs.size}` : ''}</button>}
+          {sections.filter(Boolean).length > 1 && <button type="button" className={`btn ${secs.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{secs.size ? ` ${secs.size}` : ''}</button>}
         </div>
         {secs.size > 0 && (
           <nav className="row chips">

@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import FilterIcon from '@/components/FilterIcon';
 import FavoriteButton from '@/components/FavoriteButton';
 
 type Cat = { id: string; name: LocalizedText };
 type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; reopen?: string | null; logo_url: string | null };
 
 // Filters run in the browser: the home page is fetched once and every tap is instant.
-// Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the 🗂 category
+// Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the category
 // filter — the same sheet as inside a shop: type to narrow the list, tick several. Chosen categories are mirrored into ?c=.
 export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, labels }: {
   cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string;
@@ -52,7 +53,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
         {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
         <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>{L === 'ar' ? 'مفتوح' : 'Open'}</button>
         <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>{L === 'ar' ? 'مغلق' : 'Closed'}</button>
-        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}>🗂{sel.size ? ` ${sel.size}` : ''}</button>}
+        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
       </nav>
       {sel.size > 0 && (
         <nav className="row chips" style={{ marginBottom: 14 }}>

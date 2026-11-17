@@ -1,4 +1,6 @@
 'use client';
+import FilterIcon from '@/components/FilterIcon';
+import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { text, type Category } from '@suqa/pos-core';
 import Modal from './Modal';
@@ -8,7 +10,7 @@ export type PickItem = { id: string; label: string; extra?: string };
 
 /** Generic multi-select filter: a button → sheet with type-ahead + checkboxes; the selection is shown as removable chips
  *  (PickChips). Used for categories (Sell, Items) and for people (Debts). */
-export function PickFilter({ items, selected, onChange, locale, icon = '🗂', title, big = false }: { items: PickItem[]; selected: Set<string>; onChange: (s: Set<string>) => void; locale: L; icon?: string; title: string; big?: boolean }) {
+export function PickFilter({ items, selected, onChange, locale, icon = <FilterIcon />, title, big = false }: { items: PickItem[]; selected: Set<string>; onChange: (s: Set<string>) => void; locale: L; icon?: ReactNode; title: string; big?: boolean }) {
   const [open, setOpen] = useState(false); const [q, setQ] = useState('');
   const toggle = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); onChange(n); };
   const matches = useMemo(() => { const n = q.trim().toLowerCase(); return items.filter(c => !n || c.label.toLowerCase().includes(n) || (c.extra ?? '').toLowerCase().includes(n)); }, [items, q]);

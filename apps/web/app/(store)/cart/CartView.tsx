@@ -75,6 +75,7 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
           <span>{labels.deliveryFee}</span>
           <span>{selectedShops.length > 1 ? (deliveryMode === 'courier' ? labels.oneFeeCourier : labels.feePerShop) : `→ ${labels.checkout}`}</span>
         </div>
+        <div className="muted" style={{ fontSize: 13 }}>💵 {L === 'ar' ? 'الدفع نقداً عند الاستلام، بالدولار أو بالليرة.' : 'Pay cash when you receive the order, in USD or LBP.'}</div>
         <Link className={`btn primary wide ${canCheckout ? '' : 'disabled'}`} aria-disabled={!canCheckout}
           href={canCheckout ? (signedIn ? '/checkout' : '/login?next=/checkout') : '#'} onClick={e => { if (!canCheckout) e.preventDefault(); }}
           style={{ textAlign: 'center', textDecoration: 'none' }}>

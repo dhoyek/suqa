@@ -38,3 +38,11 @@ export const getShopWithProducts = unstable_cache(async (tenantId: string, slug:
   }).filter(p => !(shop.hide_online_when_zero && p.available === 0));
   return { shop: shop as Shop, products: list };
 }, ['shop-page'], { revalidate: 15, tags: ['shop'] });
+
+/** Lowest and highest delivery fee among the zones a shop serves (its own fee for a zone replaces the zone's). null = no zones. */
+export const getShopFeeRange = unstable_cache(async (shopId: string): Promise<{ min: number; max: number } | null> => {
+  const { data } = await anon().from('shop_delivery_zones').select('fee_usd, zone:delivery_zones(fee_usd, is_active)').eq('shop_id', shopId);
+  const fees = ((data as unknown as { fee_usd: number | string | null; zone: { fee_usd: number | string; is_active: boolean } | null }[] | null) ?? [])
+    .filter(r => r.zone?.is_active !== false).map(r => Number(r.fee_usd ?? r.zone?.fee_usd ?? 0)).filter(n => Number.isFinite(n));
+  return fees.length ? { min: Math.min(...fees), max: Math.max(...fees) } : null;
+}, ['shop-fee-range'], { revalidate: 300 });

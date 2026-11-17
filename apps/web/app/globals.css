@@ -4,7 +4,7 @@
   --bg: #f6f7f8;
   --card: #ffffff;
   --text: #111827;
-  --muted: #6b7280;
+  --muted: #4b5563;   /* darker grey: readable on a phone in daylight (7:1 on white) */
   --line: #e5e7eb;
   --ok: #15803d;
   --warn: #b45309;
@@ -313,3 +313,14 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .shop-card { transition: box-shadow .15s, transform .15s; }
 .shop-card:active { transform: scale(.99); }
 @media (hover: hover) { .shop-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); } }
+
+/* ---------- trust line, tap targets, open / closed shops ---------- */
+.trust-line { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; margin-top: 8px; padding: 8px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.trust-line > span { white-space: nowrap; }
+.btn.wa-mini { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.product .stepper .btn { min-width: 44px; min-height: 44px; }
+.shop-card.is-open { border-inline-start: 4px solid #16a34a; }
+.shop-card.is-closed { background: #fafafa; }
+.shop-card.is-closed .shop-logo { filter: grayscale(.6); opacity: .8; }
+.closed-note { font-size: 12px; margin-top: 6px; color: #92400e; font-weight: 600; }
+.open-pill { color: #374151; }

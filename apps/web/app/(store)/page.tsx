@@ -2,7 +2,7 @@ import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
 import { getHomeData } from '@/lib/public-data';
 import { ui } from '@/lib/ui-text';
-import { isOpenNow } from '@/lib/hours';
+import { isOpenNow, reopenLabel } from '@/lib/hours';
 import ShopGrid from './ShopGrid';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +16,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
   const cards = shops.map(s => ({
     id: s.id, slug: s.slug, name: s.name, known_as: (s as { known_as?: string | null }).known_as ?? null, known_as_en: (s as { known_as_en?: string | null }).known_as_en ?? null, description: s.description, category_id: s.category_id, min_order_usd: Number(s.min_order_usd), logo_url: s.logo_url ?? null,
     open: isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone),
+    reopen: reopenLabel(s.opening_hours, s.is_open_override, tenant.timezone, L),
   }));
   // customers only see categories that have at least one shop listed (an empty category is a dead end)
   const used = new Set(shops.map(s => s.category_id).filter(Boolean));

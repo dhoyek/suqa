@@ -6,7 +6,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import FavoriteButton from '@/components/FavoriteButton';
 
 type Cat = { id: string; name: LocalizedText };
-type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; logo_url: string | null };
+type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; reopen?: string | null; logo_url: string | null };
 
 // Category chips filter in the browser: the home page is fetched once and every tap is instant.
 // The selected category is mirrored into ?c= so links/refresh keep it, without a server round-trip.
@@ -49,7 +49,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
       {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه…' : '🔍 Search a shop or its owner…'} style={{ marginBottom: 12 }} />}
       <section className="grid">
         {list.map(s => (
-          <Link key={s.id} href={`/s/${s.slug}`} className="card shop-card" prefetch>
+          <Link key={s.id} href={`/s/${s.slug}`} className={`card shop-card ${s.open ? 'is-open' : 'is-closed'}`} prefetch>
             <div className="row" style={{ gap: 10, alignItems: 'center' }}>
               {s.logo_url ? <img className="shop-logo" src={s.logo_url} alt="" loading="lazy" /> : <span className="shop-logo ph" aria-hidden>{(tr(s.name, L) || '•').trim().charAt(0)}</span>}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -64,6 +64,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
                 <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
               </div>
             </div>
+            {!s.open && <div className="closed-note">{s.reopen ? `${L === 'ar' ? 'يفتح' : 'Opens'} ${s.reopen} · ` : ''}{L === 'ar' ? 'يمكنك الطلب لوقت لاحق' : 'you can order for later'}</div>}
             {s.min_order_usd > 0 && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{labels.minOrder}: ${s.min_order_usd.toFixed(2)}</div>}
           </Link>
         ))}

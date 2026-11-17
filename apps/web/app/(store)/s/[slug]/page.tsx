@@ -1,9 +1,9 @@
 import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
-import { getShopWithProducts } from '@/lib/public-data';
+import { getShopWithProducts, getShopFeeRange } from '@/lib/public-data';
 import { ui } from '@/lib/ui-text';
-import { isOpenNow } from '@/lib/hours';
+import { isOpenNow, reopenLabel } from '@/lib/hours';
 import { t as tr } from '@suqa/shared';
 import ShopMenu from './ShopMenu';
 import { waLink, telLink } from '@/lib/whatsapp';
@@ -19,6 +19,10 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
   const { shop: s, products } = res;
   const L = await getLocale(tenant);
   const open = isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone);
+  const reopen = open ? null : reopenLabel(s.opening_hours, s.is_open_override, tenant.timezone, L);
+  const fee = await getShopFeeRange(s.id);
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+  const ar = L === 'ar';
   const wa = waLink(s.whatsapp ?? s.phone, `${ui('waHello', L)} ${tr(s.name, L)} 👋`);
   const tel = telLink(s.phone ?? s.whatsapp);
 
@@ -34,8 +38,15 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>
         <div className="row" style={{ fontSize: 13, marginTop: 6 }}>
           <span className={`dot ${open ? 'on' : ''}`} /> {open ? ui('openNow', L) : ui('closedNow', L)}
+          {reopen && <strong>· {ar ? 'يفتح' : 'Opens'} {reopen}</strong>}
           {s.min_order_usd > 0 && <span className="muted">· {ui('minOrder', L)} ${Number(s.min_order_usd).toFixed(2)}</span>}
           {s.address_text && <span className="muted">· {s.address_text}</span>}
+        </div>
+        {/* what a customer wants to know before ordering: delivery, how to pay, pickup */}
+        <div className="trust-line">
+          {fee && <span>🛵 {ar ? 'التوصيل' : 'Delivery'} {fee.min === fee.max ? (fee.min === 0 ? (ar ? 'مجاني' : 'free') : usd(fee.min)) : `${usd(fee.min)} – ${usd(fee.max)}`}{fee.min !== fee.max ? <span className="muted"> {ar ? 'حسب المنطقة' : 'by area'}</span> : null}</span>}
+          <span>💵 {ar ? 'الدفع نقداً عند الاستلام' : 'Pay cash on delivery'}</span>
+          {s.pickup_enabled !== false && <span>🛍️ {ar ? 'الاستلام من المحل متاح' : 'Pickup available'}</span>}
         </div>
         {(wa || tel) && (
           <div className="row" style={{ marginTop: 10 }}>

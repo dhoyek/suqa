@@ -74,6 +74,12 @@ export async function localReport(db: PosDb, from: string, to: string): Promise<
   };
 }
 
+/** The shop value computed on this device (all items are here). Used to complete the server's report, which gives totals only. */
+export async function localStock(db: PosDb): Promise<Report['stock']> {
+  const [products, rates] = await Promise.all([db.products.toArray(), db.rates.orderBy('effective_at').last()]);
+  return stockValue(products.filter(p => p.is_active && p.track_stock), rates?.lbp_per_usd ?? 89500);
+}
+
 /** Shop value: what the tracked stock is worth at cost and at selling price, in total and per section. */
 export function stockValue(tracked: Product[], rate: number): Report['stock'] {
   const retail = (p: Product) => (p.price_currency === 'usd' ? num(p.price_usd) * 100 : (num(p.price_lbp) / rate) * 100);

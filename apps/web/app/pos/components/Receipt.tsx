@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fmtLbp, fmtUsd, lbpToCents, roundLbp, searchCustomers, text, usdToLbp, type CommitResult, type Shop, type ShopCustomer, type Staff } from '@suqa/pos-core';
+import { fmtLbp, fmtUsd, fmtPhone, lbpToCents, roundLbp, text, usdToLbp, type CommitResult, type Shop, type Staff } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
 import ReturnDialog from './ReturnDialog';
+import CustomerPick from './CustomerPick';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import type { Booted } from '../lib/boot';
 
@@ -16,8 +17,8 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
   const [qr, setQr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [waState, setWaState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [phone, setPhone] = useState(order.customer_phone ?? '');
-  const [pick, setPick] = useState(false); const [cq, setCq] = useState(''); const [found, setFound] = useState<ShopCustomer[]>([]);
+  const [phone, setPhone] = useState(order.customer_phone ?? ''); const [custName, setCustName] = useState(order.customer_name ?? '');
+  const [pick, setPick] = useState(false);
   const [printed, setPrinted] = useState<boolean>(() => !again && loadPrintSettings().autoPrint);
   const [ret, setRet] = useState(false);
   const [auto, setAuto] = useState<number | null>(() => (!again && loadPrintSettings().autoNew && loadPrintSettings().autoPrint ? 5 : null));
@@ -45,7 +46,6 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (showQr && !qr) import('qrcode').then(m => m.toDataURL(url, { width: 280, margin: 1 })).then(setQr).catch(() => setQr(null)); }, [showQr, qr, url]);
-  useEffect(() => { if (!pick || !boot) return; let on = true; searchCustomers(boot.db, cq, 10).then(r => { if (on) setFound(r); }); return () => { on = false; }; }, [pick, cq, boot]);
 
   const rate = order.rate_lbp_per_usd;
   const live = lines.filter(l => !l.voided);
@@ -85,8 +85,15 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
           <button className="btn" style={{ flex: 1 }} onClick={() => setShowQr(true)}>▦ {pt('showQr', locale)}</button>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <input className="input" inputMode="tel" placeholder={pt('customerPhone', locale)} value={phone} onChange={e => { setPhone(e.target.value); setWaState('idle'); }} />
-          {boot && <button className="btn" title={pt('pickCustomer', locale)} onClick={() => { setPick(true); setCq(''); }}>📇</button>}
+          {/* who gets the receipt: the same customer menu as on the payment screen — search by name or number, or add a new one */}
+          {boot
+            ? <span className="cust-anchor" style={{ flex: 1, minWidth: 0 }}>
+                <button type="button" className="btn" style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start', textAlign: 'start', overflow: 'hidden' }} aria-expanded={pick} onClick={() => setPick(o => !o)}>
+                  {phone.trim() ? <>👤 {custName ? `${custName} · ` : ''}<bdi dir="ltr">{fmtPhone(phone)}</bdi></> : <>📇 {pt('pickCustomer', locale)}</>}
+                </button>
+                {pick && <CustomerPick boot={boot} locale={locale} onPick={c => { setPhone(c.phone); setCustName(c.name); setPick(false); setWaState('idle'); }} onClose={() => setPick(false)} />}
+              </span>
+            : <input className="input" inputMode="tel" placeholder={pt('customerPhone', locale)} value={phone} onChange={e => { setPhone(e.target.value); setWaState('idle'); }} />}
           <button className="btn" onClick={sendWa} disabled={!phone.trim() || waState === 'sending'}>{waState === 'sent' ? '✓ ' + pt('sent', locale) : '💬 ' + pt('sendWhatsApp', locale)} <kbd>W</kbd></button>
         </div>
         {waState === 'error' && <p className="bad">WhatsApp: {pt('sendFailed', locale)}</p>}
@@ -95,11 +102,6 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
       </div>
       {showQr && <Modal open onClose={() => setShowQr(false)} title={pt('receipt', locale)}>
         <div style={{ textAlign: 'center' }}>{qr ? <img src={qr} alt="QR" width={280} height={280} /> : <p className="muted">…</p>}<p className="muted">{pt('qrHint', locale)}</p><p style={{ fontSize: 12, direction: 'ltr' }}>{url}</p></div>
-      </Modal>}
-      {pick && <Modal open onClose={() => setPick(false)} title={`📇 ${pt('pickCustomer', locale)}`}>
-        <input className="input" autoFocus placeholder={pt('searchCustomer', locale)} value={cq} onChange={e => setCq(e.target.value)} />
-        <ul className="tender-list" style={{ marginTop: 8 }}>{found.map(c => <li key={c.id}><span>{c.name} <span className="muted" dir="ltr">{c.phone}</span></span><button className="btn" onClick={() => { setPhone(c.phone); setPick(false); setWaState('idle'); }}>✓</button></li>)}</ul>
-        {!found.length && <p className="muted">{pt('noResults', locale)}</p>}
       </Modal>}
       {ret && boot && staff && <ReturnDialog boot={boot} locale={locale} order={order} lines={lines} staff={staff} onDone={() => { setRet(false); onNew(); }} onClose={() => setRet(false)} />}
     </div>

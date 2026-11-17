@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, num, shiftSummary, text, todaySummary, type CatalogIndex, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
+import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, localStock, num, shiftSummary, text, todaySummary, type CatalogIndex, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
 import { pt, posErr, type L } from '../i18n';
 import ApprovalsReport from '../components/ApprovalsReport';
 import type { Booted } from '../lib/boot';
@@ -52,7 +52,13 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
     try {
       if (online) {
         const { data, error } = await sb.rpc('pos_report', { p_shop: boot.shop.id, p_from: range[0], p_to: range[1] });
-        if (!error) { setRep(data as Report); return; }
+        if (!error) {
+          // the server's report carries stock totals only; the per-section breakdown (and the warnings) come from this device's own items
+          const d = data as Report;
+          const stock = await localStock(boot.db).catch(() => null);
+          setRep({ ...d, stock: stock ?? { ...d.stock, by_section: d.stock?.by_section ?? [], no_cost: d.stock?.no_cost ?? 0, negative: d.stock?.negative ?? 0 } });
+          return;
+        }
         setErr(posErr(error.message, locale));
       }
       setRep(await localReport(boot.db, range[0], range[1]));

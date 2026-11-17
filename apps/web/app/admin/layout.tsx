@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const [role, L, myShops] = await Promise.all([getTenantRole(tenant.id), getLocale(tenant), getMyShops()]);   // together, not one after the other
   const pos = role === 'admin' || myShops.some(s => (s as unknown as { pos_enabled?: boolean }).pos_enabled);
   const tabs = [
-    { href: '/admin', label: ui('dashboard', L) }, { href: '/admin/shops', label: ui('shops', L) }, { href: '/admin/orders', label: ui('orders', L) },
+    { href: '/admin', label: ui('dashboard', L) }, { href: '/admin/shops', label: ui('shops', L) }, { href: '/admin/categories', label: L === 'ar' ? 'الفئات' : 'Categories' }, { href: '/admin/orders', label: ui('orders', L) },
     { href: '/admin/zones', label: ui('zones', L) }, { href: '/admin/members', label: ui('members', L) }, { href: '/admin/accounts', label: ui('accounts', L) }, { href: '/admin/settings', label: ui('settings', L) },
   ];
   return (

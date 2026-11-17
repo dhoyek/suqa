@@ -51,7 +51,14 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
     let shopId = localStorage.getItem(LS_SHOP);
     // opened from a shop's dashboard (/pos?shop=<id>): open THAT shop, never the one this browser used last.
     // If the account cannot open it here (point of sale off, or no access), the shop is chosen by hand instead of guessed.
-    const asked = new URLSearchParams(window.location.search).get('shop');
+    const qs = new URLSearchParams(window.location.search);
+    const asked = qs.get('shop');
+    // /pos?choose=1 (the admin area's shortcut): an account with several shops picks one instead of reopening the last.
+    // Offline, or with a single shop, the stored shop simply opens.
+    if (!asked && qs.get('choose')) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      try { const shops = await myMemberships(sb); if (shops.length > 1) { localStorage.removeItem(LS_SHOP); setPhase({ k: 'chooseShop', shops }); return; } } catch { /* offline: keep the stored shop */ }
+    }
     if (asked) {
       window.history.replaceState(null, '', window.location.pathname + window.location.hash);
       if (asked !== shopId) {

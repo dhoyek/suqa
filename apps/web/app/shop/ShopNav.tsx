@@ -6,16 +6,19 @@ export default function ShopNav({ shops, labels }: { shops: { id: string; name: 
   const path = usePathname();
   const params = useSearchParams();
   const router = useRouter();
-  const current = params.get('shop') ?? shops[0]?.id;
+  // several shops and none chosen yet: nothing is pre-selected (the page asks), and the point of sale asks too
+  const picked = shops.find(s => s.id === params.get('shop'))?.id;
+  const current = picked ?? (shops.length > 1 ? undefined : shops[0]?.id);
   const q = current && shops.length > 1 ? `?shop=${current}` : '';
-  const pq = current ? `?shop=${current}` : '';   // the point of sale opens the shop being managed here, not the one this browser used last
-  const slug = shops.find(s => s.id === current)?.slug ?? shops[0]?.slug;
+  const pq = current ? `?shop=${current}` : '?choose=1';   // the point of sale opens the shop being managed here, not the one this browser used last
+  const slug = shops.find(s => s.id === current)?.slug;
 
   return (
     <>
       {shops.length > 1 && (
-        <select className="input" style={{ width: 'auto', minHeight: 36, padding: '6px 10px' }} value={current}
-          onChange={e => router.push(`${path}?shop=${e.target.value}`)} aria-label="shop">
+        <select className="input" style={{ width: 'auto', minHeight: 36, padding: '6px 10px' }} value={current ?? ''}
+          onChange={e => { if (e.target.value) router.push(`${path}?shop=${e.target.value}`); }} aria-label="shop">
+          {!current && <option value="">🏪 …</option>}
           {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       )}

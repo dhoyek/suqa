@@ -1,6 +1,8 @@
 import { getTenant } from '@/lib/tenant';
 import { getLocale } from '@/lib/locale';
+import Link from 'next/link';
 import { currentShop } from '@/lib/current-shop';
+import { getMyShops } from '@/lib/auth';
 import { ui } from '@/lib/ui-text';
 import { supabaseServer } from '@/lib/supabase-server';
 import { t as tr } from '@suqa/shared';
@@ -12,9 +14,19 @@ export const dynamic = 'force-dynamic';
 export default async function ShopSettingsPage({ searchParams }: { searchParams: Promise<{ shop?: string }> }) {
   const sp = await searchParams;
   const tenant = await getTenant();
+  const L = await getLocale(tenant);
+  // an account with several shops says which one first: opening "the first one" is how the wrong shop gets edited
+  const mine = await getMyShops();
+  if (mine.length > 1 && !mine.some(s => s.id === sp.shop)) return (
+    <div className="stack">
+      <h1 style={{ margin: 0, fontSize: 20 }}>{L === 'ar' ? 'أي متجر تريد إدارته؟' : 'Which shop do you want to manage?'}</h1>
+      <div className="stack" style={{ gap: 8 }}>
+        {mine.map(s => <Link key={s.id} href={`/shop/settings?shop=${s.id}`} className="btn big" style={{ justifyContent: 'flex-start' }}>🏪 {tr(s.name, L)}</Link>)}
+      </div>
+    </div>
+  );
   const shop = await currentShop(sp);
   if (!shop) return null;
-  const L = await getLocale(tenant);
   const sb = await supabaseServer();
   const { data: { user } } = await sb.auth.getUser();
   const [{ data: zones }, { data: served }, { data: tm }, { data: cats }] = await Promise.all([

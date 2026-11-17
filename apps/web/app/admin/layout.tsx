@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <span className="muted" style={{ fontSize: 12 }}>{ui('goTo', L)}</span>
           <Link href="/" className="chip">🏠 {ui('home', L)}</Link>
           <Link href="/shop/settings" className="chip">🏪 {ui('myShop', L)}</Link>
-          {pos && <a href="/pos" className="chip">🖥️ {ui('pos', L)}</a>}
+          {pos && <a href="/pos?choose=1" className="chip">🖥️ {ui('pos', L)}</a>}
           <Link href="/orders" className="chip">🧾 {ui('purchaseHistory', L)}</Link>
           <Link href="/courier" className="chip">🛵 {ui('courierApp', L)}</Link>
         </div>

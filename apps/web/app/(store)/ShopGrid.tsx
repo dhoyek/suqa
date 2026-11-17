@@ -53,8 +53,9 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
       <nav className="row chips-scroll" style={{ flex: 1, minWidth: 0 }}>
         <button type="button" className={`chip ${!fav && !st && !sel.size ? 'active' : ''}`} onClick={reset}>{labels.all}</button>
         {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
-        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>{L === 'ar' ? 'مفتوح' : 'Open'}</button>
-        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>{L === 'ar' ? 'مغلق' : 'Closed'}</button>
+        {/* icons keep the row on one line on a phone; the words stay for screen readers and as a tooltip */}
+        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} title={L === 'ar' ? 'مفتوح الآن' : 'Open now'} aria-label={L === 'ar' ? 'مفتوح الآن' : 'Open now'} onClick={() => setSt(v => v === 'open' ? null : 'open')}>🔓</button>
+        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} title={L === 'ar' ? 'مغلق الآن' : 'Closed now'} aria-label={L === 'ar' ? 'مغلق الآن' : 'Closed now'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}>🔒</button>
       </nav>
         {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} style={{ flex: 'none' }} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
       </div>

@@ -51,12 +51,12 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
         {list.map(s => (
           <Link key={s.id} href={`/s/${s.slug}`} className="card shop-card" prefetch>
             <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-              {s.logo_url && <img className="shop-logo" src={s.logo_url} alt="" loading="lazy" />}
+              {s.logo_url ? <img className="shop-logo" src={s.logo_url} alt="" loading="lazy" /> : <span className="shop-logo ph" aria-hidden>{(tr(s.name, L) || '•').trim().charAt(0)}</span>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row spread" style={{ alignItems: 'center' }}>
                   <strong>{tr(s.name, L)}</strong>
                   <span className="row" style={{ gap: 6, alignItems: 'center' }}>
-                    <span className={`dot ${s.open ? 'on' : ''}`} />
+                    <span className={`open-pill ${s.open ? 'on' : ''}`}>{s.open ? (L === 'ar' ? 'مفتوح' : 'Open') : (L === 'ar' ? 'مغلق' : 'Closed')}</span>
                     <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs?.has(s.id)} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
                   </span>
                 </div>

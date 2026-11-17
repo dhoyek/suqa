@@ -299,3 +299,20 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .subtabs button.on { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
 .subtabs .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-accent); margin-inline-start: 6px; vertical-align: middle; }
 .savebar .unsaved { color: #92400e; font-weight: 600; margin-inline-end: auto; }
+
+/* ---------- storefront polish (back button, section row, placeholders) ---------- */
+.back-btn { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 20px; line-height: 1; cursor: pointer; color: var(--brand-primary); display: inline-flex; align-items: center; justify-content: center; }
+.back-btn:active { background: #eef6f8; }
+.topbar .brand { min-width: 0; }
+.topbar .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-chips { position: sticky; top: 61px; z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; margin: 0 -16px; background: var(--bg); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.sec-chips::-webkit-scrollbar { display: none; }
+.sec-chips .chip { flex: none; }
+.thumb.ph, .shop-logo.ph { display: inline-flex; align-items: center; justify-content: center; font-weight: 800; color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 10%, #fff); border: 0; }
+.thumb.ph { width: 44px; height: 44px; font-size: 18px; }
+.shop-logo.ph { font-size: 20px; }
+.open-pill { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #f1f3f5; color: var(--muted); white-space: nowrap; }
+.open-pill.on { background: #dcfce7; color: #166534; }
+.shop-card { transition: box-shadow .15s, transform .15s; }
+.shop-card:active { transform: scale(.99); }
+@media (hover: hover) { .shop-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); } }

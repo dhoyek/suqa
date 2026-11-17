@@ -51,10 +51,11 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
           <input className="input search" type="search" placeholder={labels.searchItems} value={q} onChange={e => setQ(e.target.value)} aria-label={labels.searchItems} style={{ flex: 1 }} />
           {sections.filter(Boolean).length > 1 && <button type="button" className={`btn ${secs.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}>🗂{secs.size ? ` ${secs.size}` : ''}</button>}
         </div>
-        {secs.size > 0 && (
-          <nav className="row chips">
-            {[...secs].map(x => <button type="button" key={x} className="chip active" onClick={() => toggleSec(x)}>{x} ✕</button>)}
-            <button type="button" className="chip" onClick={() => setSecs(new Set())}>{labels.clearFilter}</button>
+        {/* sections in one swipeable row that stays under the top bar: one tap shows a section, another tap shows all again */}
+        {sections.filter(Boolean).length > 1 && (
+          <nav className="sec-chips" aria-label={labels.categories}>
+            <button type="button" className={`chip ${secs.size === 0 ? 'active' : ''}`} onClick={() => setSecs(new Set())}>{labels.all}</button>
+            {sections.filter(Boolean).map(x => <button type="button" key={x} className={`chip ${secs.has(x) ? 'active' : ''}`} onClick={() => { setSecs(prev => prev.size === 1 && prev.has(x) ? new Set() : new Set([x])); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{x}</button>)}
           </nav>
         )}
         {sheet && (
@@ -77,7 +78,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
               const q = qtyOf(p.id);
               return (
                 <div className={`product ${p.is_available ? '' : 'off'}`} key={p.id}>
-                  {p.image_url && <img className="thumb lg" src={p.image_url} alt="" loading="lazy" />}
+                  {p.image_url ? <img className="thumb lg" src={p.image_url} alt="" loading="lazy" /> : <span className="thumb ph" aria-hidden>{(tr(p.name, L) || '•').trim().charAt(0)}</span>}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="name">{tr(p.name, L)}</div>
                     {!!(p as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((p as { available_days?: number[] }).available_days!, L)}</div>}

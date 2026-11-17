@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import MapPicker from '@/components/MapPicker';
+import ImageUpload from '@/components/ImageUpload';
+import { ui } from '@/lib/ui-text';
 import RestorePanel from './RestorePanel';
 import SectionNames from './SectionNames';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
@@ -27,6 +29,23 @@ export default function ShopEditor(props: {
     prep_minutes: String(shop?.prep_minutes ?? 30), commission_rate: shop?.commission_rate == null ? '' : String(Number(shop.commission_rate) * 100),
   });
   const [loc, setLoc] = useState(props.location);
+  // the rest of what the shop's own settings page holds, so an admin can prepare a shop completely before its owner signs in
+  type Range = [string, string]; type Hours = Record<string, Range[]>;
+  const L = props.locale;
+  const [x, setX] = useState({
+    desc_ar: shop?.description?.ar ?? '', desc_en: shop?.description?.en ?? '', pickup: shop ? shop.pickup_enabled !== false : true,
+    logo_url: (shop?.logo_url ?? null) as string | null, cover_url: (shop?.cover_url ?? null) as string | null,
+  });
+  const [hours, setHours] = useState<Hours>((shop?.opening_hours as Hours | null | undefined) ?? {});
+  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+  const DAY_LABEL: Record<string, { en: string; ar: string }> = {
+    mon: { en: 'Mon', ar: 'الاثنين' }, tue: { en: 'Tue', ar: 'الثلاثاء' }, wed: { en: 'Wed', ar: 'الأربعاء' }, thu: { en: 'Thu', ar: 'الخميس' },
+    fri: { en: 'Fri', ar: 'الجمعة' }, sat: { en: 'Sat', ar: 'السبت' }, sun: { en: 'Sun', ar: 'الأحد' },
+  };
+  const setRange = (day: string, i: number, k: 0 | 1, v: string) => setHours(h => { const r = [...(h[day] ?? [])]; r[i] = [...(r[i] ?? ['09:00', '18:00'])] as Range; r[i][k] = v; return { ...h, [day]: r }; });
+  const addRange = (day: string) => setHours(h => ({ ...h, [day]: [...(h[day] ?? []), (h[day]?.length ? ['16:00', '20:00'] : ['09:00', '18:00']) as Range] }));
+  const removeRange = (day: string, i: number) => setHours(h => { const r = (h[day] ?? []).filter((_, j) => j !== i); const n = { ...h }; if (r.length) n[day] = r; else delete n[day]; return n; });
+  const imgLabels = { add: ui('photo', L), change: ui('changePhoto', L), remove: labels.remove };
   const ask = useConfirm();
   const [served, setServed] = useState<Record<string, { on: boolean; fee: string }>>(Object.fromEntries(zones.map(z => {
     const s = props.served.find(x => x.zone_id === z.id); return [z.id, { on: !!s, fee: s?.fee_usd == null ? '' : String(s.fee_usd) }];
@@ -65,6 +84,7 @@ export default function ShopEditor(props: {
       phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null, address_text: f.address_text.trim() || null,
       min_order_usd: Number(f.min_order_usd) || 0, prep_minutes: Number(f.prep_minutes) || 30,
       commission_rate: f.commission_rate.trim() === '' ? null : Number(f.commission_rate) / 100, location: pointToEwkt(loc),
+      description: { ar: x.desc_ar.trim(), en: x.desc_en.trim() }, pickup_enabled: x.pickup, logo_url: x.logo_url, cover_url: x.cover_url, opening_hours: hours,
     };
     let id = shop?.id;
     if (id) { const { error } = await sb.from('shops').update(row).eq('id', id); if (error) { setMsg(error.message); setBusy(false); return; } }
@@ -120,6 +140,14 @@ export default function ShopEditor(props: {
           <div style={{ flex: 1 }}><label className="label">{labels.category}</label>
             <select className="input" value={f.category_id} onChange={e => setF({ ...f, category_id: e.target.value })}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         </div>
+        {shop ? <>
+          <div><label className="label">{ui('cover', L)}</label>
+            <ImageUpload shopId={shop.id} kind="cover" value={x.cover_url} onChange={u => setX({ ...x, cover_url: u })} locale={L} labels={imgLabels} /></div>
+          <div><label className="label">{ui('logo', L)}</label>
+            <ImageUpload shopId={shop.id} kind="logo" shape="square" value={x.logo_url} onChange={u => setX({ ...x, logo_url: u })} locale={L} labels={imgLabels} /></div>
+        </> : <small className="muted">🖼 {ar ? 'صورة الغلاف والشعار تُضافان بعد أول حفظ.' : 'The cover image and logo can be added after the first save.'}</small>}
+        <div><label className="label">{ui('descAr', L)}</label><input className="input" dir="rtl" value={x.desc_ar} onChange={e => setX({ ...x, desc_ar: e.target.value })} /></div>
+        <div><label className="label">{ui('descEn', L)}</label><input className="input" dir="ltr" value={x.desc_en} onChange={e => setX({ ...x, desc_en: e.target.value })} /></div>
         <div><div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}>{field('known_as', ar ? 'معروف باسم — عربي (اختياري) — مثلاً: أبو إيلي' : 'Known as — Arabic (optional)', 'rtl')}</div>
           <div style={{ flex: 1 }}>{field('known_as_en', ar ? 'معروف باسم — إنكليزي (اختياري) — مثلاً: Abou Elie' : 'Known as — English (optional) — e.g. Abou Elie', 'ltr')}</div>
@@ -135,6 +163,7 @@ export default function ShopEditor(props: {
           <div style={{ flex: 1 }}>{field('prep_minutes', labels.prepMinutes, 'ltr')}</div>
           <div style={{ flex: 1 }}>{field('commission_rate', labels.commissionRate, 'ltr')}</div>
         </div>
+        <label className="row" style={{ gap: 10, cursor: 'pointer' }}><input type="checkbox" className="check" checked={x.pickup} onChange={e => setX({ ...x, pickup: e.target.checked })} /> 🛍️ {ui('pickupEnabled', L)}</label>
         <div><div className="label">{labels.shopLocation}</div><MapPicker value={loc} onChange={setLoc} useMyLocationLabel={labels.useMyLocation} /></div>
         <div>
           <div className="label">{labels.zonesServed}</div>
@@ -142,6 +171,27 @@ export default function ShopEditor(props: {
             <div className="row" key={z.id} style={{ padding: '6px 0' }}>
               <label className="row" style={{ flex: 1, cursor: 'pointer' }}><input type="checkbox" checked={served[z.id]?.on ?? false} onChange={e => setServed({ ...served, [z.id]: { ...served[z.id], on: e.target.checked } })} /> {z.name} <span className="muted">(${z.fee_usd.toFixed(2)})</span></label>
               <input className="input" style={{ width: 120 }} dir="ltr" placeholder={labels.feeOverride} value={served[z.id]?.fee ?? ''} onChange={e => setServed({ ...served, [z.id]: { ...served[z.id], fee: e.target.value } })} />
+            </div>
+          ))}
+        </div>
+        <div className="stack" style={{ gap: 6 }}>
+          <div className="label">{ui('openingHours', L)}</div>
+          {DAYS.map(d => (
+            <div key={d} className="stack" style={{ gap: 4 }}>
+              {(hours[d]?.length ? hours[d] : [null]).map((r, i) => (
+                <div className="hours-row" key={i}>
+                  <span style={{ fontSize: 13 }}>{i === 0 ? DAY_LABEL[d][ar ? 'ar' : 'en'] : ''}</span>
+                  {r ? <>
+                    <input type="time" className="input" dir="ltr" value={r[0]} onChange={e => setRange(d, i, 0, e.target.value)} />
+                    <input type="time" className="input" dir="ltr" value={r[1]} onChange={e => setRange(d, i, 1, e.target.value)} />
+                    <button type="button" className="btn ghost muted" onClick={() => removeRange(d, i)} aria-label={labels.remove}>✕</button>
+                  </> : <>
+                    <span className="muted" style={{ fontSize: 13, gridColumn: 'span 2' }}>{ui('closedDay', L)}</span>
+                    <button type="button" className="btn ghost" onClick={() => addRange(d)}>{ui('addRange', L)}</button>
+                  </>}
+                </div>
+              ))}
+              {hours[d]?.length === 1 && <button type="button" className="btn ghost" style={{ alignSelf: 'flex-end', fontSize: 12 }} onClick={() => addRange(d)}>{ui('addRange', L)}</button>}
             </div>
           ))}
         </div>

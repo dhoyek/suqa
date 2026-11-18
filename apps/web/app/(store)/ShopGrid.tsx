@@ -27,10 +27,6 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
   const c = [...sel].join(',');
   const [favs, setFavs] = useState<Set<string> | null>(null);     // null = not signed in / not loaded
   useEffect(() => {
-    const url = c ? `/?c=${c}` : '/';
-    if (window.location.pathname + window.location.search !== url) window.history.replaceState(null, '', url);
-  }, [c]);
-  useEffect(() => {
     const sb = supabaseBrowser();
     sb.auth.getSession().then(async ({ data }) => {
       if (!data.session) return;
@@ -39,6 +35,15 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
     });
   }, []);
   const [q, setQ] = useState('');
+  // The search words and chosen categories live in the address (?q=…&c=…), so coming Back from a shop finds the same search still on screen.
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) setQ(v); setReady(true); }, []);
+  useEffect(() => {
+    if (!ready) return;                                             // not before the words above were read back
+    const qs = new URLSearchParams(); if (c) qs.set('c', c); if (q.trim()) qs.set('q', q.trim());
+    const url = qs.toString() ? `/?${qs}` : '/';
+    if (window.location.pathname + window.location.search !== url) window.history.replaceState(window.history.state, '', url);
+  }, [c, q, ready]);
   // Items across every shop for what is typed (suqa.match_items: Arabic, Arabizi, English, aliases). Ordering still happens inside the shop:
   // an item opens its shop with the same words already in the shop's search box.
   type ItemHit = { product_id: string; shop_id: string; shop_name: LocalizedText; name: LocalizedText; price_usd: number | string; price_currency: string; price_lbp: number; score: number };

@@ -94,7 +94,7 @@ describe('yorgo core', () => {
   it('tool list follows mode and role; an unknown model is priced at the dearest rate', () => {
     expect(toolsFor('seller', null)).toHaveLength(0);
     expect(toolsFor('seller', 'setup').map(t => t.name)).toEqual(['match_items']);
-    expect(toolsFor('shopper', null).map(t => t.name)).toEqual(['match_items']);
+    expect(toolsFor('shopper', null).map(t => t.name)).toEqual(['match_items', 'draft_basket']);
     expect(costOf('some-new-model', usage, cfg.prices)).toBe(costOf('claude-sonnet-5-5', usage, cfg.prices));
     expect(costOf('claude-haiku-5-5', usage, cfg.prices)).toBeCloseTo((1000 * 0.10 + 100 * 0.50 + 2000 * 0.01) / 1e6, 9);
   });

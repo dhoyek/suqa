@@ -39,7 +39,7 @@ describe('yorgo core', () => {
     expect(rec.p_messages[1].cost_usd).toBe(each);
     expect((r as { cost_usd: number }).cost_usd).toBeCloseTo(each * 2, 6);
     // the second call carries the tool result back, as a user turn
-    expect(calls.model[1].messages.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1' }] });
+    expect(calls.model[1].messages.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1' }, { type: 'text' }] });   // + the language note
   });
 
   it('does not call the model when the gate is closed', async () => {

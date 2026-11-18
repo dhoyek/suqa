@@ -107,7 +107,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
                     <span className={`open-pill ${s.open ? 'on' : ''}`}>{s.open ? (L === 'ar' ? 'مفتوح' : 'Open') : (L === 'ar' ? 'مغلق' : 'Closed')}</span>
                     <ShareButton path={`/s/${s.slug}`} locale={L === 'ar' ? 'ar' : 'en'} iconOnly className="btn ghost share-mini" label={L === 'ar' ? 'مشاركة المتجر' : 'Share this shop'}
                       text={L === 'ar' ? `اطلب من ${tr(s.name, L)} عبر ${brand}` : `Order from ${tr(s.name, L)} on ${brand}`} />
-                    <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs?.has(s.id)} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
+                    <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs ? favs.has(s.id) : false} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
                   </span>
                 </div>
                 {(L === 'en' ? s.known_as_en || s.known_as : s.known_as || s.known_as_en) && <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-primary)' }}>{L === 'en' ? s.known_as_en || s.known_as : s.known_as || s.known_as_en}</div>}

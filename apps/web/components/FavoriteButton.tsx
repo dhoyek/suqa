@@ -7,7 +7,14 @@ export default function FavoriteButton({ shopId, tenantId, initial, labels, onCh
   const [on, setOn] = useState(!!initial);
   const [uid, setUid] = useState<string | null>(null);
   useEffect(() => { supabaseBrowser().auth.getSession().then(({ data }) => setUid(data.session?.user.id ?? null)); }, []);
-  useEffect(() => { setOn(!!initial); }, [initial]);
+  useEffect(() => { if (initial !== undefined) setOn(initial); }, [initial]);
+  // where the page does not say (inside a shop), the star looks its own state up — otherwise a favourite shop showed an empty star there
+  useEffect(() => {
+    if (!uid || initial !== undefined) return;
+    let live = true;
+    supabaseBrowser().from('favorites').select('shop_id').eq('user_id', uid).eq('shop_id', shopId).maybeSingle().then(({ data }) => { if (live) setOn(!!data); });
+    return () => { live = false; };
+  }, [uid, shopId, initial]);
   if (!uid) return null;
   const toggle = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();

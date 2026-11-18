@@ -21,7 +21,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
   const [needed, setNeeded] = useState<string>(draft.needed_at ? toLocalInput(draft.needed_at) : '');   // datetime-local value, '' = as soon as possible
   const [addrSel, setAddrSel] = useState<string>('new'); const [askAddr, setAskAddr] = useState<null | { repeat?: OrderLine[] }>(null);
   const defFee = Math.round(num(boot.shop.default_delivery_fee_usd) * 100);
-  const [f, setF] = useState(fee ? (fee / 100).toString() : defFee && !editing?.amountLocked ? (defFee / 100).toString() : '');
+  const [f, setF] = useState(fee ? (fee / 100).toString() : editing && (editing.amountLocked || draft.fulfillment === 'delivery') ? '0' : defFee ? (defFee / 100).toString() : '');   // an existing delivery keeps its own fee, even a free one
   const [matches, setMatches] = useState<ShopCustomer[]>([]); const [picked, setPicked] = useState<ShopCustomer | null>(null); const [showList, setShowList] = useState(false);
   const [openOrders, setOpenOrders] = useState(0); const [openList, setOpenList] = useState<Order[]>([]); const [showOpen, setShowOpen] = useState(false); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);

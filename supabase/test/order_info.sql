@@ -10,7 +10,8 @@ grant usage on schema net to authenticated; grant all on all tables in schema ne
 insert into suqa.integration_config (key, value) values ('wa_events_url', 'https://x.test/api/wa/events'), ('wa_events_secret', 's') on conflict (key) do update set value = excluded.value;
 \i supabase/schema/80_pos_order_info.sql
 
-create or replace function pg_temp.round_lbp(p uuid, v bigint) returns void language sql security definer as $$ update suqa.orders set total_lbp = v where id = p $$;
+create schema if not exists t_oi; grant usage on schema t_oi to authenticated;
+create or replace function t_oi.round_lbp(p uuid, v bigint) returns void language sql security definer as $$ update suqa.orders set total_lbp = v where id = p $$;
 set local role authenticated; set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';   -- shop owner
 
 create or replace function pg_temp.push(p_kind text, p_payload jsonb, p_op uuid default gen_random_uuid()) returns jsonb language sql as $$
@@ -46,7 +47,7 @@ begin
   -- 3. only the name: no message, nothing else moves
   r := pg_temp.push('order.info', jsonb_build_object('id', v_id, 'customer_name', 'Rima Khoury'));
   select * into o from suqa.orders where id = v_id;
-  perform pg_temp.round_lbp(v_id, 545000);   -- as rounded at the till
+  perform t_oi.round_lbp(v_id, 545000);   -- as rounded at the till
   r := pg_temp.push('order.info', jsonb_build_object('id', v_id, 'customer_name', 'Rima Khoury'));
   assert o.customer_name = 'Rima Khoury' and o.fulfillment = 'pickup' and o.total_cents = 600 and o.customer_notes = 'ring twice', 'name only';
   assert o.total_lbp = 545000, 'a name fix leaves the rounded LBP total alone: ' || o.total_lbp;

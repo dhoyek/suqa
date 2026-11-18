@@ -331,3 +331,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 /* share icon on a shop card: quiet, but still a full tap target */
 .share-mini { padding: 6px; min-width: 40px; min-height: 40px; color: var(--muted); }
+
+/* a map keeps its own stacking: Leaflet layers sit at z-index 200–1000 and would otherwise slide over the sticky top bar and menus */
+.map, .leaflet-container { position: relative; z-index: 0; isolation: isolate; }

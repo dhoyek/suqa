@@ -6,6 +6,7 @@ import { supabaseBrowser } from '@/lib/supabase-browser';
 import FilterIcon from '@/components/FilterIcon';
 import DoorIcon from '@/components/DoorIcon';
 import FavoriteButton from '@/components/FavoriteButton';
+import ShareButton from '@/components/ShareButton';
 
 type Cat = { id: string; name: LocalizedText };
 type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people call it, e.g. the owner's name */ known_as?: string | null; known_as_en?: string | null; description: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean; reopen?: string | null; logo_url: string | null };
@@ -13,8 +14,8 @@ type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people
 // Filters run in the browser: the home page is fetched once and every tap is instant.
 // Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the category
 // filter — the same sheet as inside a shop: type to narrow the list, tick several. Chosen categories are mirrored into ?c=.
-export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, labels }: {
-  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string;
+export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, brand, labels }: {
+  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string; brand: string;
   labels: { all: string; minOrder: string; empty: string; favorites: string; noFavorites: string; addFavorite: string; removeFavorite: string; categories: string; clearFilter: string; typeToFilter: string; ok: string };
 }) {
   const [sel, setSel] = useState<Set<string>>(() => new Set((initial ?? '').split(',').filter(id => cats.some(x => x.id === id))));
@@ -89,6 +90,8 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, la
                   <strong>{tr(s.name, L)}</strong>
                   <span className="row" style={{ gap: 6, alignItems: 'center' }}>
                     <span className={`open-pill ${s.open ? 'on' : ''}`}>{s.open ? (L === 'ar' ? 'مفتوح' : 'Open') : (L === 'ar' ? 'مغلق' : 'Closed')}</span>
+                    <ShareButton path={`/s/${s.slug}`} locale={L === 'ar' ? 'ar' : 'en'} iconOnly className="btn ghost share-mini" label={L === 'ar' ? 'مشاركة المتجر' : 'Share this shop'}
+                      text={L === 'ar' ? `اطلب من ${tr(s.name, L)} عبر ${brand}` : `Order from ${tr(s.name, L)} on ${brand}`} />
                     <FavoriteButton shopId={s.id} tenantId={tenantId} initial={favs?.has(s.id)} labels={{ add: labels.addFavorite, remove: labels.removeFavorite }} onChange={on => toggleFav(s.id, on)} />
                   </span>
                 </div>

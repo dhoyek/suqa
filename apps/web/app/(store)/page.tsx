@@ -21,6 +21,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
   // customers only see categories that have at least one shop listed (an empty category is a dead end)
   const used = new Set(shops.map(s => s.category_id).filter(Boolean));
   const shownCats = cats.filter(cat => used.has(cat.id));
-  return <ShopGrid cats={shownCats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id}
+  return <ShopGrid cats={shownCats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id} brand={tenant.brand_name}
     labels={{ all: ui('all', L), minOrder: ui('minOrder', L), empty: ui('noShopsInCategory', L), favorites: ui('favorites', L), noFavorites: ui('noFavorites', L), addFavorite: ui('addFavorite', L), removeFavorite: ui('removeFavorite', L), categories: ui('categories', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), ok: ui('okBtn', L) }} />;
 }

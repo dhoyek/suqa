@@ -328,3 +328,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 /* one line of chips that slides sideways instead of wrapping (shops list: the filter button stays beside it) */
 .chips-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 8px; padding-block: 2px; }
 .chips-scroll::-webkit-scrollbar { display: none; }
+
+/* share icon on a shop card: quiet, but still a full tap target */
+.share-mini { padding: 6px; min-width: 40px; min-height: 40px; color: var(--muted); }

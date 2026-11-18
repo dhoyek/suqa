@@ -50,7 +50,7 @@ export function makeMatcher(query: string): ((item: Folded) => boolean) | null {
       if (t.num) return false;                                                   // a size or count must be there as written
       if (t.s.length < 2) return t.w.length <= 2;                                // "w", "b", "el" join words and carry no weight; a longer word with no sound to compare ("mayy", "zzzz") must be there as typed
       if (t.s.length === 2) return item.skels.includes(t.s);                     // two sounds: the same word only ("bira" = بيرة, not "bread")
-      return item.skels.some(k => k.startsWith(t.s) || near(k, t.s));
+      return item.skels.some(k => k.startsWith(t.s) || (k.length >= 3 && near(k, t.s)));    // a typo is forgiven between real words, not against a two-sound one ("bebsi" is not "pies")
     });
   };
 }

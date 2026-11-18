@@ -13,6 +13,7 @@ test('search', () => {
   expect(m('mayy')(w)).toBe(true); expect(m('man2ouche')(w)).toBe(false); expect(m('ka3ke chocola')(k)).toBe(true); expect(m('bebsi')(p)).toBe(true); expect(m('pepsi 330')(p)).toBe(false); expect(m('pepsi 185')(p)).toBe(true);
   expect(m('zaatar')(k)).toBe(false);
   const beer = foldItem('بيرة', 'Beer', 'bira'), bread = foldItem('رغيف', 'Bread loaf');
+  expect(m('bebsi')(foldItem('دجاج بالعجين', 'Chicken in dough', 'Dough Pies & Pizza'))).toBe(false);
   expect(m('bira')(beer)).toBe(true); expect(m('bira')(bread)).toBe(false); expect(m('zzzz')(bread)).toBe(false); expect(m('mayy')(bread)).toBe(false);
   expect(m('za3tar w jebne')(foldItem('زعتر + جبنة', 'Zaatar + cheese'))).toBe(true); expect(m('za3tar w jebne')(z)).toBe(false);
 });

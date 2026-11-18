@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import ImageUpload from '@/components/ImageUpload';
+import ShareButton from '@/components/ShareButton';
 import CategoryPick from '@/components/CategoryPick';
 import type { Locale, Shop } from '@suqa/shared';
 
@@ -21,6 +22,8 @@ type Labels = Record<'myShop' | 'shopDetails' | 'nameAr' | 'nameEn' | 'descAr' |
 type Zone = { id: string; name: string; fee_usd: number };
 
 export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, served: served0, admin }: { shop: Shop; locale: Locale; canEdit: boolean; admin?: { tenantId: string; categories: { id: string; name: string }[] } | null; labels: Labels; zones: Zone[]; served: { zone_id: string; fee_usd: number | null }[] }) {
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);   // after mount: the server does not know the address the owner is using
   const sb = useMemo(() => supabaseBrowser(), []);
   const router = useRouter();
   // which association zones this shop delivers to, with an optional fee of its own (empty = the zone's standard fee)
@@ -111,6 +114,17 @@ export default function MyShopForm({ shop, locale: L, canEdit, labels, zones, se
   return (
     <div className="stack">
       <h1 style={{ margin: 0, fontSize: 20 }}>{labels.myShop} — {(L === 'ar' ? shop.name.ar : shop.name.en) || shop.name.ar || shop.name.en}</h1>
+      {shop.slug && <section className="card stack" style={{ gap: 8 }}>
+        <strong>{L === 'ar' ? 'شارك رابط متجرك' : 'Share your shop link'}</strong>
+        <code dir="ltr" style={{ fontSize: 13, overflowWrap: 'anywhere' }}>{origin}/s/{shop.slug}</code>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <ShareButton whatsapp className="btn primary" path={`/s/${shop.slug}`} locale={L === 'ar' ? 'ar' : 'en'} label={L === 'ar' ? 'إرسال عبر واتساب' : 'Send on WhatsApp'}
+            text={L === 'ar' ? `اطلب من ${shop.name.ar || shop.name.en} أونلاين` : `Order from ${shop.name.en || shop.name.ar} online`} />
+          <ShareButton copy path={`/s/${shop.slug}`} locale={L === 'ar' ? 'ar' : 'en'} label={L === 'ar' ? 'مشاركة' : 'Share'}
+            text={L === 'ar' ? `اطلب من ${shop.name.ar || shop.name.en} أونلاين` : `Order from ${shop.name.en || shop.name.ar} online`} />
+        </div>
+        <small className="muted">{L === 'ar' ? 'واتساب يفتح لائحة جهات الاتصال والمجموعات لتختار لمن ترسل الرابط.' : 'WhatsApp opens your contacts and groups so you choose who gets the link.'}</small>
+      </section>}
 
       <section className={`card row spread ${paused ? 'paused' : ''}`} style={{ alignItems: 'center' }}>
         <div><strong>{labels.pauseOrders}</strong><div className="muted" style={{ fontSize: 13 }}>{labels.pauseHint}</div></div>

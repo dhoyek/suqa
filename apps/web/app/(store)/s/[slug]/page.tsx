@@ -8,6 +8,7 @@ import { t as tr } from '@suqa/shared';
 import ShopMenu from './ShopMenu';
 import { waLink, telLink } from '@/lib/whatsapp';
 import FavoriteButton from '@/components/FavoriteButton';
+import ShareButton from '@/components/ShareButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,8 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         <div className="row" style={{ gap: 12, alignItems: 'center' }}>
           {s.logo_url && <img className="shop-logo" src={s.logo_url} alt="" />}
           <h1 style={{ margin: '4px 0', fontSize: 22, flex: 1 }}>{tr(s.name, L)}</h1>
+          <ShareButton path={`/s/${s.slug}`} locale={L === 'ar' ? 'ar' : 'en'} iconOnly className="btn ghost" label={L === 'ar' ? 'مشاركة المتجر' : 'Share this shop'}
+            text={L === 'ar' ? `اطلب من ${tr(s.name, L)} عبر ${tenant.brand_name}` : `Order from ${tr(s.name, L)} on ${tenant.brand_name}`} />
           <FavoriteButton shopId={s.id} tenantId={tenant.id} labels={{ add: ui('addFavorite', L), remove: ui('removeFavorite', L) }} />
         </div>
         <div className="muted" style={{ fontSize: 14 }}>{tr(s.description, L)}</div>

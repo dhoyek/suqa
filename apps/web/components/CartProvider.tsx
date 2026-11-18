@@ -80,7 +80,7 @@ export function CartProvider({ tenantSlug, multiShop, children }: { tenantSlug: 
           .map(s => s.id !== shopId ? s : { ...s, lines: s.lines.map(l => l.product_id === productId ? { ...l, qty } : l).filter(l => l.qty > 0) })
           .filter(s => s.lines.length) }));
       },
-      setNote(shopId, productId, notes) { setCart(prev => ({ v: 2, shops: prev.shops.map(s => s.id !== shopId ? s : { ...s, lines: s.lines.map(l => l.product_id === productId ? { ...l, notes: notes.trim() || undefined } : l) }) })); },
+      setNote(shopId, productId, notes) { setCart(prev => ({ v: 2, shops: prev.shops.map(s => s.id !== shopId ? s : { ...s, lines: s.lines.map(l => l.product_id === productId ? { ...l, notes: notes.replace(/^\s+/, '').slice(0, 200) || undefined }   /* kept as typed: trimming on every key ate the space between words */ : l) }) })); },
       setSelected(shopId, selected) { setCart(prev => ({ v: 2, shops: prev.shops.map(s => s.id === shopId ? { ...s, selected } : s) })); },
       removeShop(shopId) { setCart(prev => ({ v: 2, shops: prev.shops.filter(s => s.id !== shopId) })); },
       removeShops(ids) { setCart(prev => ({ v: 2, shops: prev.shops.filter(s => !ids.includes(s.id)) })); },

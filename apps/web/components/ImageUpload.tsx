@@ -10,7 +10,7 @@ export default function ImageUpload({ shopId, kind, value, onChange, locale, lab
   shopId: string; kind: 'logo' | 'cover' | 'product'; value: string | null; onChange: (url: string | null) => void; locale: Locale;
   labels: { add: string; change: string; remove: string }; shape?: 'wide' | 'square';
 }) {
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement>(null); const camera = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -29,12 +29,15 @@ export default function ImageUpload({ shopId, kind, value, onChange, locale, lab
 
   return (
     <div className={`imgup ${shape}`}>
-      <div className="imgup-box" onClick={() => !busy && input.current?.click()} role="button" aria-busy={busy}>
+      <div className="imgup-box" onClick={() => !busy && input.current?.click()} role="button" aria-busy={busy} title={value ? labels.change : labels.add}>
         {value ? <img src={value} alt="" /> : <span className="muted">{busy ? '…' : `+ ${labels.add}`}</span>}
       </div>
-      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={e => pick(e.target.files?.[0])} />
-      <div className="row" style={{ gap: 6 }}>
-        {value && <button type="button" className="btn ghost" disabled={busy} onClick={() => input.current?.click()}>{labels.change}</button>}
+      {/* two inputs: one opens the photos / files of the device, the other goes straight to the camera (phones) */}
+      <input ref={input} type="file" accept="image/*" hidden onChange={e => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+      <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => input.current?.click()}>🖼 {locale === 'ar' ? 'من الصور' : 'Gallery'}</button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => camera.current?.click()}>📷 {locale === 'ar' ? 'الكاميرا' : 'Camera'}</button>
         {value && <button type="button" className="btn ghost muted" disabled={busy} onClick={remove}>{labels.remove}</button>}
       </div>
       {err && <div className="error">{err}</div>}

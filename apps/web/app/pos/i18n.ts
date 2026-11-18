@@ -63,7 +63,7 @@ const T = {
   noResults: { ar: 'لا نتائج', en: 'No results' },
   onHand: { ar: 'المتوفر', en: 'On hand' },
   itemsCount: { ar: 'صنف', en: 'items' },
-  rate: { ar: 'سعر الصرف', en: 'Rate' },
+  rate: { ar: 'سعر الصرف', en: 'Rate' }, rateHint: { ar: 'سعر الدولار بالليرة في هذا المحل: تُحسب به مبالغ الليرة على الشاشة والفاتورة والباقي. المبيعات السابقة تبقى بسعرها.', en: 'Lira per dollar for this shop: used for the lira amounts on screen, on receipts and for change. Past sales keep their own rate.' }, rateConfirm: { ar: 'تغيير سعر الصرف لهذا المحل؟', en: 'Change this shop\'s exchange rate?' }, rateSaved: { ar: 'تم الحفظ', en: 'Saved' }, rateSince: { ar: 'مُعتمد منذ', en: 'In use since' }, rateDefault: { ar: 'لم يُحدَّد سعر لهذا المحل بعد (السعر الافتراضي).', en: 'No rate set for this shop yet (default rate).' },
   // settings
   devices: { ar: 'الأجهزة', en: 'Devices' },
   thisDevice: { ar: 'هذا الجهاز', en: 'this device' },

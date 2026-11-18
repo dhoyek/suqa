@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { CURRENT_SCHEMA_VERSION, META, type PosDb } from './db';
-import { num, type Channel, type Currency, type Localized, type Order, type OrderLine, type Payment, type Product, type StockMove } from './types';
+import { num, type Channel, type Currency, type Localized, type Order, type OrderLine, type Payment, type Product, type Rate, type StockMove } from './types';
 import { settle, totals, type Settlement, type Totals } from './money';
 
 export const newId = (): string => uuidv7();
@@ -159,4 +159,17 @@ export async function dropDraft(db: PosDb, id: string): Promise<void> {
 export async function cancelDraft(db: PosDb, draft: Draft, reason: string, staffUserId?: string | null): Promise<void> {
   await dropDraft(db, draft.id);
   if (draft.lines.length) await enqueue(db, 'sale.cancel', { id: draft.id, reason, staff_user_id: staffUserId ?? null, lines: draft.lines.length, at: new Date().toISOString() });
+}
+
+/** The shop's exchange rate (lira per dollar): a new dated row — the history is kept, the latest one is what the till uses.
+ *  Owner only on the server (a cashier needs the owner's approval). Past sales keep the rate they were made at. */
+export async function setShopRate(db: PosDb, shopId: string, lbpPerUsd: number): Promise<Rate> {
+  const rate = Math.round(lbpPerUsd);
+  if (!Number.isFinite(rate) || rate < 1000 || rate > 10_000_000) throw new Error('bad_rate');
+  const row: Rate = { id: newId(), shop_id: shopId, lbp_per_usd: rate, effective_at: new Date().toISOString() };
+  await db.transaction('rw', [db.rates, db.outbox], async () => {
+    await db.rates.put(row);
+    await enqueue(db, 'rate.set', { id: row.id, lbp_per_usd: rate, effective_at: row.effective_at });
+  });
+  return row;
 }

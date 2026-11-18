@@ -44,5 +44,12 @@ export async function POST(req: Request) {
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
     { tenant: { id: tenant.id, brand: tenant.brand_name }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop },
   );
-  return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
+  if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
+
+  // for 👍 / 👎: the id of the answer just stored (the person's own conversation; the switch-keeping client reads one number)
+  const { data: last } = await admin.from('yorgo_messages').select('id').eq('conversation_id', result.conversation_id).eq('role', 'assistant').order('id', { ascending: false }).limit(1).maybeSingle();
+  // what was asked for and not found, as a counted phrase only (script 78; quietly skipped where it is not installed)
+  const missed = (result.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []);
+  if (missed.length) await admin.rpc('yorgo_miss', { p_tenant: tenant.id, p_shop: mode === 'seller' ? shopId : focusShop?.id ?? null, p_phrases: missed }).then(() => null, () => null);
+  return NextResponse.json({ ...result, message_id: (last?.id as number | undefined) ?? null });
 }

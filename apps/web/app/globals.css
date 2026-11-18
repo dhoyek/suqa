@@ -379,3 +379,10 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 /* "Install the app" sheet: arrow pointing at the in-app browser's ⋯ menu */
 @keyframes install-bob { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(4px, -4px); } }
+
+.yorgo-thumbs { display: inline-flex; gap: 2px; margin-inline-start: 8px; vertical-align: middle; }
+.yorgo-thumbs button { border: 0; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; opacity: .45; filter: grayscale(1); border-radius: 6px; }
+.yorgo-thumbs button.on { opacity: 1; filter: none; background: #e0e7ff; }
+
+.yorgo-bar { height: 8px; border-radius: 999px; background: #eef0f3; overflow: hidden; }
+.yorgo-bar > div { height: 100%; border-radius: 999px; min-width: 2px; }

@@ -115,7 +115,7 @@ export default function Shell(props: {
         {view === 'drivers' && <DriversView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
       </main>
-      {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online} sells={yorgoSells}
+      {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online} sells={yorgoSells} sb={props.sb as never} canReview={['owner', 'stock', 'setup'].includes(roleOf(staff) ?? '')}
         onAddToCart={(lines, conversation) => { setYorgoCart(c => ({ lines, conversation, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
     </div>
   );

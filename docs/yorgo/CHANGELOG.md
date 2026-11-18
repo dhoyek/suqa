@@ -93,3 +93,9 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - Not signed in: the panel explains and links to sign-in. One-shop carts: the shop with most lines is added, with the usual "replace cart?" question.
 - POS: keystrokes in a multi-line text box are never read as a barcode scan.
 - Prompt: mixed-language messages are answered in their main language.
+
+## 2026-11-18 — step D: usage page, feedback, names customers use (dev)
+- **Admin → ✨ Yorgo** (`/admin/yorgo`): spent this month against the cap with a forecast, messages and cost per message, shoppers and the top shopper against the per-shopper cap, per-shop POS switch with spend, last 14 days; master and shopper switches, the three caps and the rate limit are editable there. Numbers only (`yorgo_usage`).
+- **👍 / 👎** under Yorgo's answers in the POS and on the storefront (`/api/yorgo/feedback` → `yorgo_feedback`, as the person). The chat route now returns `message_id`.
+- **Names customers use:** tapping one of Yorgo's choices records "phrase → item" (`alias_suggest`, script 75). In the POS panel, 💡 lists what is waiting; owner / stock / association setup approve (becomes an alias) or reject (`alias_decide`).
+- **Script 78 (`yorgo_misses`) written, NOT applied:** counted "asked for and not found" phrases per shop / whole market, no person and no conversation. The route already calls `yorgo_miss` and ignores the error where it is not installed; the POS 💡 list and the admin page show misses once it is.

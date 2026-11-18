@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { supabaseBrowser } from '@/lib/supabase-browser';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useCart, type ShopRef } from '@/components/CartProvider';
@@ -13,9 +14,9 @@ type Item = { product_id: string; name: Record<string, string>; unit: string | n
 type Line = Item & { key: string; quantity: number; note?: string };
 type Choice = { key: string; phrase: string; quantity: number; options: Item[] };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
-type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft };
+type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
 type DraftIn = { kind?: string; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[] }[]; not_found?: string[] };
-type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[] } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
+type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
 
 const T = {
   open: { ar: 'اسأل يورغو', en: 'Ask Yorgo' }, ai: { ar: 'مساعد ذكاء اصطناعي', en: 'AI assistant' },
@@ -40,7 +41,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
   const t = (k: keyof typeof T) => T[k][locale];
   const name = (n: Record<string, string>) => n?.[locale] || n?.ar || n?.en || '';
   const path = usePathname() ?? '/';
-  const cart = useCart(); const ask = useConfirm();
+  const cart = useCart(); const ask = useConfirm(); const sb = useMemo(() => supabaseBrowser(), []);
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState(''); const [busy, setBusy] = useState(false);
@@ -66,7 +67,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
         const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_basket').map(toDraft).filter((d): d is Draft => !!d);
-        if (r.reply) push({ from: 'yorgo', text: r.reply });
+        if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
         if (!r.reply && !drafts.length) push({ from: 'note', text: t('error') });
       } else if (r.status === 'paused') push({ from: 'note', text: t(r.reason === 'rate' ? 'rate' : r.reason === 'off' ? 'off' : 'cap') });
@@ -96,6 +97,11 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
     patch(m.id, d => ({ ...d, state: 'added' }));
   };
   const money = (n: number) => `$${n.toFixed(2)}`;
+  const rate = (m: Msg, v: 1 | -1) => { if (!m.mid) return; const value = m.fb === v ? null : v;
+    setMsgs(ms => ms.map(x => (x.id === m.id ? { ...x, fb: value ?? undefined } : x)));
+    void fetch('/api/yorgo/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message_id: m.mid, value }) }).catch(() => null); };
+  // a pick teaches the shop a name ("<phrase>" meant this item); the shop approves it before it becomes an alias
+  const learn = (o: Item, phrase: string) => { void Promise.resolve(sb.rpc('alias_suggest', { p_product: o.product_id, p_phrase: phrase, p_source: 'yorgo' })).then(() => null, () => null); };
 
   return (
     <>
@@ -132,7 +138,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
                   <div key={c.key} className="yorgo-choice">
                     <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {t('pick')}</span></div>
                     <div className="yorgo-options">
-                      {c.options.map(o => <button key={o.product_id} className="btn" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { ...o, key: c.key, quantity: c.quantity }] }))}>{name(o.name)} <small className="muted">{money(o.price_usd)} · {name(o.shop.name)}</small></button>)}
+                      {c.options.map(o => <button key={o.product_id} className="btn" onClick={() => { learn(o, c.phrase); patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { ...o, key: c.key, quantity: c.quantity }] })); }}>{name(o.name)} <small className="muted">{money(o.price_usd)} · {name(o.shop.name)}</small></button>)}
                       <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>✕ {t('skip')}</button>
                     </div>
                   </div>
@@ -144,7 +150,8 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
                 </div>}
                 {m.draft.state === 'open' && !!m.draft.choices.length && <small className="muted">{t('pickFirst')}</small>}
               </div>
-            ) : <div key={m.id} className={`yorgo-msg ${m.from}`} dir="auto">{m.text}</div>)}
+            ) : <div key={m.id} className={`yorgo-msg ${m.from}`} dir="auto">{m.text}{m.from === 'yorgo' && !!m.mid && <span className="yorgo-thumbs" dir="ltr">
+              <button className={m.fb === 1 ? 'on' : ''} aria-label="👍" onClick={() => rate(m, 1)}>👍</button><button className={m.fb === -1 ? 'on' : ''} aria-label="👎" onClick={() => rate(m, -1)}>👎</button></span>}</div>)}
             {busy && <div className="yorgo-msg yorgo typing">…</div>}
             <div ref={endRef} />
           </div>

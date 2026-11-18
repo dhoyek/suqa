@@ -12,13 +12,16 @@ type DraftIn = { kind?: string; lines?: { product_id: string; quantity: number; 
 type Line = { key: string; product: Product; quantity: number; note?: string };
 type Choice = { key: string; phrase: string; quantity: number; options: Product[] };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
-type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft };
-type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[] } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
+type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
+type Sb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>; from: (t: string) => any };   // eslint-disable-line @typescript-eslint/no-explicit-any
+type Suggestion = { id: string; phrase: string; picks: number; product_id: string };
+type Miss = { id: string; phrase: string; times: number };
+type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
 
 const price = (p: Product, locale: L) => (p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100)));
 
-export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, onAddToCart }: {
-  open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean; sells: boolean;
+export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, sb, canReview, onAddToCart }: {
+  open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean; sells: boolean; sb: Sb; canReview: boolean;
   onAddToCart: (lines: YorgoCartLine[], conversationId: string | null) => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -52,7 +55,7 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
         const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_order').map(toDraft).filter((d): d is Draft => !!d);
-        if (r.reply) push({ from: 'yorgo', text: r.reply });
+        if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
         if (!r.reply && !drafts.length) push({ from: 'note', text: pt('yorgoError', locale) });
       } else if (r.status === 'paused') {
@@ -73,17 +76,53 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     patch(m.id, d => ({ ...d, state: 'added' }));
   };
   const reset = () => { setMsgs([]); conv.current = null; setInput(''); };
+  // 👍 / 👎: tapping the same thumb again takes it back
+  const rate = (m: Msg, v: 1 | -1) => { if (!m.mid) return; const value = m.fb === v ? null : v;
+    setMsgs(ms => ms.map(x => (x.id === m.id ? { ...x, fb: value ?? undefined } : x)));
+    void fetch('/api/yorgo/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message_id: m.mid, value }) }).catch(() => null); };
+  // a pick teaches the shop a name: "<phrase>" meant this item — it waits for the shop's approval before it becomes an alias
+  const learn = (p: Product, phrase: string) => { void Promise.resolve(sb.rpc('alias_suggest', { p_product: p.id, p_phrase: phrase, p_source: 'yorgo' })).catch(() => null); };
+
+  // names customers use: picks waiting for approval, and phrases nobody could find (owner / stock / association setup)
+  const [review, setReview] = useState(false); const [sugg, setSugg] = useState<Suggestion[] | null>(null); const [misses, setMisses] = useState<Miss[]>([]);
+  const loadReview = async () => {
+    const a = await sb.from('alias_suggestions').select('id,phrase,picks,product_id').eq('shop_id', shopId).eq('status', 'pending').order('picks', { ascending: false }).limit(50);
+    setSugg(((a.data as Suggestion[] | null) ?? []).filter(x => index.byId.has(x.product_id)));
+    const b = await sb.from('yorgo_misses').select('id,phrase,times').eq('shop_id', shopId).is('dismissed_at', null).order('times', { ascending: false }).limit(30);
+    setMisses((b.data as Miss[] | null) ?? []);                      // empty where the misses table is not installed yet
+  };
+  useEffect(() => { if (open && review && online) void loadReview(); }, [open, review, online]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const decide = async (x: Suggestion, ok: boolean) => { setSugg(l => (l ?? []).filter(y => y.id !== x.id)); await Promise.resolve(sb.rpc('alias_decide', { p_id: x.id, p_approve: ok })).catch(() => null); };
+  const dismiss = async (x: Miss) => { setMisses(l => l.filter(y => y.id !== x.id)); await Promise.resolve(sb.rpc('yorgo_miss_dismiss', { p_id: x.id })).catch(() => null); };
 
   return (
     <Modal open={open} onClose={onClose} wide title={<>✨ Yorgo <small className="yorgo-tag">{pt('yorgoAi', locale)}</small></>}
-      actions={msgs.length ? <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>↺</button> : undefined}
+      actions={<>
+        {canReview && <button className={`btn icon${review ? ' primary' : ''}`} title={pt('yorgoNames', locale)} onClick={() => setReview(v => !v)}>💡</button>}
+        {!!msgs.length && !review && <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>↺</button>}
+      </>}
       footer={<div className="yorgo-input">
         <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt(sells ? 'yorgoPlaceholder' : 'yorgoPlaceholderItems', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
         <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>↑</button>
         <p className="yorgo-foot muted">{pt('yorgoDisclaimer', locale)}</p>
       </div>}>
-      <div className="yorgo-chat">
+      {review ? <div className="yorgo-chat">
+        <p className="muted" style={{ margin: 0 }}>{pt('yorgoNamesHint', locale)}</p>
+        {sugg === null && <p className="muted">…</p>}
+        {sugg?.map(x => { const p = index.byId.get(x.product_id)!; return (
+          <div key={x.id} className="yorgo-line">
+            <div className="yorgo-line-name"><strong dir="auto">{x.phrase}</strong> <span className="muted">→</span> {text(p.name, locale)}{x.picks > 1 && <small className="muted"> · ×{x.picks}</small>}</div>
+            <div className="qty-btns"><button title={pt('yorgoNameOk', locale)} onClick={() => void decide(x, true)}>✓</button><button className="rm" title={pt('yorgoNameNo', locale)} onClick={() => void decide(x, false)}>✕</button></div>
+          </div>); })}
+        {sugg !== null && !sugg.length && <p className="muted">{pt('yorgoNamesNone', locale)}</p>}
+        {!!misses.length && <><strong style={{ marginTop: 8 }}>{pt('yorgoMisses', locale)}</strong><p className="muted" style={{ margin: 0, fontSize: 13 }}>{pt('yorgoMissesHint', locale)}</p></>}
+        {misses.map(x => (
+          <div key={x.id} className="yorgo-line">
+            <div className="yorgo-line-name"><span dir="auto">{x.phrase}</span>{x.times > 1 && <small className="muted"> · ×{x.times}</small>}</div>
+            <div className="qty-btns"><button className="rm" title={pt('yorgoMissDone', locale)} onClick={() => void dismiss(x)}>✕</button></div>
+          </div>))}
+      </div> : <div className="yorgo-chat">
         {!msgs.length && <div className="yorgo-hello">
           <p style={{ margin: 0 }}><strong>{pt('yorgoHello', locale)}</strong></p>
           <p className="muted" style={{ margin: 0 }}>{pt(sells ? 'yorgoHint' : 'yorgoHintItems', locale)}</p>
@@ -107,7 +146,7 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
               <div key={c.key} className="yorgo-choice">
                 <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {pt('yorgoPick', locale)}</span></div>
                 <div className="yorgo-options">
-                  {c.options.map(p => <button key={p.id} className="btn" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { key: c.key, product: p, quantity: c.quantity }] }))}>{text(p.name, locale)} <small className="muted num">{price(p, locale)}</small></button>)}
+                  {c.options.map(p => <button key={p.id} className="btn" onClick={() => { learn(p, c.phrase); patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { key: c.key, product: p, quantity: c.quantity }] })); }}>{text(p.name, locale)} <small className="muted num">{price(p, locale)}</small></button>)}
                   <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>✕ {pt('yorgoSkip', locale)}</button>
                 </div>
               </div>
@@ -121,11 +160,12 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
             {m.draft.state === 'open' && !!m.draft.choices.length && <small className="muted">{pt('yorgoPickFirst', locale)}</small>}
           </div>
         ) : (
-          <div key={m.id} className={`yorgo-msg ${m.from}`} dir="auto">{m.text}</div>
+          <div key={m.id} className={`yorgo-msg ${m.from}`} dir="auto">{m.text}{m.from === 'yorgo' && !!m.mid && <span className="yorgo-thumbs" dir="ltr">
+            <button className={m.fb === 1 ? 'on' : ''} aria-label="👍" onClick={() => rate(m, 1)}>👍</button><button className={m.fb === -1 ? 'on' : ''} aria-label="👎" onClick={() => rate(m, -1)}>👎</button></span>}</div>
         ))}
         {busy && <div className="yorgo-msg yorgo typing">…</div>}
         <div ref={endRef} />
-      </div>
+      </div>}
     </Modal>
   );
 }

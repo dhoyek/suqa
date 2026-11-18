@@ -124,11 +124,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
     try {
       if (shops.length === 1) {
         const s = shops[0];
-        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
+        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes?.trim() ? { notes: l.notes.trim() } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/${order.id}?placed=1`);
       } else {
-        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes ? { notes: l.notes } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
+        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes?.trim() ? { notes: l.notes.trim() } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/b/${basket.id}?placed=1`);
       }

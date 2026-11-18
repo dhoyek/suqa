@@ -19,6 +19,7 @@ import ItemsView from './views/ItemsView';
 import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
+import PinGate from './components/PinGate';
 import CustomersView from './views/CustomersView';
 import PurchasesView from './views/PurchasesView';
 
@@ -74,7 +75,10 @@ export default function Shell(props: {
     return () => { on = false; }; }, [props.sb, boot.shop.id, online, yorgoKey]);
   const canYorgo = yorgoOn;                                                       // every role may ask about items; drafts are for those who sell (the server decides)
   const yorgoSells = roleOf(staff) === 'owner' || roleOf(staff) === 'cashier';
-  const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
+  const go = (v: View) => { setView(v); setMenu(false); };
+  // leaving الدين locks it again; coming back within the grace does not ask twice
+  const DEBT_GRACE_MS = 5 * 60_000; const debtUntil = useRef(0); const [debtOk, setDebtOk] = useState(false);
+  useEffect(() => { setDebtOk(view === 'debts' && Date.now() < debtUntil.current); }, [view]);                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
 
@@ -106,7 +110,8 @@ export default function Shell(props: {
         {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} yorgoCart={yorgoCart} onYorgoTaken={() => setYorgoCart(null)} />}
         {view === 'orders' && <OrdersView {...props} focus={orderFocus} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}
         {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
-        {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
+        {/* الدين: the signed-in person's own PIN again each time it is opened (a short grace after a correct one) */}
+        {view === 'debts' && (debtOk ? <DebtsView {...props} onCustomer={openCustomer} /> : <PinGate locale={locale} me={staff} title={pt('debtsNav', locale)} onOk={() => { debtUntil.current = Date.now() + DEBT_GRACE_MS; setDebtOk(true); }} onCancel={() => setView('sell')} />)}
         {view === 'items' && <ItemsView {...props} />}
         {view === 'stock' && <StockView {...props} focus={stockFocus} onReorder={allowed.includes('purchases') ? (supplierId, items) => { setPurPreset(p => ({ supplierId, items, n: (p?.n ?? 0) + 1 })); setView('purchases'); } : undefined} />}
         {view === 'purchases' && <PurchasesView {...props} preset={purPreset} />}

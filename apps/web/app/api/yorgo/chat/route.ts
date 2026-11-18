@@ -17,7 +17,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const body = await req.json().catch(() => ({})) as { mode?: string; shop_id?: string; conversation_id?: string; message?: string };
+  const body = await req.json().catch(() => ({})) as { mode?: string; shop_id?: string; shop_slug?: string; conversation_id?: string; message?: string };
   const mode = body.mode === 'seller' ? 'seller' : body.mode === 'shopper' ? 'shopper' : null as Mode | null;
   if (!mode || typeof body.message !== 'string') return NextResponse.json({ error: 'bad_request' }, { status: 400 });
 
@@ -33,9 +33,16 @@ export async function POST(req: Request) {
     role = r as Role; shopName = (shop.name as { ar?: string; en?: string })?.ar ?? (shop.name as { en?: string })?.en ?? null;
   }
 
+  // a shopper on a shop's page: tell the model which shop, nothing more (the search itself stays the public catalog)
+  let focusShop: { id: string; name: string } | null = null;
+  if (mode === 'shopper' && typeof body.shop_slug === 'string' && /^[\w-]{1,80}$/.test(body.shop_slug)) {
+    const { data: fs } = await sb.from('shops').select('id,name').eq('tenant_id', tenant.id).eq('slug', body.shop_slug).eq('status', 'active').maybeSingle();
+    if (fs) focusShop = { id: fs.id as string, name: (fs.name as { ar?: string; en?: string })?.ar ?? (fs.name as { en?: string })?.en ?? '' };
+  }
+
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message },
+    { tenant: { id: tenant.id, brand: tenant.brand_name }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop },
   );
   return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 }

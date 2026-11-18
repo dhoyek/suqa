@@ -5,7 +5,9 @@ import type { ToolDef } from './model';
 export type Mode = 'shopper' | 'seller';
 export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
 type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
-export type ToolCtx = { sb: { rpc: Rpc }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type From = (t: string) => any;
+export type ToolCtx = { sb: { rpc: Rpc; from?: From }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null };
 export type Tool = ToolDef & { modes: Mode[]; roles?: Role[]; run(input: Record<string, unknown>, ctx: ToolCtx): Promise<unknown> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,7 +80,51 @@ const draftOrder: Tool = {
   },
 };
 
-const ALL: Tool[] = [matchItems, draftOrder];
+// The shopper's version: same shape, but the storefront has no catalog on the device, so the draft is filled in here — with the
+// caller's own client, i.e. exactly what the public catalog shows them. An id that is not on sale online is dropped.
+type ShopOut = { id: string; slug: string; name: Record<string, string>; whatsapp: string | null; min_order_usd: number; pickup_enabled: boolean };
+type ItemOut = { product_id: string; name: Record<string, string>; unit: string | null; price_usd: number; days: number[] | null; shop: ShopOut };
+export type BasketDraft = { lines: (ItemOut & { quantity: number; note?: string })[]; choices: { phrase: string; quantity: number; options: ItemOut[] }[]; not_found: string[] };
+
+const draftBasket: Tool = {
+  name: 'draft_basket',
+  description: 'Prepare a basket draft for the customer to check and add to their cart. Call it ONCE per request, after match_items, with every item they asked for: '
+    + 'a sure match goes in "lines"; when two or more candidates could be meant (size, flavour, or the same item in different shops) put the phrase in "choices" with the candidate ids so the customer taps one; what was not found goes in "not_found". '
+    + 'Use only product_id values returned by match_items. This does not order anything.',
+  input_schema: draftOrder.input_schema,
+  modes: ['shopper'],
+  async run(input, ctx) {
+    const base = await draftOrder.run(input, ctx) as { draft: OrderDraft };
+    const ids = [...new Set([...base.draft.lines.map(l => l.product_id), ...base.draft.choices.flatMap(c => c.options)])];
+    const found = new Map<string, ItemOut>();
+    if (ids.length && ctx.sb.from) {
+      const { data, error } = await ctx.sb.from('products')
+        .select('id,name,unit,price_usd,is_available,is_active,visible_online,available_days,shops!inner(id,tenant_id,slug,name,whatsapp,min_order_usd,pickup_enabled,status)').in('id', ids);
+      if (error) throw new Error(String(error.message).slice(0, 100));
+      type Row = { id: string; name: Record<string, string>; unit: string | null; price_usd: number | string; is_available: boolean; is_active: boolean; visible_online: boolean | null; available_days: number[] | null;
+        shops: { id: string; tenant_id: string; slug: string; name: Record<string, string>; whatsapp: string | null; min_order_usd: number | string | null; pickup_enabled: boolean | null; status: string } };
+      for (const r of (data as Row[] | null) ?? []) {
+        const sh = Array.isArray(r.shops) ? (r.shops as Row['shops'][])[0] : r.shops;
+        if (!sh || sh.tenant_id !== ctx.tenantId || sh.status !== 'active' || !r.is_active || !r.is_available || r.visible_online === false) continue;
+        found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: Number(r.price_usd), days: r.available_days?.length ? r.available_days : null,
+          shop: { id: sh.id, slug: sh.slug, name: sh.name, whatsapp: sh.whatsapp, min_order_usd: Number(sh.min_order_usd ?? 0), pickup_enabled: sh.pickup_enabled !== false } });
+      }
+    }
+    const not_found = [...base.draft.not_found];
+    const lines = base.draft.lines.flatMap(l => { const it = found.get(l.product_id); return it ? [{ ...it, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) }] : []; });
+    const choices: BasketDraft['choices'] = [];
+    for (const c of base.draft.choices) {
+      const options = c.options.map(o => found.get(o)).filter((o): o is ItemOut => !!o);
+      if (options.length > 1) choices.push({ phrase: c.phrase, quantity: c.quantity, options });
+      else if (options.length === 1) lines.push({ ...options[0], quantity: c.quantity });
+      else not_found.push(c.phrase);
+    }
+    const draft: BasketDraft = { lines, choices, not_found };
+    return { ok: true, shown_to_customer: true, lines: lines.length, choices: choices.length, not_found: not_found.length, shops: [...new Set(lines.map(l => l.shop.slug))].length, draft };
+  },
+};
+
+const ALL: Tool[] = [matchItems, draftOrder, draftBasket];
 
 /** The tools this person may use. The model is never shown a tool outside this list, and a call to one is refused. */
 export function toolsFor(mode: Mode, role: Role | null): Tool[] {

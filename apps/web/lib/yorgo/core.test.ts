@@ -113,4 +113,19 @@ describe('yorgo core', () => {
     expect(toolsFor('seller', 'stock').map(t => t.name)).not.toContain('draft_order');
     expect(toolsFor('shopper', null).map(t => t.name)).not.toContain('draft_order');
   });
+  it('fills a shopper basket from the public catalog and drops what is not on sale', async () => {
+    const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
+    const shop = { id: 's1', tenant_id: 't1', slug: 'abou-elie', name: { ar: 'دكان' }, whatsapp: null, min_order_usd: 0, pickup_enabled: true, status: 'active' };
+    const rows = [{ id: A, name: { ar: 'خبز' }, unit: 'bag', price_usd: '1.25', is_available: true, is_active: true, visible_online: true, available_days: null, shops: shop },
+      { id: B, name: { ar: 'مخفي' }, unit: null, price_usd: 2, is_available: true, is_active: true, visible_online: false, available_days: null, shops: shop },
+      { id: C, name: { ar: 'غريب' }, unit: null, price_usd: 3, is_available: true, is_active: true, visible_online: true, available_days: null, shops: { ...shop, tenant_id: 'other' } }];
+    const tool = toolsFor('shopper', null).find(t => t.name === 'draft_basket')!;
+    const asked: unknown[] = [];
+    const out = await tool.run({ lines: [{ product_id: A, quantity: 2 }, { product_id: B, quantity: 1 }], choices: [{ phrase: 'x', options: [A, C] }], not_found: ['nido'] },
+      { sb: { rpc: async () => ({ data: null, error: null }), from: () => ({ select: () => ({ in: async (_c: string, ids: string[]) => { asked.push(ids); return { data: rows, error: null }; } }) }) }, tenantId: 't1', mode: 'shopper', shopId: null, role: null }) as { draft: { lines: { product_id: string; quantity: number; price_usd: number; shop: { slug: string } }[]; choices: unknown[]; not_found: string[] } };
+    expect(asked).toEqual([[A, B, C]]);
+    expect(out.draft.lines.map(l => [l.product_id, l.quantity, l.price_usd, l.shop.slug])).toEqual([[A, 2, 1.25, 'abou-elie'], [A, 1, 1.25, 'abou-elie']]);   // hidden item dropped; a choice with one real option becomes a line
+    expect(out.draft.choices).toEqual([]); expect(out.draft.not_found).toEqual(['nido']);
+    expect(toolsFor('seller', 'owner').map(t => t.name)).not.toContain('draft_basket');
+  });
 });

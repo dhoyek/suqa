@@ -85,3 +85,11 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - Names, prices and stock on the card come from the catalog on the device; an id the till does not know is dropped. The sale is finished in the cart as usual (approval PIN, stock rules unchanged).
 - A sale whose cart took a Yorgo draft carries `via_yorgo` = conversation id in the `sale.commit` op, so it is in the audit log. No schema change.
 - Needs internet; offline the panel says so and the till is untouched.
+
+## 2026-11-18 — step C: Yorgo on the storefront (dev)
+- Floating "✨ Ask Yorgo" button on every storefront page (not on checkout, login or signup), shown when `yorgo_settings.enabled` and `shopper_enabled` are on and a key is configured (`lib/yorgo/enabled.ts`, cached 60 s).
+- Signed-in customers write what they want; new shopper tool `draft_basket` returns a suggested basket (lines, choices, not found) filled from the public catalog with the customer's own access. "Add to cart" puts the lines in the normal cart; checkout is unchanged.
+- On a shop page the model is told which shop the customer is looking at and searches it first.
+- Not signed in: the panel explains and links to sign-in. One-shop carts: the shop with most lines is added, with the usual "replace cart?" question.
+- POS: keystrokes in a multi-line text box are never read as a barcode scan.
+- Prompt: mixed-language messages are answered in their main language.

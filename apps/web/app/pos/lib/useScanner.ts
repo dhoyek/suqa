@@ -12,6 +12,7 @@ export function useScanner(onScan: (code: string) => void, { minLength = 4, maxG
   const cb = useRef(onScan); cb.current = onScan;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLTextAreaElement) return;      // free text (a pasted customer message, a long note) is never a barcode
       const now = performance.now();
       if (now - lastT.current > maxGap) { buf.current = ''; target.current = null; }
       lastT.current = now;

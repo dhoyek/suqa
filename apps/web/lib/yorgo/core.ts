@@ -10,11 +10,12 @@ type Query = { select(c: string): Query; eq(c: string, v: unknown): Query; order
 export type Deps = {
   model: ModelClient; cfg: YorgoConfig;
   admin: { rpc: Rpc };                               // service role: ONLY yorgo_gate and yorgo_record (switches, caps, metering)
-  sb: { rpc: Rpc; from(t: string): Query };          // the caller's own client: history and every tool
+  sb: { rpc: Rpc; from(t: string): Query };  // (tools may use the same `from` for the public catalog)          // the caller's own client: history and every tool
 };
 export type TurnInput = {
   tenant: { id: string; brand: string }; userId: string; mode: Mode; channel: 'app' | 'pos' | 'whatsapp';
   shopId: string | null; shopName?: string | null; role: Role | null; conversationId: string | null; message: string;
+  focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
 };
 export type TurnResult =
   | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number }
@@ -47,7 +48,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   // 3. the model, with the tools this person may use
   const tools = toolsFor(i.mode, i.role);
   const ctx: ToolCtx = { sb: d.sb, tenantId: i.tenant.id, mode: i.mode, shopId: i.shopId, role: i.role };
-  const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName });
+  const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null });
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }] }];
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }] }];
   let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = [];

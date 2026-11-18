@@ -12,6 +12,7 @@ insert into suqa.integration_config (key, value) values ('wa_events_url', 'https
 
 create schema if not exists t_oi; grant usage on schema t_oi to authenticated;
 create or replace function t_oi.round_lbp(p uuid, v bigint) returns void language sql security definer as $$ update suqa.orders set total_lbp = v where id = p $$;
+grant execute on function t_oi.round_lbp(uuid, bigint) to authenticated;
 set local role authenticated; set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';   -- shop owner
 
 create or replace function pg_temp.push(p_kind text, p_payload jsonb, p_op uuid default gen_random_uuid()) returns jsonb language sql as $$

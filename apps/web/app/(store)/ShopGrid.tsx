@@ -39,6 +39,21 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
     });
   }, []);
   const [q, setQ] = useState('');
+  // Items across every shop for what is typed (suqa.match_items: Arabic, Arabizi, English, aliases). Ordering still happens inside the shop:
+  // an item opens its shop with the same words already in the shop's search box.
+  type ItemHit = { product_id: string; shop_id: string; shop_name: LocalizedText; name: LocalizedText; price_usd: number | string; price_currency: string; price_lbp: number; score: number };
+  const [items, setItems] = useState<ItemHit[]>([]);
+  useEffect(() => {
+    const phrase = q.trim();
+    if (phrase.length < 2) { setItems([]); return; }
+    let live = true;
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabaseBrowser().rpc('match_items', { p_tenant: tenantId, p_phrases: [phrase], p_shop: null, p_limit: 8 });
+      if (live) setItems(error || !data ? [] : (data as ItemHit[]).filter(x => x.score >= 0.45));
+    }, 300);
+    return () => { live = false; clearTimeout(timer); };
+  }, [q, tenantId]);
+  const slugOf = useMemo(() => new Map(shops.map(s => [s.id, s.slug])), [shops]);
   // search by shop name (both languages), what people call it, or its description; Arabic letter variants are folded
   const fold = (t: string) => t.toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   const list = useMemo(() => {
@@ -79,7 +94,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
           </div>
         </div>
       )}
-      {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه…' : '🔍 Search a shop or its owner…'} style={{ marginBottom: 12 }} />}
+      {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه أو صنف…' : '🔍 Search a shop, its owner or an item…'} style={{ marginBottom: 12 }} />}
       <section className="grid">
         {list.map(s => (
           <Link key={s.id} href={`/s/${s.slug}`} className={`card shop-card ${s.open ? 'is-open' : 'is-closed'}`} prefetch>
@@ -103,8 +118,24 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
             {s.min_order_usd > 0 && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{labels.minOrder}: ${s.min_order_usd.toFixed(2)}</div>}
           </Link>
         ))}
-        {!list.length && <p className="muted">{fav && !st && !sel.size ? labels.noFavorites : labels.empty}</p>}
+        {!list.length && !items.length && <p className="muted">{fav && !st && !sel.size ? labels.noFavorites : labels.empty}</p>}
       </section>
+      {items.length > 0 && (
+        <section className="stack" style={{ gap: 8, marginTop: 16 }}>
+          <strong>{L === 'ar' ? 'أصناف' : 'Items'}</strong>
+          <div className="card" style={{ padding: 0 }}>
+            {items.filter(x => slugOf.has(x.shop_id)).map((x, i) => (
+              <Link key={x.product_id} href={`/s/${slugOf.get(x.shop_id)}?q=${encodeURIComponent(q.trim())}`} className="item-hit" style={{ borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600 }}>{tr(x.name, L)}</span>
+                  <span className="muted" style={{ fontSize: 13 }}>🏪 {tr(x.shop_name, L)}</span>
+                </span>
+                <span dir="ltr" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{x.price_currency === 'lbp' && Number(x.price_lbp) > 0 ? `${Number(x.price_lbp).toLocaleString('en-US')} ل.ل.` : `$${Number(x.price_usd).toFixed(2)}`}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }

@@ -13,6 +13,7 @@ export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
 export interface Product {
   id: string; tenant_id: string; shop_id: string;
   name: Localized; description?: Localized;
+  aliases?: string[] | null;             // 75: other names people use ("man2ouche", "mayy"); searched like the name
   price_usd: number | string;            // legacy decimal column (string from Postgres numeric)
   price_currency: Currency; price_lbp: number; cost_cents?: number | null; supplier_id?: string | null; margin_pct?: number | string | null; next_expiry?: string | null;
   sku?: string | null; unit?: string | null; unit_kind: string; decimal_qty: boolean; vat: boolean;

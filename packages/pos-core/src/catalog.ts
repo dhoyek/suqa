@@ -1,6 +1,7 @@
 export interface ScaleConfig { prefix: string | null; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number }
 export interface ScanHit { product: Product; qty: number; pack?: { qty: number; barcode: string }; unit_price_cents?: number; unit_price_lbp?: number; fixed_total_cents?: number; fixed_total_lbp?: number; scale?: boolean }
 import type { Barcode, Category, Localized, Product, QuickButton } from './types';
+import { foldItem, makeMatcher, type Folded } from './item-match';
 
 // Arabic/Latin normalisation shared with the store's menu search: strip tashkeel, unify alef forms, ta marbuta → ha, alef maqsura → ya,
 // Arabic-Indic digits → Western, lower-case Latin, collapse whitespace.
@@ -15,7 +16,7 @@ export function normalize(v: string): string {
 }
 export const text = (t: Localized | undefined, locale: 'ar' | 'en'): string => (t?.[locale] || t?.ar || t?.en || '');
 
-interface IndexRow { id: string; norm: string }
+interface IndexRow { id: string; norm: string; fold: Folded }
 
 /**
  * In-memory catalog for the sale screen. Built once from IndexedDB, patched by the feed.
@@ -102,7 +103,9 @@ export class CatalogIndex {
   private rebuild(): void {
     this.rows = [];
     for (const p of this.byId.values()) {
-      this.rows.push({ id: p.id, norm: normalize(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.sku ?? ''} ${[...(this.barcodesOf.get(p.id) ?? [])].join(' ')} ${p.description?.ar ?? ''} ${p.description?.en ?? ''}`) });
+      this.rows.push({ id: p.id,
+        norm: normalize(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.sku ?? ''} ${[...(this.barcodesOf.get(p.id) ?? [])].join(' ')} ${p.description?.ar ?? ''} ${p.description?.en ?? ''} ${(p.aliases ?? []).join(' ')}`),
+        fold: foldItem(p.name?.ar, p.name?.en, ...(p.aliases ?? [])) });
     }
     this.dirty = false;
   }
@@ -120,6 +123,20 @@ export class CatalogIndex {
       if (words.length && !words.every(w => r.norm.includes(w))) continue;
       out.push(p);
       if (out.length >= limit) break;
+    }
+    // Then what was meant rather than typed: Arabizi ("man2ouche", "7alib"), a small typo, another script. Exact hits stay on top.
+    // All of it runs on this device from the cached catalog — nothing here needs the network.
+    const hit = out.length < limit && words.length ? makeMatcher(q) : null;
+    if (hit) {
+      const got = new Set(out.map(p => p.id));
+      for (const r of this.rows) {
+        if (got.has(r.id)) continue;
+        const p = this.byId.get(r.id)!;
+        if (cats && !cats.has(p.section ?? '')) continue;
+        if (!hit(r.fold)) continue;
+        out.push(p);
+        if (out.length >= limit) break;
+      }
     }
     return out;
   }

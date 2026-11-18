@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { CatalogIndex } from './catalog';
 import { foldItem, makeMatcher, skelWords } from './item-match';
 test('folding matches SQL', () => {
   expect(skelWords('خبز')).toEqual(['xbz']); expect(skelWords('khebez')).toEqual(['xbz']); expect(skelWords('5ebez')).toEqual(['xbz']);
@@ -16,4 +17,13 @@ test('search', () => {
   expect(m('bebsi')(foldItem('دجاج بالعجين', 'Chicken in dough', 'Dough Pies & Pizza'))).toBe(false);
   expect(m('bira')(beer)).toBe(true); expect(m('bira')(bread)).toBe(false); expect(m('zzzz')(bread)).toBe(false); expect(m('mayy')(bread)).toBe(false);
   expect(m('za3tar w jebne')(foldItem('زعتر + جبنة', 'Zaatar + cheese'))).toBe(true); expect(m('za3tar w jebne')(z)).toBe(false);
+});
+
+test('POS catalog search: exact first, then Arabizi / alias / typo, all offline', () => {
+  const mk = (id: string, ar: string, en: string, aliases: string[] = []) => ({ id, tenant_id: 't', shop_id: 's', name: { ar, en }, aliases, price_usd: 1, price_currency: 'usd', price_lbp: 0, unit_kind: 'piece', decimal_qty: false, vat: false, track_stock: false, min_stock: 0, visible_online: true, is_available: true, is_active: true, sort_order: 0, on_hand: 0, reserved: 0, section: null }) as never;
+  const ix = new CatalogIndex();
+  ix.load([mk('1', 'زعتر', 'Zaatar', ['man2ouche']), mk('2', 'مياه', 'Water', ['mayy']), mk('3', 'خبز عربي', 'Arabic bread'), mk('4', 'بيبسي', 'Pepsi')], [], [], []);
+  const names = (q: string) => ix.search(q).map(p => p.name.en);
+  expect(names('ma2ouche')).toEqual(['Zaatar']); expect(names('mayy')).toEqual(['Water']); expect(names('khebez')).toEqual(['Arabic bread']); expect(names('bebsi')).toEqual(['Pepsi']);
+  expect(names('pepsi')).toEqual(['Pepsi']); expect(names('zzzz')).toEqual([]);
 });

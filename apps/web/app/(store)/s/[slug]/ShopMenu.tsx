@@ -30,6 +30,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const [sheet, setSheet] = useState(false); const [secQ, setSecQ] = useState('');
   const [limit, setLimit] = useState(60);
   const [q, setQ] = useState('');
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) setQ(v); }, []);   // arriving from the home page's item search
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   // every item folded once: names, description, its section's names and its aliases ("man2ouche", "mayy" …)

@@ -334,3 +334,9 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 /* a map keeps its own stacking: Leaflet layers sit at z-index 200–1000 and would otherwise slide over the sticky top bar and menus */
 .map, .leaflet-container { position: relative; z-index: 0; isolation: isolate; }
+
+/* phones: with a site logo the name beside it is dropped — the header is the tightest place on the screen */
+@media (max-width: 640px) { .brand-text.has-logo { display: none; } }
+/* an item found from the home page search */
+.item-hit { display: flex; gap: 12px; align-items: center; padding: 12px 14px; min-height: 44px; color: inherit; text-decoration: none; }
+.item-hit:hover { background: #f9fafb; }

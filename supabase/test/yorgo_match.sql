@@ -29,6 +29,14 @@ do $$ declare n int; t3 int; begin
   if t3::numeric / n < 0.85 then raise exception 'top-3 accuracy fell to % of %', t3, n; end if;
 end $$;
 
+-- 76: several items contain خبز; for "khebez" the plain bread must come first, on its own score (not by luck of the order)
+do $$ declare v_first text; v_bread real; v_crouton real; begin
+  select m.name->>'en' into v_first from suqa.match_items('7e570000-0000-4000-8000-000000000001', array['khebez'], null, 1) m;
+  select max(m.score) filter (where m.name->>'en' = 'Arabic bread'), max(m.score) filter (where m.name->>'en' ilike '%crouton%') into v_bread, v_crouton
+    from suqa.match_items('7e570000-0000-4000-8000-000000000001', array['khebez'], null, 10) m;
+  if v_first is distinct from 'Arabic bread' or v_crouton is null or v_bread <= v_crouton then raise exception 'khebez: bread % vs croutons %, first %', v_bread, v_crouton, v_first; end if;
+end $$;
+
 -- ---- access ----
 insert into auth.users (id) values ('7e570000-0000-4000-8000-00000000aaaa'), ('7e570000-0000-4000-8000-00000000bbbb'), ('7e570000-0000-4000-8000-00000000cccc');
 insert into suqa.shop_members (shop_id, user_id, role) values

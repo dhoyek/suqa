@@ -42,3 +42,12 @@ The phrases were written by the developer from the catalog, not taken from real 
 - Milestone 1 split into 1a (this) and 1b (Claude call, conversations, metering) — see PLAN.md.
 - No pgvector: not needed at this accuracy.
 - Not wired into any screen yet. The storefront and POS searches are unchanged.
+
+## Milestone 1a, follow-up — closest name first (script 76)
+
+Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bread". All three contain خبز and tied at 0.77, because closeness to the whole name was measured by spelling only, so a Latin phrase against an Arabic name scored 0. The local run had bread first only by row order, which is why the accuracy table did not show it.
+
+- `match_items`: the whole-name term is also measured on the consonant skeleton; equal scores go to the shorter name.
+- Test: a dedicated check that bread outscores croutons for "khebez" (it fails on 75, passes on 76).
+- Accuracy on the 85 phrases is unchanged: 83 first (98%), 84 in the first three (99%). One more expected answer was widened ("CANDEL", the catalog's own spelling).
+- Also learned on real data: searching across all shops is noisier than inside one shop ("bayd b 2awarma" puts a grocery item first). The assistant should search inside the chosen shop whenever there is one.

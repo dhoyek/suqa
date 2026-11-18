@@ -36,13 +36,15 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
   const due = Math.max(0, Math.round((Number(o.total_usd) - paidUsd) * 100) / 100);
   const drvPays = o.payments.filter(p => p.tender === 'driver'); const cashSettled = drvPays.length > 0 && drvPays.every(p => p.settled_at);
   const drvUsd = drvPays.filter(p => p.currency === 'usd').reduce((s, p) => s + Number(p.amount), 0) / 100, drvLbp = drvPays.filter(p => p.currency === 'lbp').reduce((s, p) => s + Number(p.amount), 0);
+  // "$20.00 − 715,000 L.L.": a negative part is change he gave from his own pocket in that currency
+  const cashStr = (u: number, l: number) => { const parts: [number, string][] = []; if (u) parts.push([u, `$${Math.abs(u).toFixed(2)}`]); if (l) parts.push([l, `${Math.abs(l).toLocaleString('en-US')} ${ar ? 'ل.ل.' : 'LBP'}`]); return parts.map(([n, t], i) => (i === 0 ? (n < 0 ? '− ' : '') : n < 0 ? ' − ' : ' + ') + t).join(''); };
   const debtUsd = o.payments.filter(p => p.tender === 'unpaid').reduce((s, p) => s + Number(p.amount), 0) / 100;
   // the pay screen's numbers (81); absent on a database without the script → the sheet shows no pay screen
   const { data: infoData } = o.driver_id && ['accepted', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) ? await admin.rpc('driver_pay_info', { p_order: id }) : { data: null };
   const info = infoData as { due_cents: number; rate: number; lbp_step: number; can_debt: boolean; credit_limit_cents: number | null; debt_cents: number | null } | null;
   const WHY: Record<string, [string, string]> = { not_covered: ['المبلغ المُدخل أقل من المطلوب.', 'The amount entered is less than what is due.'], too_much: ['المبلغ المُدخل أكثر من المطلوب — راجع الباقي للزبون.', 'The amount entered is more than what is due — check the change.'], over_credit_limit: ['يتجاوز حدّ الدين المسموح لهذا الزبون. اتصل بالمحل.', 'Over this customer\'s credit limit. Call the shop.'], debt_needs_customer: ['لا رقم للزبون — لا يمكن تسجيل دين. اتصل بالمحل.', 'No customer number — a debt cannot be recorded. Call the shop.'], pay_required: ['أدخل ما دفعه الزبون.', 'Enter what the customer paid.'], bad_amount: ['مبلغ غير صحيح.', 'Invalid amount.'] };
   const shopPhone = o.shop?.whatsapp || o.shop?.phone || ''; const map = mapUrl(o.address); const address = addrText(o.address);
-  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const when = (iso: string | null) => iso ? new Date(iso).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Beirut' }) : '';
   const Btn = ({ href, children, primary = false }: { href: string; children: React.ReactNode; primary?: boolean }) => <a className={`btn ${primary ? 'primary' : ''}`} href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" style={{ flex: 1, justifyContent: 'center' }}>{children}</a>;
   return (
     <main className="container narrow stack" style={{ paddingBottom: 24 }}>
@@ -51,7 +53,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
 
       {/* one tap so the shop knows he got it and is coming for the bag */}
       {o.driver_id && ['accepted', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && (() => {
-        const hm = (iso: string) => new Date(iso).toLocaleTimeString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+        const hm = (iso: string) => new Date(iso).toLocaleTimeString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Beirut' });
         const Step = ({ done, label, at }: { done: boolean; label: string; at: string | null }) => <span className={`dstep ${done ? 'done' : ''}`}>{done ? '✓' : '○'} {label}{at ? ` ${hm(at)}` : ''}</span>;
         // both early taps are offered together: "got it" first (highlighted), "picked up" under it — he may skip straight to the second
         type Tap = { action: string; s: string; label: string; hint: string };
@@ -75,7 +77,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
       {/* closed by the driver (or the shop): what he holds for this order, and the way to his account */}
       {o.driver_id && o.status === 'delivered' && <section className="card stack" style={{ gap: 6, background: '#ecfdf5' }}>
         <strong style={{ color: '#166534' }}>✓ {ar ? 'تم التسليم' : 'Delivered'}{o.driver_delivered_at ? ` · ${when(o.driver_delivered_at)}` : ''}</strong>
-        {(drvUsd !== 0 || drvLbp !== 0) && <div>{ar ? '💵 النقد معك لهذا الطلب' : '💵 Cash with you for this order'}: <strong dir="ltr">{[drvUsd !== 0 ? `$${drvUsd.toFixed(2)}` : '', drvLbp !== 0 ? `${drvLbp.toLocaleString('en-US')} ${ar ? 'ل.ل.' : 'LBP'}` : ''].filter(Boolean).join(' + ')}</strong>{cashSettled ? <span className="muted"> · ✓ {ar ? 'سُلِّم للمحل' : 'handed to the shop'}</span> : <span> — {ar ? 'سلّمه للمحل' : 'hand it to the shop'}</span>}</div>}
+        {(drvUsd !== 0 || drvLbp !== 0) && <div>{ar ? '💵 النقد معك لهذا الطلب' : '💵 Cash with you for this order'}: <strong dir="ltr">{cashStr(drvUsd, drvLbp)}</strong>{cashSettled ? <span className="muted"> · ✓ {ar ? 'سُلِّم للمحل' : 'handed to the shop'}</span> : <span> — {ar ? 'سلّمه للمحل' : 'hand it to the shop'}</span>}</div>}
         {debtUsd > 0 && <div className="muted">📒 {ar ? 'دين على الزبون' : 'Debt on the customer'}: <span dir="ltr">${debtUsd.toFixed(2)}</span></div>}
       </section>}
       {o.driver_id && <a className="btn" href={`/d/me/${o.driver_id}`} style={{ justifyContent: 'center' }}>💰 {ar ? 'حسابي مع المحل' : 'My account with the shop'}</a>}
@@ -103,7 +105,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
           <tr><td>{ar ? 'قيمة الطلب' : 'Order amount'}</td><td className="num">{money(Number(o.subtotal_usd))}</td></tr>
           <tr><td>{ar ? 'رسوم التوصيل' : 'Delivery fee'}</td><td className="num">{money(Number(o.delivery_fee_usd))}</td></tr>
           <tr><td><strong>{ar ? 'الإجمالي' : 'Total'}</strong></td><td className="num"><strong>{money(Number(o.total_usd))}</strong></td></tr>
-          <tr style={{ background: due > 0 ? '#fff8e6' : '#ecfdf5' }}><td><strong>{due > 0 ? (ar ? '💵 المطلوب تحصيله من الزبون' : '💵 Collect from customer') : (ar ? '✓ مدفوع مسبقاً — لا تحصيل' : '✓ Prepaid — nothing to collect')}</strong></td><td className="num"><strong>{due > 0 ? money(due) : ''}</strong></td></tr>
+          <tr style={{ background: due > 0 ? '#fff8e6' : '#ecfdf5' }}><td><strong>{due > 0 ? (o.status === 'delivered' ? (ar ? '📒 غير مدفوع — دين على الزبون' : '📒 Unpaid — on the customer') : ar ? '💵 المطلوب تحصيله من الزبون' : '💵 Collect from customer') : (ar ? '✓ مدفوع مسبقاً — لا تحصيل' : '✓ Prepaid — nothing to collect')}</strong></td><td className="num"><strong>{due > 0 ? money(due) : ''}</strong></td></tr>
           {Number(o.courier_fee_cents) > 0 && <tr><td className="muted">{ar ? 'أجرة السائق' : 'Driver fee'}</td><td className="num muted">{money(Number(o.courier_fee_cents) / 100)}</td></tr>}
         </tbody></table>
       </section>

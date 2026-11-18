@@ -16,7 +16,8 @@ export type Payout = { id: string; driver_id: string; orders_count: number; amou
 type Rep = { default: { mode: DriverPayMode; cents: number }; drivers: Drv[]; orders: DrvOrder[]; payouts: Payout[] };
 type Preset = 'today' | 'week' | 'month' | 'lastMonth';
 /** Cash as the driver holds it: dollars and lira side by side ("$29.00 + 540,000 ل.ل."). */
-const cashText = (usd: number, lbp: number, locale: L) => [usd ? fmtUsd(usd) : '', lbp ? fmtLbp(lbp, locale) : ''].filter(Boolean).join(' + ') || fmtUsd(0);
+const cashText = (usd: number, lbp: number, locale: L) => { const parts: [number, string][] = []; if (usd) parts.push([usd, fmtUsd(Math.abs(usd))]); if (lbp) parts.push([lbp, fmtLbp(Math.abs(lbp), locale)]);
+  return parts.map(([n, t], i) => (i === 0 ? (n < 0 ? '− ' : '') : n < 0 ? ' − ' : ' + ') + t).join('') || fmtUsd(0); };   // a negative part = change he gave from his own pocket
 
 function range(p: Preset): [string, string] {
   const d = new Date(); d.setHours(0, 0, 0, 0);

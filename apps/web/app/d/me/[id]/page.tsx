@@ -31,7 +31,8 @@ export default async function DriverAccount({ params }: { params: Promise<{ id: 
   const lbp = (c: number) => <span dir="ltr" className="muted" style={{ fontSize: '.85em' }}>≈ {Math.round((Number(c) * Number(b.rate)) / 100 / 1000) * 1000 > 0 ? (Math.round((Number(c) * Number(b.rate)) / 100 / 1000) * 1000).toLocaleString('en-US') : 0} {ar ? 'ل.ل.' : 'LBP'}</span>;
   const when = (iso: string) => new Date(iso).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Beirut' });
   // cash is shown in the notes he really holds: dollars and lira side by side
-  const cash = (u: number, l: number) => { const a = Number(u), c = Number(l); if (!a && !c) return <span className="muted">—</span>; return <span dir="ltr">{[a ? `$${(a / 100).toFixed(2)}` : '', c ? `${c.toLocaleString('en-US')} ${ar ? 'ل.ل.' : 'LBP'}` : ''].filter(Boolean).join(' + ')}</span>; };
+  const cash = (u: number, l: number) => { const a = Number(u), c = Number(l); if (!a && !c) return <span className="muted">—</span>; const parts: [number, string][] = []; if (a) parts.push([a, `$${(Math.abs(a) / 100).toFixed(2)}`]); if (c) parts.push([c, `${Math.abs(c).toLocaleString('en-US')} ${ar ? 'ل.ل.' : 'LBP'}`]);
+    return <span dir="ltr">{parts.map(([n, t], i) => (i === 0 ? (n < 0 ? '− ' : '') : n < 0 ? ' − ' : ' + ') + t).join('')}</span>; };
   const onRoadDue = b.on_road.reduce((s, o) => s + Number(o.due_cents), 0);
   const net = Number(b.net_cents); const shopPhone = b.shop?.whatsapp || b.shop?.phone || '';
   const Kpi = ({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) =>

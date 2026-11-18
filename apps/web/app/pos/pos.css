@@ -540,8 +540,8 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .yorgo-missing { font-size: 13px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 8px; }
 .yorgo-draft-actions { display: flex; align-items: center; gap: 8px; }
 .yorgo-draft-actions .btn { width: auto; }
-.yorgo-input { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
+.yorgo-input { display: flex; gap: 8px; align-items: flex-end; width: 100%; flex-wrap: wrap; }
 .yorgo-input textarea { flex: 1; resize: none; min-height: 48px; font-family: inherit; }
-.yorgo-input .btn { width: auto; min-width: 48px; min-height: 48px; font-size: 18px; }
-.yorgo-foot { font-size: 11px; margin: 8px 0 0; text-align: center; }
+.yorgo-input .btn { width: auto; min-width: 48px; min-height: 48px; font-size: 20px; font-weight: 700; }
+.yorgo-foot { font-size: 11px; margin: 0; text-align: center; flex-basis: 100%; }
 @media (max-width: 760px) { .yorgo-btn-label { display: none; } .pos .btn.yorgo-btn { padding-inline: 9px; } .yorgo-msg { max-width: 94%; } }

@@ -76,11 +76,12 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
 
   return (
     <Modal open={open} onClose={onClose} wide title={<>✨ Yorgo <small className="yorgo-tag">{pt('yorgoAi', locale)}</small></>}
-      actions={msgs.length ? <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>🗒</button> : undefined}
+      actions={msgs.length ? <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>↺</button> : undefined}
       footer={<div className="yorgo-input">
         <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt(sells ? 'yorgoPlaceholder' : 'yorgoPlaceholderItems', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
-        <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>➤</button>
+        <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>↑</button>
+        <p className="yorgo-foot muted">{pt('yorgoDisclaimer', locale)}</p>
       </div>}>
       <div className="yorgo-chat">
         {!msgs.length && <div className="yorgo-hello">
@@ -125,7 +126,6 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
         {busy && <div className="yorgo-msg yorgo typing">…</div>}
         <div ref={endRef} />
       </div>
-      <p className="yorgo-foot muted">{pt('yorgoDisclaimer', locale)}</p>
     </Modal>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { foldItem, makeMatcher, type Folded } from '@/lib/item-match';
 import FilterIcon from '@/components/FilterIcon';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
@@ -31,11 +32,13 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const [q, setQ] = useState('');
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+  // every item folded once: names, description, its section's names and its aliases ("man2ouche", "mayy" …)
+  const folded = useMemo(() => new Map<string, Folded>(products.map(p => [p.id, foldItem(p.name?.ar, p.name?.en, p.description?.ar, p.description?.en, secText(p.section ?? ''), ...((p as { aliases?: string[] | null }).aliases ?? []))])),
+    [products]);   // eslint-disable-line react-hooks/exhaustive-deps
   const visible = useMemo(() => {
-    const needle = norm(q.trim());
-    return products.filter(p => (secs.size === 0 || secs.has(p.section ?? ''))
-      && (!needle || norm(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.description?.ar ?? ''} ${p.description?.en ?? ''} ${secText(p.section ?? '')}`).includes(needle)));
-  }, [products, secs, q]);
+    const hit = makeMatcher(q);                                  // Arabic, Arabizi, English, small typos, and the item's other names
+    return products.filter(p => (secs.size === 0 || secs.has(p.section ?? '')) && (!hit || hit(folded.get(p.id)!)));
+  }, [products, secs, q, folded]);
   useEffect(() => setLimit(60), [q, secs]);                       // a new search/filter starts from the top again
   const shown = visible.slice(0, limit);
   const visibleSections = sections.filter(s => shown.some(p => (p.section ?? '') === s));

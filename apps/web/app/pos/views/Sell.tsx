@@ -25,7 +25,7 @@ type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLin
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onOrder, onStock, reindex, newOrderRequest, presetCustomer, yorgoCart, onYorgoTaken }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onOrder?: (id: string, detail?: boolean) => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null; yorgoCart?: { lines: { product: Product; quantity: number; note?: string }[]; conversation: string | null; n: number } | null; onYorgoTaken?: () => void }) {
+export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onOrder, onStock, reindex, newOrderRequest, presetCustomer, yorgoCart, onYorgoTaken }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onOrder?: (id: string, detail?: boolean) => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null; yorgoCart?: { lines: { product: Product; quantity: number; note?: string }[]; conversation: string | null; order?: boolean; n: number } | null; onYorgoTaken?: () => void }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
@@ -55,10 +55,12 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   useEffect(() => { if (!yorgoCart || yorgoSeen.current === yorgoCart) return; yorgoSeen.current = yorgoCart; const y = yorgoCart;
     void loadCurrentDraft(boot.db).then(() => {
       setReceipt(null);
-      setDraft(d => { let n: Draft = { ...d, via_yorgo: y.conversation ?? d.via_yorgo ?? null };
+      // "as an order": a counter cart becomes a WhatsApp order for delivery (pickup is chosen in the customer box, which opens next);
+      // a cart that is already an order keeps its channel, customer and address
+      setDraft(d => { let n: Draft = { ...d, via_yorgo: y.conversation ?? d.via_yorgo ?? null, ...(y.order && d.channel === 'walkin' ? { channel: 'whatsapp' as const, fulfillment: 'delivery' as const } : {}) };
         for (const l of y.lines) n = l.note ? { ...n, lines: [...n.lines, { ...lineFromProduct(l.product, l.quantity), notes: l.note }] } : addToDraft(n, l.product, l.quantity);
         return n; });
-      setToast(pt('yorgoInCart', locale)); setTimeout(() => setToast(null), 3500);
+      if (y.order) setDialog({ k: 'customer' }); else { setToast(pt('yorgoInCart', locale)); setTimeout(() => setToast(null), 3500); }
       onYorgoTaken?.();
     });
   }, [yorgoCart]);   // eslint-disable-line react-hooks/exhaustive-deps

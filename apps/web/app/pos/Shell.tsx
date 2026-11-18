@@ -68,7 +68,7 @@ export default function Shell(props: {
   const yorgoKey = `suqa-yorgo-${boot.shop.id}`;
   const [yorgoOn, setYorgoOn] = useState<boolean>(() => { try { return localStorage.getItem(yorgoKey) === '1'; } catch { return false; } });
   const [yorgoOpen, setYorgoOpen] = useState(false);
-  const [yorgoCart, setYorgoCart] = useState<{ lines: YorgoCartLine[]; conversation: string | null; n: number } | null>(null);
+  const [yorgoCart, setYorgoCart] = useState<{ lines: YorgoCartLine[]; conversation: string | null; order?: boolean; n: number } | null>(null);
   useEffect(() => { if (!online) return; let on = true;
     props.sb.from('yorgo_shops').select('enabled').eq('shop_id', boot.shop.id).maybeSingle().then(({ data, error }) => { if (!on || error) return; const v = !!(data as { enabled?: boolean } | null)?.enabled; setYorgoOn(v); try { localStorage.setItem(yorgoKey, v ? '1' : '0'); } catch { /* private mode */ } });
     return () => { on = false; }; }, [props.sb, boot.shop.id, online, yorgoKey]);
@@ -116,7 +116,7 @@ export default function Shell(props: {
         {view === 'settings' && <SettingsView {...props} />}
       </main>
       {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online} sells={yorgoSells} sb={props.sb as never} canReview={['owner', 'stock', 'setup'].includes(roleOf(staff) ?? '')}
-        onAddToCart={(lines, conversation) => { setYorgoCart(c => ({ lines, conversation, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
+        onAddToCart={(lines, conversation, order) => { setYorgoCart(c => ({ lines, conversation, order, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
     </div>
   );
 }

@@ -22,7 +22,8 @@ const price = (p: Product, locale: L) => (p.price_currency === 'lbp' ? fmtLbp(nu
 
 export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, sb, canReview, onAddToCart }: {
   open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean; sells: boolean; sb: Sb; canReview: boolean;
-  onAddToCart: (lines: YorgoCartLine[], conversationId: string | null) => void;
+  /** asOrder: the lines become a delivery / pickup order (the customer box opens next) instead of a sale at the counter */
+  onAddToCart: (lines: YorgoCartLine[], conversationId: string | null, asOrder: boolean) => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState(''); const [busy, setBusy] = useState(false);
@@ -70,9 +71,9 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
 
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
   const step = (p: Product) => (p.decimal_qty ? 0.5 : 1);
-  const accept = (m: Msg) => {
+  const accept = (m: Msg, asOrder = false) => {
     if (!m.draft?.lines.length) return;
-    onAddToCart(m.draft.lines.map(l => ({ product: l.product, quantity: l.quantity, note: l.note })), conv.current);
+    onAddToCart(m.draft.lines.map(l => ({ product: l.product, quantity: l.quantity, note: l.note })), conv.current, asOrder);
     patch(m.id, d => ({ ...d, state: 'added' }));
   };
   const reset = () => { setMsgs([]); conv.current = null; setInput(''); };
@@ -155,7 +156,8 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
             {m.draft.state === 'open' && <div className="yorgo-draft-actions">
               <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, state: 'discarded' }))}>{pt('yorgoDiscard', locale)}</button>
               <span style={{ flex: 1 }} />
-              <button className="btn primary" disabled={!m.draft.lines.length} onClick={() => accept(m)}>🛒 {pt('yorgoToCart', locale)} ({m.draft.lines.length})</button>
+              <button className="btn" disabled={!m.draft.lines.length} title={pt('yorgoToCartHint', locale)} onClick={() => accept(m)}>🛒 {pt('yorgoToCart', locale)}</button>
+              <button className="btn primary" disabled={!m.draft.lines.length} title={pt('yorgoToOrderHint', locale)} onClick={() => accept(m, true)}>📥 {pt('yorgoToOrder', locale)} ({m.draft.lines.length})</button>
             </div>}
             {m.draft.state === 'open' && !!m.draft.choices.length && <small className="muted">{pt('yorgoPickFirst', locale)}</small>}
           </div>

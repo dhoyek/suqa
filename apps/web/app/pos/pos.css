@@ -538,7 +538,7 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .yorgo-options { display: flex; flex-wrap: wrap; gap: 6px; }
 .yorgo-options .btn { width: auto; text-align: start; }
 .yorgo-missing { font-size: 13px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 8px; }
-.yorgo-draft-actions { display: flex; align-items: center; gap: 8px; }
+.yorgo-draft-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .yorgo-draft-actions .btn { width: auto; }
 .yorgo-input { display: flex; gap: 8px; align-items: flex-end; width: 100%; flex-wrap: wrap; }
 .yorgo-input textarea { flex: 1; resize: none; min-height: 48px; font-family: inherit; }

@@ -98,4 +98,19 @@ describe('yorgo core', () => {
     expect(costOf('some-new-model', usage, cfg.prices)).toBe(costOf('claude-sonnet-5-5', usage, cfg.prices));
     expect(costOf('claude-haiku-5-5', usage, cfg.prices)).toBeCloseTo((1000 * 0.10 + 100 * 0.50 + 2000 * 0.01) / 1e6, 9);
   });
+  it('hands a draft to the screen: ids and quantities only, cleaned, and never for a role that cannot sell', async () => {
+    const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
+    const { deps, calls } = rig({ replies: [toolCall({ lines: [{ product_id: A, quantity: 2, note: ' sliced ' }, { product_id: 'not-an-id', quantity: 1 }, { product_id: B, quantity: -5 }],
+      choices: [{ phrase: 'pepsi', options: [A, A, B] }, { phrase: 'x', options: ['bad'] }], not_found: ['nido', ''] }, 'draft_order'), say('2 جاهزين')] });
+    const r = await runTurn(deps, base) as { status: string; drafts: unknown[] };
+    expect(r.status).toBe('ok');
+    expect(r.drafts).toEqual([{ kind: 'draft_order', lines: [{ product_id: A, quantity: 2, note: 'sliced' }, { product_id: B, quantity: 1 }], choices: [{ phrase: 'pepsi', quantity: 1, options: [A, B] }], not_found: ['nido'] }]);
+    // the model is told the draft was shown, not handed the draft back
+    const back = JSON.parse((calls.model[1].messages.at(-1)!.content[0] as { content: string }).content);
+    expect(back).toEqual({ ok: true, shown_to_staff: true, lines: 2, choices: 1, not_found: 1 });
+    expect(toolsFor('seller', 'cashier').map(t => t.name)).toContain('draft_order');
+    expect(toolsFor('seller', 'setup').map(t => t.name)).not.toContain('draft_order');
+    expect(toolsFor('seller', 'stock').map(t => t.name)).not.toContain('draft_order');
+    expect(toolsFor('shopper', null).map(t => t.name)).not.toContain('draft_order');
+  });
 });

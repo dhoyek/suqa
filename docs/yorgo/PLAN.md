@@ -2,7 +2,7 @@
 
 One assistant, two modes (shopper, seller), built on the Claude API with tool use. Community project, one operator: cost control is a requirement, not an afterthought.
 
-Status: **item matching live (scripts 75, 76); step A — the core — built and tested without a key (script 77 written, not applied).** No screen uses the assistant yet.
+Status: **item matching live (75, 76); step A (core) and step B (POS: paste a message → draft order) on dev with script 77; prod untouched.**
 
 ## What the repo already gives us
 

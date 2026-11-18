@@ -42,7 +42,43 @@ const matchItems: Tool = {
   },
 };
 
-const ALL: Tool[] = [matchItems];
+// A draft is a proposal, nothing more: it carries item ids and quantities only. Names, prices and stock are filled in by the till from
+// its own catalog, an id the till does not know is dropped there, and nothing is sold until a person confirms it in the cart.
+export type OrderDraft = { lines: { product_id: string; quantity: number; note?: string }[]; choices: { phrase: string; quantity: number; options: string[] }[]; not_found: string[] };
+const qty = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(999, Math.round(n * 1000) / 1000) : 1; };
+const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+const draftOrder: Tool = {
+  name: 'draft_order',
+  description: 'Prepare a draft order for the staff member to check and confirm in the cart. Call it ONCE per customer message, after match_items, with every item the customer asked for: '
+    + 'a sure match goes in "lines"; when two or more candidates could be meant, put the phrase in "choices" with the candidate ids (the staff member taps the right one); what was not found goes in "not_found". '
+    + 'Use only product_id values returned by match_items. This does not sell anything.',
+  input_schema: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      lines: { type: 'array', maxItems: 40, items: { type: 'object', additionalProperties: false, required: ['product_id', 'quantity'], properties: {
+        product_id: { type: 'string' }, quantity: { type: 'number', description: 'As the customer asked; 1 when not said.' }, note: { type: 'string', maxLength: 120, description: 'Only what the customer said about this item (sliced, cold…).' } } } },
+      choices: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['phrase', 'options'], properties: {
+        phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
+      not_found: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
+    },
+  },
+  modes: ['seller'], roles: ['owner', 'cashier'],
+  async run(input) {
+    const lines = (Array.isArray(input.lines) ? input.lines : []).slice(0, 40).map(l => l as Record<string, unknown>)
+      .filter(l => typeof l.product_id === 'string' && UUID.test(l.product_id))
+      .map(l => ({ product_id: (l.product_id as string).toLowerCase(), quantity: qty(l.quantity), ...(str(l.note, 120) ? { note: str(l.note, 120) } : {}) }));
+    const choices = (Array.isArray(input.choices) ? input.choices : []).slice(0, 20).map(c => c as Record<string, unknown>)
+      .map(c => ({ phrase: str(c.phrase, 80), quantity: qty(c.quantity), options: [...new Set((Array.isArray(c.options) ? c.options : []).filter((o): o is string => typeof o === 'string' && UUID.test(o)).map(o => o.toLowerCase()))].slice(0, 4) }))
+      .filter(c => c.phrase && c.options.length);
+    const not_found = (Array.isArray(input.not_found) ? input.not_found : []).map(n => str(n, 80)).filter(Boolean).slice(0, 20);
+    if (!lines.length && !choices.length && !not_found.length) throw new Error('empty_draft');
+    const draft: OrderDraft = { lines, choices, not_found };
+    return { ok: true, shown_to_staff: true, lines: lines.length, choices: choices.length, not_found: not_found.length, draft };
+  },
+};
+
+const ALL: Tool[] = [matchItems, draftOrder];
 
 /** The tools this person may use. The model is never shown a tool outside this list, and a call to one is refused. */
 export function toolsFor(mode: Mode, role: Role | null): Tool[] {

@@ -25,7 +25,7 @@ type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLin
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
  * Everything reads the in-memory index and writes IndexedDB; the network is never awaited here.
  */
-export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onOrder, onStock, reindex, newOrderRequest, presetCustomer }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onOrder?: (id: string, detail?: boolean) => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null }) {
+export default function Sell({ boot, sb, locale, index, tick, staff, status, busyRef, onGo, onOrder, onStock, reindex, newOrderRequest, presetCustomer, yorgoCart, onYorgoTaken }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; status: SyncStatus | null; busyRef: MutableRefObject<boolean>; onGo: (v: 'shift' | 'orders') => void; onOrder?: (id: string, detail?: boolean) => void; onStock?: (productId: string) => void; reindex: () => void; newOrderRequest?: number; presetCustomer?: { phone: string; name: string } | null; yorgoCart?: { lines: { product: Product; quantity: number; note?: string }[]; conversation: string | null; n: number } | null; onYorgoTaken?: () => void }) {
   const shop = boot.shop;
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
@@ -48,6 +48,20 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   useEffect(() => { loadCurrentDraft(boot.db).then(d => { if (d) setDraft(d); }); }, [boot]);
   // "＋ new order" from the inbox: start a WhatsApp order and open the customer dialog
   useEffect(() => { if (newOrderRequest && presetCustomer) { setReceipt(null); setDraft(d => ({ ...(d.lines.length ? d : { ...newDraft('whatsapp'), fulfillment: 'delivery' as const }), channel: 'whatsapp', customer_phone: presetCustomer.phone, customer_name: presetCustomer.name })); setDialog({ k: 'customer' }); return; } if (newOrderRequest) { setReceipt(null); setDraft(d => (d.lines.length ? { ...d, channel: 'whatsapp' } : { ...newDraft('whatsapp'), fulfillment: 'delivery' })); setDialog({ k: 'customer' }); } }, [newOrderRequest]);
+  // a draft accepted from Yorgo: its lines land in the cart like tapped items (same names, prices and stock rules); the sale stays the cashier's to finish.
+  // Each accepted draft is taken once and handed back (onYorgoTaken), so returning to this screen never adds the same lines twice. The saved
+  // cart is read first for the order of things only: when this screen has just opened, the restore above must land before the new lines.
+  const yorgoSeen = useRef<unknown>(null);
+  useEffect(() => { if (!yorgoCart || yorgoSeen.current === yorgoCart) return; yorgoSeen.current = yorgoCart; const y = yorgoCart;
+    void loadCurrentDraft(boot.db).then(() => {
+      setReceipt(null);
+      setDraft(d => { let n: Draft = { ...d, via_yorgo: y.conversation ?? d.via_yorgo ?? null };
+        for (const l of y.lines) n = l.note ? { ...n, lines: [...n.lines, { ...lineFromProduct(l.product, l.quantity), notes: l.note }] } : addToDraft(n, l.product, l.quantity);
+        return n; });
+      setToast(pt('yorgoInCart', locale)); setTimeout(() => setToast(null), 3500);
+      onYorgoTaken?.();
+    });
+  }, [yorgoCart]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); listParked(boot.db).then(setParked); boot.db.staff.toArray().then(setMembers); currentShift(boot.db).then(setShift); }, [boot, tick]);
   // persist the cart (debounced) and flag "busy" so a SW update never lands mid-sale
   // A sold / saved cart must never be written back: the autosave below used to fire again when the pay dialog closed, so the

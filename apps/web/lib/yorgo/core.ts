@@ -50,7 +50,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName });
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }] }];
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }] }];
-  let reply = ''; let failure: string | null = null; let cost = 0;
+  let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = [];
   try {
     for (let round = 0; ; round++) {
       const res = await d.model.create({ model: d.cfg.modelDefault, system, tools: tools.map(({ name, description, input_schema }) => ({ name, description, input_schema })), messages, maxTokens: d.cfg.maxTokens });
@@ -65,7 +65,10 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
         const tool = tools.find(t => t.name === call.name);                       // a tool outside this person's list does not exist
         try {
           if (!tool) throw new Error('unknown_tool');
-          results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(await tool.run(call.input ?? {}, ctx)) });
+          const out = await tool.run(call.input ?? {}, ctx) as Record<string, unknown> | unknown[];
+          // a draft goes to the screen, not back to the model: the model only learns that it was shown
+          if (out && !Array.isArray(out) && out.draft) { drafts.push({ kind: call.name, ...(out.draft as object) }); const { draft: _d, ...rest } = out; void _d; results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(rest) }); }
+          else results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(out) });
         } catch (e) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify({ error: (e as Error).message.slice(0, 120) }), is_error: true });
         }
@@ -79,8 +82,8 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const rec = await d.admin.rpc('yorgo_record', { p_conversation: conversationId, p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId, p_channel: i.channel, p_messages: fresh, p_summary: null });
   const id = typeof rec.data === 'string' ? rec.data : conversationId;
   if (rec.error || !id) return { status: 'error', error: 'record_failed' };
-  if (failure || !reply) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
-  return { status: 'ok', conversation_id: id, reply, drafts: [], cost_usd: Math.round(cost * 1e6) / 1e6 };
+  if (failure || (!reply && !drafts.length)) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
+  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6 };
 }
 
 /** Stored rows → what the model expects. Tool results travel as user turns; the window must open on a real user message,

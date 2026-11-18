@@ -78,3 +78,10 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - Script 77 applied on dev; `ANTHROPIC_API_KEY` set on Netlify (dev and prod projects).
 - The key is trimmed of stray spaces/quotes before use (first call failed with 401 for that reason).
 - Thinking is switched off in the request: the 5.5 models think by default and the thinking is billed as output inside `max_tokens`, which left no room for the answer (first call returned no text). `max_tokens` 700 → 1024.
+
+## 2026-11-18 — step B: paste a message → draft order (dev)
+- New seller tool `draft_order` (owner, cashier): item ids and quantities only — `lines` (sure), `choices` (the staff member taps the right one), `not_found`. The draft goes to the screen; the model is only told it was shown.
+- POS: ✨ Yorgo button in the top bar (shown when `yorgo_shops.enabled` for the shop and the person sells). Chat panel with the draft card: change quantity, remove, pick between candidates, then "Add to cart" or "Discard".
+- Names, prices and stock on the card come from the catalog on the device; an id the till does not know is dropped. The sale is finished in the cart as usual (approval PIN, stock rules unchanged).
+- A sale whose cart took a Yorgo draft carries `via_yorgo` = conversation id in the `sale.commit` op, so it is in the audit log. No schema change.
+- Needs internet; offline the panel says so and the till is untouched.

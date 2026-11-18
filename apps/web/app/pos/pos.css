@@ -517,3 +517,31 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .pos-modal-actions { display: inline-flex; gap: 8px; align-items: center; flex: none; }
 .pos-modal-actions .btn.icon { min-width: 44px; min-height: 44px; font-size: 20px; }
 .pos-modal-actions .btn.icon.primary { font-weight: 800; }
+
+/* Yorgo — the assistant. One accent of its own so it is never mistaken for a till action. */
+.pos .btn.yorgo-btn { background: linear-gradient(135deg, #7c3aed, #0e7490); color: #fff; border-color: transparent; font-weight: 700; padding-inline: 12px; white-space: nowrap; }
+.yorgo-tag { font-size: 11px; font-weight: 600; background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+.yorgo-chat { display: flex; flex-direction: column; gap: 8px; min-height: 38dvh; }
+.yorgo-hello { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px dashed #c4b5fd; border-radius: 12px; background: #faf5ff; }
+.yorgo-msg { max-width: 86%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.yorgo-msg.me { align-self: flex-end; background: var(--brand-primary); color: #fff; border-end-end-radius: 4px; }
+.yorgo-msg.yorgo { align-self: flex-start; background: #f3f4f6; border-end-start-radius: 4px; }
+.yorgo-msg.note { align-self: center; background: #fef3c7; color: #92400e; font-size: 13px; text-align: center; }
+.yorgo-msg.typing { letter-spacing: 3px; animation: yorgo-pulse 1s infinite; }
+@keyframes yorgo-pulse { 50% { opacity: .35; } }
+.yorgo-draft { align-self: stretch; border: 1px solid #c4b5fd; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+.yorgo-draft.added, .yorgo-draft.discarded { opacity: .7; }
+.yorgo-draft-head { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.yorgo-line { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.yorgo-line-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.yorgo-choice { border: 1px dashed #f0d58a; background: #fffbeb; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.yorgo-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.yorgo-options .btn { width: auto; text-align: start; }
+.yorgo-missing { font-size: 13px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 8px; }
+.yorgo-draft-actions { display: flex; align-items: center; gap: 8px; }
+.yorgo-draft-actions .btn { width: auto; }
+.yorgo-input { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
+.yorgo-input textarea { flex: 1; resize: none; min-height: 48px; font-family: inherit; }
+.yorgo-input .btn { width: auto; min-width: 48px; min-height: 48px; font-size: 18px; }
+.yorgo-foot { font-size: 11px; margin: 8px 0 0; text-align: center; }
+@media (max-width: 760px) { .yorgo-btn-label { display: none; } .pos .btn.yorgo-btn { padding-inline: 9px; } .yorgo-msg { max-width: 94%; } }

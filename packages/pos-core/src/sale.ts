@@ -15,6 +15,7 @@ export interface Draft {
   customer_name?: string; customer_phone?: string; notes?: string | null; fulfillment?: 'delivery' | 'pickup'; address?: Record<string, unknown>; needed_at?: string | null;
   approved_by?: string | null; started_at: string;
   discount_pct?: number | null;        // customer discount % — applied on the subtotal at pay time when larger than discount_cents
+  via_yorgo?: string | null;           // the assistant conversation a draft was accepted from; travels in the op, so the audit log shows it
 }
 
 export const newDraft = (channel: Channel = 'walkin'): Draft => ({ id: newId(), channel, lines: [], discount_cents: 0, started_at: new Date().toISOString() });
@@ -107,7 +108,7 @@ export async function commitSale(db: PosDb, input: CommitInput): Promise<CommitR
         customer_name: order.customer_name, customer_phone: order.customer_phone, notes: order.customer_notes, address: order.address, fulfillment: order.fulfillment, needed_at: order.needed_at ?? null,
         notify_customer: order.notify_customer, rate_lbp_per_usd: rate, subtotal_cents: t.subtotal_cents, discount_cents: t.discount_cents, discount_reason: order.discount_reason,
         total_cents: t.total_cents + (input.delivery_fee_cents ?? 0), total_lbp: t.total_lbp + Math.round(((input.delivery_fee_cents ?? 0) * rate) / 100), delivery_fee_cents: input.delivery_fee_cents ?? 0, paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp,
-        placed_at: now, approved_by: draft.approved_by ?? null,
+        placed_at: now, approved_by: draft.approved_by ?? null, ...(draft.via_yorgo ? { via_yorgo: draft.via_yorgo } : {}),
         voided: draft.lines.filter(l => l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, qty: l.quantity, reason: l.void_reason ?? null })),
         lines: lines.filter(l => !l.voided).map(l => ({ id: l.id, product_id: l.product_id, name: l.name, unit: l.unit, qty: l.quantity, price_currency: l.price_currency,
           unit_price_cents: l.unit_price_cents, unit_price_lbp: l.unit_price_lbp, discount_cents: l.discount_cents, line_total_cents: l.line_total_cents, cost_cents: l.cost_cents, notes: l.notes, approved_by: draft.lines.find(d => d.id === l.id)?.approved_by ?? null })),

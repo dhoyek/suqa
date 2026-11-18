@@ -6,6 +6,7 @@ import { pt, type L } from './i18n';
 import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import AccountMenu from './components/AccountMenu';
+import YorgoPanel, { type YorgoCartLine } from './components/YorgoPanel';
 import { initApproval, refreshApproval } from './lib/approval';
 import { roleOf, viewsFor } from './lib/perm';
 import { newOrderChime } from './lib/chime';
@@ -62,6 +63,16 @@ export default function Shell(props: {
   const openOrder = (id: string, detail?: boolean) => { setOrderFocus(f => ({ id, detail, n: (f?.n ?? 0) + 1 })); setView('orders'); };
   const openCustomer = (phone: string, name: string) => { setCustFocus(f => ({ phone, name, n: (f?.n ?? 0) + 1 })); setView('customers'); };
   const [menu, setMenu] = useState(false);
+  // Yorgo, the assistant: shown when the association switched it on for this shop and this person sells. The answer is remembered on the
+  // device so the button does not come and go; the assistant itself needs internet, the till never waits for it.
+  const yorgoKey = `suqa-yorgo-${boot.shop.id}`;
+  const [yorgoOn, setYorgoOn] = useState<boolean>(() => { try { return localStorage.getItem(yorgoKey) === '1'; } catch { return false; } });
+  const [yorgoOpen, setYorgoOpen] = useState(false);
+  const [yorgoCart, setYorgoCart] = useState<{ lines: YorgoCartLine[]; conversation: string | null; n: number } | null>(null);
+  useEffect(() => { if (!online) return; let on = true;
+    props.sb.from('yorgo_shops').select('enabled').eq('shop_id', boot.shop.id).maybeSingle().then(({ data, error }) => { if (!on || error) return; const v = !!(data as { enabled?: boolean } | null)?.enabled; setYorgoOn(v); try { localStorage.setItem(yorgoKey, v ? '1' : '0'); } catch { /* private mode */ } });
+    return () => { on = false; }; }, [props.sb, boot.shop.id, online, yorgoKey]);
+  const canYorgo = yorgoOn && allowed.includes('sell') && (roleOf(staff) === 'owner' || roleOf(staff) === 'cashier');
   const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
@@ -84,13 +95,14 @@ export default function Shell(props: {
             <span className={`dot ${online ? 'on' : ''}`} />{online ? pt('online', locale) : pt('offline', locale)}
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
+          {canYorgo && <button className="btn yorgo-btn" title={pt('yorgoOpen', locale)} onClick={() => setYorgoOpen(true)}>✨<span className="yorgo-btn-label"> Yorgo</span></button>}
           <button className={`btn icon sync ${spinning ? 'spin' : ''}`} title={pt('syncNow', locale)} onClick={syncNow}>🔄</button>
           <AccountMenu sb={props.sb} boot={boot} staff={staff} locale={locale} setLocale={props.setLocale} onLock={onLock} />
         </div>
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       <main className="pos-main">
-        {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} />}
+        {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} yorgoCart={yorgoCart} onYorgoTaken={() => setYorgoCart(null)} />}
         {view === 'orders' && <OrdersView {...props} focus={orderFocus} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}
         {view === 'customers' && <CustomersView {...props} focus={custFocus} onNewOrder={c => { setPreset(c); setNewOrderReq(n => n + 1); setView('sell'); }} />}
         {view === 'debts' && <DebtsView {...props} onCustomer={openCustomer} />}
@@ -102,6 +114,8 @@ export default function Shell(props: {
         {view === 'drivers' && <DriversView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
       </main>
+      {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online}
+        onAddToCart={(lines, conversation) => { setYorgoCart(c => ({ lines, conversation, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
     </div>
   );
 }

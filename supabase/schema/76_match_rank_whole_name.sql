@@ -4,6 +4,9 @@
 --   Now the whole-name term is also measured by sound (the consonant skeleton), and equal scores go to the shorter name.
 --   Only suqa.match_items changes (same signature, same access rules). No table changes. Idempotent.
 
+-- load pg_trgm in this session first: until then its settings are unknown names, and a function may not be created with `set pg_trgm.…`
+select extensions.similarity('a', 'a') as pg_trgm_loaded;
+
 create or replace function suqa.match_items(p_tenant uuid, p_phrases text[], p_shop uuid default null, p_limit int default 5)
 returns table (phrase_no int, phrase text, product_id uuid, shop_id uuid, shop_name jsonb, name jsonb, unit text,
                price_usd numeric, price_currency text, price_lbp bigint, is_available boolean, available_days smallint[],

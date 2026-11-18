@@ -16,6 +16,7 @@
 -- Base file 04 (products) lists the new column. Idempotent.
 
 create extension if not exists pg_trgm with schema extensions;
+select extensions.similarity('a', 'a') as pg_trgm_loaded;   -- loads the library in this session, so `set pg_trgm.…` on a function below is a known setting
 
 -- ---------- A) aliases ----------
 alter table suqa.products add column if not exists aliases text[] not null default '{}';

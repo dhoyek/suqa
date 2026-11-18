@@ -14,7 +14,7 @@ export interface ModelClient { create(req: ModelRequest): Promise<ModelResponse>
 
 /** null when no key is configured: the route then answers "not configured" instead of failing. */
 export function anthropicClient(): ModelClient | null {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.ANTHROPIC_API_KEY?.trim().replace(/^["']|["']$/g, '');   // tolerate a pasted space, line break or quotes
   if (!key) return null;
   return {
     async create(req) {

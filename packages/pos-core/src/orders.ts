@@ -166,3 +166,41 @@ export async function setOrderNeeded(db: PosDb, order: Order, needed_at: string 
   await db.transaction('rw', [db.orders, db.outbox], async () => { await db.orders.put(updated); await enqueue(db, 'order.needed', { id: order.id, needed_at }); });
   return updated;
 }
+
+export interface OrderInfoPatch { customer_name: string; customer_phone: string; fulfillment: 'delivery' | 'pickup'; address: Record<string, unknown>; delivery_fee_cents: number; notes: string | null; needed_at: string | null }
+/** Why the information of this order cannot be edited (null = it can). Delivered orders can — with the amount locked. */
+export function infoEditBlock(order: Order): 'order_closed' | 'not_an_order' | null {
+  if (order.status === 'rejected' || order.status === 'cancelled') return 'order_closed';
+  if (order.channel === 'walkin' || order.parked) return 'not_an_order';
+  return null;
+}
+/**
+ * Correct who / how / where an existing order is for (the customer box, opened on an order). The lines are not touched.
+ * Before delivery the fee follows the choice (pickup = no fee, no driver) and the total is recomputed; once delivered the money was
+ * already counted (payments, shift cash, driver pay), so the amount and the driver stay as they are and only the information changes.
+ * One op; the server applies the same rules.
+ */
+export async function editOrderInfo(db: PosDb, order: Order, patch: OrderInfoPatch, notify = true): Promise<Order> {
+  const block = infoEditBlock(order); if (block) throw new Error(block);
+  const closed = order.status === 'delivered';
+  const pickup = patch.fulfillment === 'pickup';
+  if (!closed && pickup && order.driver_id && (order.driver_paid_at || order.driver_payout_id)) throw new Error('driver_paid');
+  const rate = num(order.rate_lbp_per_usd) || 89500;
+  const fee = closed ? Math.round(num(order.delivery_fee_usd) * 100) : pickup ? 0 : Math.max(0, Math.round(patch.delivery_fee_cents || 0));
+  const lines = await db.orderLines.where('order_id').equals(order.id).toArray();
+  const subtotal = lines.filter(l => !l.voided).reduce((s, l) => s + num(l.line_total_cents), 0);
+  const discount = Math.min(num(order.discount_cents), subtotal);
+  const total = subtotal - discount + fee;
+  const dropDriver = !closed && pickup && !!order.driver_id;
+  const updated: Order = { ...order, customer_name: patch.customer_name.trim(), customer_phone: patch.customer_phone.trim() || order.customer_phone, fulfillment: patch.fulfillment,
+    address: pickup ? {} : patch.address, customer_notes: patch.notes?.trim() || null, needed_at: patch.needed_at,
+    ...(closed ? {} : { delivery_fee_usd: fee / 100, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100) }),
+    ...(dropDriver ? { driver_id: null, courier_name: null, courier_fee_cents: 0, driver_ack_at: null, driver_picked_at: null, driver_delivered_at: null } : {}),
+    updated_at: new Date().toISOString() };
+  await db.transaction('rw', [db.orders, db.outbox], async () => {
+    await db.orders.put(updated);
+    await enqueue(db, 'order.info', { id: order.id, customer_name: updated.customer_name, customer_phone: updated.customer_phone, fulfillment: updated.fulfillment, address: updated.address,
+      delivery_fee_cents: fee, notes: updated.customer_notes ?? null, needed_at: updated.needed_at ?? null, notify });
+  });
+  return updated;
+}

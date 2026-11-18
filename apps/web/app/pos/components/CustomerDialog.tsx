@@ -11,17 +11,17 @@ import MapPicker from './MapPicker';
 export type CustomerResult = { patch: Partial<Draft>; feeCents: number; repeat?: OrderLine[] };
 
 /** Who is this sale/order for. Picks from the shop's customers (name or number), fills name / address / map pin, and saves edits back to the customer. */
-export default function CustomerDialog({ boot, sb, locale, draft, fee, online, cartCount = 0, onAddToOrder, onOpenOrders, onDone, onClose }: { boot: Booted; sb: SupabaseClient; locale: L; draft: Draft; fee: number; online: boolean; cartCount?: number; onAddToOrder?: (o: Order) => void; onOpenOrders?: () => void; onDone: (r: CustomerResult) => void; onClose: () => void }) {
+export default function CustomerDialog({ boot, sb, locale, draft, fee, online, cartCount = 0, editing, onAddToOrder, onOpenOrders, onDone, onClose }: { boot: Booted; sb: SupabaseClient; locale: L; draft: Draft; fee: number; online: boolean; cartCount?: number; /** an order that already exists: the box corrects its information instead of starting a new one */ editing?: { number: string; amountLocked: boolean }; onAddToOrder?: (o: Order) => void; onOpenOrders?: () => void; onDone: (r: CustomerResult) => void; onClose: () => void }) {
   const [channel, setChannel] = useState<Draft['channel']>(draft.channel);
   const [phone, setPhone] = useState(draft.customer_phone ?? ''); const [name, setName] = useState(draft.customer_name ?? '');
-  const [ful, setFul] = useState<'pickup' | 'delivery'>(draft.channel !== 'walkin' && draft.customer_phone ? (draft.fulfillment ?? 'delivery') : 'delivery');
+  const [ful, setFul] = useState<'pickup' | 'delivery'>(editing ? (draft.fulfillment ?? 'pickup') : draft.channel !== 'walkin' && draft.customer_phone ? (draft.fulfillment ?? 'delivery') : 'delivery');
   const a0 = (draft.address ?? {}) as CustomerAddress;
   const [line1, setLine1] = useState(a0.line1 ?? ''); const [map, setMap] = useState(a0.map_url ?? ''); const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(a0.lat != null && a0.lng != null ? { lat: a0.lat, lng: a0.lng } : null);
   const [notes, setNotes] = useState(draft.notes ?? ''); const [when, setWhen] = useState('');
   const [needed, setNeeded] = useState<string>(draft.needed_at ? toLocalInput(draft.needed_at) : '');   // datetime-local value, '' = as soon as possible
   const [addrSel, setAddrSel] = useState<string>('new'); const [askAddr, setAskAddr] = useState<null | { repeat?: OrderLine[] }>(null);
   const defFee = Math.round(num(boot.shop.default_delivery_fee_usd) * 100);
-  const [f, setF] = useState(fee ? (fee / 100).toString() : defFee ? (defFee / 100).toString() : '');
+  const [f, setF] = useState(fee ? (fee / 100).toString() : defFee && !editing?.amountLocked ? (defFee / 100).toString() : '');
   const [matches, setMatches] = useState<ShopCustomer[]>([]); const [picked, setPicked] = useState<ShopCustomer | null>(null); const [showList, setShowList] = useState(false);
   const [openOrders, setOpenOrders] = useState(0); const [openList, setOpenList] = useState<Order[]>([]); const [showOpen, setShowOpen] = useState(false); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -34,7 +34,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
     let on = true;
     sb.rpc('pos_delivery_fee', { p_shop: boot.shop.id, p_lat: coords.lat, p_lng: coords.lng }).then(async ({ data }) => {
       if (!on) return; const z = data as typeof zone; setZone(z);
-      if (z?.zone_id && z.fee_usd != null && !feeTouched.current) setF(String(Number(z.fee_usd)));
+      if (z?.zone_id && z.fee_usd != null && !feeTouched.current && !editing) setF(String(Number(z.fee_usd)));
       if (z && !z.zone_id) {   // outside — or the shop simply hasn't picked its areas yet (different message, different fix)
         const { count } = await sb.from('shop_delivery_zones').select('zone_id', { count: 'exact', head: true }).eq('shop_id', boot.shop.id);
         if (on) setNoZones(count === 0);
@@ -51,7 +51,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
       if (r.ok) { const k = key; setAskedKey(k); setTimeout(() => setAskedKey(v => (v === k ? '' : v)), 60000); }
     } catch { setAsking('failed'); }
   };
-  const isOrder = channel !== 'walkin';
+  const isOrder = !!editing || channel !== 'walkin';
   const key = normPhone(phone);
   const waChat = key.length >= 6 && normalizePhone(phone) ? `https://wa.me/${normalizePhone(phone)}` : null;   // the staff member's own WhatsApp, for a word with the customer
 
@@ -117,14 +117,15 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
 
   return (
     <>
-      <Modal open onClose={onClose} title={pt('customer', locale)} wide={isOrder}
-        footer={<><button className="btn ghost" onClick={() => onDone({ patch: { channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {}, notes: null }, feeCents: 0 })}>✕ {pt('walkin', locale)}</button>
+      <Modal open onClose={onClose} title={editing ? `${pt('editOrderInfo', locale)} · ${editing.number}` : pt('customer', locale)} wide={isOrder}
+        footer={editing ? <><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={() => submit()}>{pt('save', locale)}</button></>
+          : <><button className="btn ghost" onClick={() => onDone({ patch: { channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {}, notes: null }, feeCents: 0 })}>✕ {pt('walkin', locale)}</button>
           {last && isOrder && <button className="btn" onClick={() => submit(last.lines)}>🔁 {pt('repeatLast', locale)} ({last.lines.length})</button>}
           <span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={() => submit()}>{pt('ok', locale)}</button></>}>
         <div className={`cust-grid ${isOrder ? '' : 'one'}`}>
           <div className="stack">
-            <label className="label">{pt('channelLabel', locale)}</label>
-            <div className="seg">{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div>
+            {!editing && <><label className="label">{pt('channelLabel', locale)}</label>
+            <div className="seg">{(['walkin', 'whatsapp', 'phone'] as Draft['channel'][]).map(c => <button key={c} className={channel === c ? 'active' : ''} onClick={() => setChannel(c)}>{pt(c as 'walkin', locale)}</button>)}</div></>}
 
             <label className="label">{pt('customerPhone', locale)}{isOrder ? ' *' : ''}</label>
             <div className="row" style={{ gap: 6 }}>
@@ -141,7 +142,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
             <button className="btn" type="button" onClick={() => setPicker(true)} title={pt('pickCustomer', locale)}>👥 {pt('pickCustomer', locale)}</button>
             </div>
             {!phone && !name && matches.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}><small className="muted">{pt('recentCustomers', locale)}:</small>{matches.slice(0, isOrder ? 5 : 8).map(c => <button key={c.id} className="chip" onClick={() => pick(c)}>{c.name || fmtPhone(c.phone)}</button>)}</div>}
-            {openOrders > 0 && <div className="open-orders">
+            {!editing && openOrders > 0 && <div className="open-orders">
               <button type="button" className="pill warn" style={{ border: 0, cursor: 'pointer', font: 'inherit' }} onClick={() => setShowOpen(v => !v)}>⚠ {pt('hasOpenOrder', locale).replace('{n}', String(openOrders))} {showOpen ? '▴' : '▾'}</button>
               {showOpen && <ul className="tender-list" style={{ marginTop: 6 }}>
                 {openList.map(o => <li key={o.id} style={{ flexWrap: 'wrap' }}>
@@ -189,11 +190,12 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
               </>}
               {coords && <small className="muted" dir="ltr">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} · <a href={mapUrlFor(coords.lat, coords.lng)} target="_blank" rel="noreferrer">{pt('openMap', locale)}</a></small>}
               <label className="label">{pt('deliveryFee', locale)} ($)</label>
-              <input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />
+              <input className="input" dir="ltr" inputMode="decimal" value={f} disabled={!!editing?.amountLocked} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />
               {zone && (zone.zone_id ? <small className="muted">🗺 {text(zone.name ?? {}, locale)} · ${Number(zone.fee_usd ?? 0)}{zone.eta_minutes ? ` · ~${zone.eta_minutes} ${pt('min', locale)}` : ''}</small> : noZones
                 ? <small className="pill warn">{pt('noZonesServed', locale)} · <a href={`/shop/settings?shop=${boot.shop.id}`} target="_blank" rel="noreferrer">{pt('shopSettingsLink', locale)}</a></small>
                 : <small className="pill warn">{pt('outsideZones', locale)}</small>)}
             </>}
+            {editing?.amountLocked && <div className="pill warn" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>🔒 {pt('infoAmountLocked', locale)}</div>}
             {isOrder && <>
               <label className="label">{pt('orderNotes', locale)}</label>
               <input className="input" value={notes} placeholder={pt('orderNotesHint', locale)} onChange={e => setNotes(e.target.value)} />
@@ -208,7 +210,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
                 <input className="input" value={when} placeholder={pt('neededAtHint', locale)} onChange={e => setWhen(e.target.value)} style={{ flex: 1 }} />
               </div>
             </>}
-            {last && isOrder && <div className="card" style={{ background: '#fafafa', fontSize: 13 }}>
+            {last && isOrder && !editing && <div className="card" style={{ background: '#fafafa', fontSize: 13 }}>
               <strong>{pt('lastOrder', locale)}</strong> <span className="muted">{last.order.number ?? last.order.local_number}</span>
               <div className="muted">{last.lines.map(l => `${num(l.quantity)}${l.unit ? ' ' + l.unit : '×'} ${text(l.name, locale)}`).join(' · ')}</div>
             </div>}

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
-import { NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -14,6 +14,7 @@ import ReturnDialog from '../components/ReturnDialog';
 import OwnerPin from '../components/OwnerPin';
 import { useConfirm } from '@/components/ConfirmProvider';
 import OrderDetailSheet from '../components/OrderDetailSheet';
+import CustomerDialog from '../components/CustomerDialog';
 import { newOrderChime } from '../lib/chime';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { orderSheetHtml } from '../lib/print';
@@ -38,7 +39,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
   const [rate, setRate] = useState(89500);
-  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta'; o: Order } | { k: 'driver'; o: Order; to: OrderStatus } | { k: 'assign'; o: Order } | { k: 'edit'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
+  const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta'; o: Order } | { k: 'driver'; o: Order; to: OrderStatus } | { k: 'assign'; o: Order } | { k: 'edit'; o: Order } | { k: 'info'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
@@ -204,6 +205,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                       {(o.status === 'accepted' || o.status === 'preparing') && <button className="btn" onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>}
                       {!pickup && ASSIGNABLE.includes(o.status) && (open || !!o.driver_id) && <button className="btn" onClick={() => setDialog({ k: 'assign', o })}>🛵 {pt(o.driver_id ? 'changeDriver' : 'chooseDriver', locale)}</button>}
                       {open && !['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
+                      {open && !infoEditBlock(o) && <button className="btn" onClick={() => setDialog({ k: 'info', o })}>👤 {pt('editOrderInfo', locale)}</button>}
                       {open && <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>}
                       {open && <span style={{ position: 'relative' }}>
                         <button className="btn icon" title={pt('moreActions', locale)} onClick={() => setMenu(menu === o.id ? null : o.id)}>⋯</button>
@@ -252,6 +254,17 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
           boot.engine.poke(); setDialog(null); await reload();
         }} onClose={() => setDialog(null)} />}
       {ackToast && <div className="toast">{ackToast}</div>}
+      {dialog?.k === 'info' && <CustomerDialog boot={boot} sb={sb} locale={locale} online={online} fee={Math.round(num(dialog.o.delivery_fee_usd) * 100)}
+        editing={{ number: dialog.o.number ?? dialog.o.local_number ?? '', amountLocked: dialog.o.status === 'delivered' }}
+        draft={{ id: dialog.o.id, channel: dialog.o.channel, lines: [], discount_cents: 0, started_at: dialog.o.placed_at, customer_name: dialog.o.customer_name ?? '', customer_phone: dialog.o.customer_phone ?? '', notes: dialog.o.customer_notes ?? null, fulfillment: dialog.o.fulfillment ?? 'pickup', address: dialog.o.address ?? {}, needed_at: dialog.o.needed_at ?? null }}
+        onClose={() => setDialog(null)}
+        onDone={async r => {
+          const o = dialog.o;
+          try {
+            await editOrderInfo(boot.db, o, { customer_name: r.patch.customer_name ?? '', customer_phone: r.patch.customer_phone ?? '', fulfillment: r.patch.fulfillment ?? 'pickup', address: r.patch.address ?? {}, delivery_fee_cents: r.feeCents, notes: r.patch.notes ?? null, needed_at: r.patch.needed_at ?? null }, o.notify_customer !== false);
+            boot.engine.poke(); setDialog(null); await reload();
+          } catch (e) { setDialog(null); await confirm((e as Error).message === 'driver_paid' ? pt('infoDriverPaid', locale) : (e as Error).message); }
+        }} />}
       {dialog?.k === 'detail' && <OrderDetailSheet sb={sb} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} payments={payments[dialog.o.id] ?? []} online={online} onCustomer={onCustomer} onClose={() => setDialog(null)} />}
       {dialog?.k === 'return' && <ReturnDialog boot={boot} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} staff={staff} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
     </div>

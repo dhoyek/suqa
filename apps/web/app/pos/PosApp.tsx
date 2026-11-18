@@ -7,6 +7,7 @@ import AccessRequest from './components/AccessRequest';
 import { LS_SHOP, bootDevice, downloadJson, myMemberships, subscribePoke, type Booted, type Membership } from './lib/boot';
 import LockScreen from './LockScreen';
 import Shell from './Shell';
+import { useConfirmLabels } from '@/components/ConfirmProvider';
 import './pos.css';
 
 type Phase =
@@ -17,6 +18,7 @@ export const LS_LOCALE = 'suqa-pos-locale';
 export default function PosApp({ locale: tenantLocale, brand, tenantId }: { locale: L; brand: string; tenantId: string }) {
   // per-device language (Settings → اللغة); falls back to the tenant default
   const [locale, setLocaleState] = useState<L>(tenantLocale);
+  useConfirmLabels(pt('confirm', locale), pt('cancel', locale));   // the confirm sheet follows the POS language, not the site's
   useEffect(() => { try { const v = localStorage.getItem(LS_LOCALE); if (v === 'ar' || v === 'en') setLocaleState(v); if (localStorage.getItem('suqa-pos-big') === '1') document.documentElement.classList.add('pos-big'); } catch {} }, []);
   const setLocale = useCallback((l: L) => { setLocaleState(l); try { localStorage.setItem(LS_LOCALE, l); } catch {} }, []);
   const sb = useMemo(() => supabaseBrowser(), []);

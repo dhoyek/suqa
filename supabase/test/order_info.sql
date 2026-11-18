@@ -50,6 +50,7 @@ begin
   select * into o from suqa.orders where id = v_id;
   perform t_oi.round_lbp(v_id, 545000);   -- as rounded at the till
   r := pg_temp.push('order.info', jsonb_build_object('id', v_id, 'customer_name', 'Rima Khoury'));
+  select * into o from suqa.orders where id = v_id;
   assert o.customer_name = 'Rima Khoury' and o.fulfillment = 'pickup' and o.total_cents = 600 and o.customer_notes = 'ring twice', 'name only';
   assert o.total_lbp = 545000, 'a name fix leaves the rounded LBP total alone: ' || o.total_lbp;
   assert (select count(*) from net.sent where body->>'event' = 'order.edited') = 1, 'a name fix is silent';

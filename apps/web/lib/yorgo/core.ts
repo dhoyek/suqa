@@ -78,7 +78,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
         }
       }
       fresh.push({ role: 'tool', content: results });
-      messages.push({ role: 'user', content: results });
+      messages.push({ role: 'user', content: note ? [...results, { type: 'text', text: note }] : results });   // the language note again: the answer is written right after this turn
     }
   } catch (e) { failure = (e as Error).message.slice(0, 160); }
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { addressBook, coordsFrom, fmtPhone, fmtUsd, lastOrderOf, mapUrlFor, normPhone, num, openOrdersOf, sameAddress, searchCustomers, text, upsertCustomer, type CustomerAddress, type Draft, type Order, type OrderLine, type SavedAddress, type ShopCustomer } from '@suqa/pos-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { pt, type Key, type L } from '../i18n';
+import { normalizePhone } from '@/lib/whatsapp';
 import type { Booted } from '../lib/boot';
 import Modal from './Modal';
 import MapPicker from './MapPicker';
@@ -25,7 +26,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
   const [openOrders, setOpenOrders] = useState(0); const [openList, setOpenList] = useState<Order[]>([]); const [showOpen, setShowOpen] = useState(false); const [last, setLast] = useState<Awaited<ReturnType<typeof lastOrderOf>>>(null); const [pickMap, setPickMap] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
   const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
-  const [asking, setAsking] = useState<string | null>(null); const [picker, setPicker] = useState(false);
+  const [asking, setAsking] = useState<'…' | 'ok' | 'failed' | null>(null); const [askedKey, setAskedKey] = useState(''); /* the number the request went to: no second message to it for a minute */ const [picker, setPicker] = useState(false);
   const [noZones, setNoZones] = useState(false);
   // delivery-zone fee from the pin (online only; outside the zones → keep the default/typed fee)
   useEffect(() => {
@@ -46,11 +47,13 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
     if (!online || key.length < 6) return; setAsking('…');
     try {
       const r = await fetch('/api/pos/ask-location', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shop_id: boot.shop.id, phone: phone.trim(), name: name.trim() }) });
-      setAsking(r.ok ? pt('locationAsked', locale) : pt('sendFailed', locale));
-    } catch { setAsking(pt('sendFailed', locale)); }
+      setAsking(r.ok ? 'ok' : 'failed');
+      if (r.ok) { const k = key; setAskedKey(k); setTimeout(() => setAskedKey(v => (v === k ? '' : v)), 60000); }
+    } catch { setAsking('failed'); }
   };
   const isOrder = channel !== 'walkin';
   const key = normPhone(phone);
+  const waChat = key.length >= 6 && normalizePhone(phone) ? `https://wa.me/${normalizePhone(phone)}` : null;   // the staff member's own WhatsApp, for a word with the customer
 
   // search as you type (number or name), recent customers when empty
   useEffect(() => { let on = true; searchCustomers(boot.db, phone || name, 8).then(m => { if (on) setMatches(m); }); return () => { on = false; }; }, [boot, phone, name]);
@@ -176,7 +179,14 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
                 <input className="input" dir="ltr" placeholder="https://maps.google.com/?q=…" value={map} onChange={e => onMapText(e.target.value)} style={{ flex: 1 }} />
                 <button className="btn" onClick={() => setPickMap(true)}>🗺 {pt('pickOnMap', locale)}</button>
               </div>
-              {channel === 'whatsapp' && <div className="row" style={{ gap: 8, alignItems: 'center' }}><button className="btn ghost" disabled={!online || key.length < 6 || asking === '…'} onClick={askLocation}>💬 {pt('askLocation', locale)}</button>{asking && asking !== '…' && <small className="muted">{asking}</small>}</div>}
+              {channel === 'whatsapp' && <>
+                <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button className="btn ghost" disabled={!online || key.length < 6 || asking === '…' || askedKey === key} onClick={askLocation}>💬 {pt('askLocation', locale)}</button>
+                  {waChat && <a className="btn ghost" href={waChat} target="_blank" rel="noreferrer" title={pt('openChatHint', locale)}>↗ {pt('openChat', locale)}</a>}
+                </div>
+                {asking === 'ok' && askedKey === key && <div className="pill ok" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>✓ {pt('locationAsked', locale)}</div>}
+                {asking === 'failed' && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('sendFailed', locale)}</div>}
+              </>}
               {coords && <small className="muted" dir="ltr">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} · <a href={mapUrlFor(coords.lat, coords.lng)} target="_blank" rel="noreferrer">{pt('openMap', locale)}</a></small>}
               <label className="label">{pt('deliveryFee', locale)} ($)</label>
               <input className="input" dir="ltr" inputMode="decimal" value={f} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />

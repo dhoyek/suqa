@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 // In-page replacement for window.confirm(): a bottom sheet with Cancel / Confirm.
 // Native dialogs are blocked in some webviews and look poor on phones. Usage: const ask = useConfirm(); if (!(await ask(text))) return;
@@ -7,8 +7,12 @@ type Ask = (message: string, opts?: { confirmLabel?: string; danger?: boolean })
 type Notify = (message: string, kind?: 'error' | 'ok') => void;
 const Ctx = createContext<Ask | null>(null);
 const NotifyCtx = createContext<Notify | null>(null);
+type Labels = { confirm: string; cancel: string };
+const LabelsCtx = createContext<((l: Labels | null) => void) | null>(null);
 
-export function ConfirmProvider({ children, labels }: { children: ReactNode; labels: { confirm: string; cancel: string } }) {
+export function ConfirmProvider({ children, labels: siteLabels }: { children: ReactNode; labels: Labels }) {
+  // a screen with its own language switch (the POS) can replace the button labels while it is open
+  const [override, setOverride] = useState<Labels | null>(null); const labels = override ?? siteLabels;
   const [state, setState] = useState<{ message: string; confirmLabel?: string; danger?: boolean } | null>(null);
   const resolver = useRef<(v: boolean) => void>(() => {});
   const ask = useCallback<Ask>((message, opts) => new Promise<boolean>(resolve => { resolver.current = resolve; setState({ message, ...opts }); }), []);
@@ -23,6 +27,7 @@ export function ConfirmProvider({ children, labels }: { children: ReactNode; lab
   }, []);
   return (
     <Ctx.Provider value={ask}>
+      <LabelsCtx.Provider value={setOverride}>
       <NotifyCtx.Provider value={notify}>
       {children}
       {toast && <div className={`toast ${toast.kind}`} role="status" onClick={() => setToast(null)}>{toast.message}</div>}
@@ -38,8 +43,15 @@ export function ConfirmProvider({ children, labels }: { children: ReactNode; lab
         </div>
       )}
       </NotifyCtx.Provider>
+      </LabelsCtx.Provider>
     </Ctx.Provider>
   );
+}
+
+/** Use these Confirm / Cancel labels while the calling screen is mounted (it has its own language, e.g. the POS). */
+export function useConfirmLabels(confirm: string, cancel: string): void {
+  const set = useContext(LabelsCtx);
+  useEffect(() => { set?.({ confirm, cancel }); return () => set?.(null); }, [set, confirm, cancel]);
 }
 
 export function useNotify(): Notify {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { shopNewOrder, customerStatus, courierReady, shouldNotifyCustomer, type OrderEvent } from '../server/wa-messages';
+import { shopNewOrder, shopNewOrderTpl, customerStatus, courierReady, shouldNotifyCustomer, type OrderEvent } from '../server/wa-messages';
 
 const base: OrderEvent = {
   event: 'order.created', old_status: null,
@@ -46,5 +46,14 @@ describe('wa-messages', () => {
     expect(shouldNotifyCustomer({ ...base, order: { ...base.order, status: 'accepted' } })).toBe(true);
     expect(shouldNotifyCustomer({ ...base, order: { ...base.order, status: 'accepted', notify_customer: false } })).toBe(false);
     expect(shouldNotifyCustomer({ ...base, tenant: { ...base.tenant!, notify_stages: ['delivered'] }, order: { ...base.order, status: 'accepted' } })).toBe(false);
+  });
+  it('a driver number saved the local way goes out with the country code', () => {
+    const e: OrderEvent = { ...base, event: 'order.status', order: { ...base.order, status: 'out_for_delivery' }, driver: { id: 'd1', name: 'Chhab Amir', phone: '76504996' } };
+    expect(customerStatus(e, 'https://x.test')).toContain('(+96176504996)');
+  });
+  it('new order to the shop: template with a button, the older one (link in the text) as fallback', () => {
+    const tpl = shopNewOrderTpl(base, 'https://x.test');
+    expect(tpl.name).toBe('order_new_shop_v2'); expect(tpl.params).toHaveLength(6); expect(tpl.params.join(' ')).not.toContain('/pos#orders');
+    expect(tpl.fallback).toMatchObject({ name: 'order_new_shop' }); expect(tpl.fallback!.params).toHaveLength(7); expect(tpl.fallback!.params[6]).toBe('https://x.test/pos#orders');
   });
 });

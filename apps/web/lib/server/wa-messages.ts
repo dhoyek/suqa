@@ -1,4 +1,5 @@
 import { formatMoney, pointFromEwkb, t, type Locale, type LocalizedText, type DisplayCurrency } from '@suqa/shared';
+import { normalizePhone } from '@/lib/whatsapp';
 
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
@@ -21,9 +22,10 @@ export type OrderEvent = {
 
 const addr = (a: Record<string, unknown>) => [a.label, a.line1, a.line2, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join(', ');
 const mapUrl = (a: Record<string, unknown>) => { if (a?.map_url) return String(a.map_url); const p = (a?.lat != null && a?.lng != null) ? { lat: Number(a.lat), lng: Number(a.lng) } : pointFromEwkb(a?.location as string | undefined); return p ? `https://maps.google.com/?q=${p.lat},${p.lng}` : ''; };
-const waMe = (phone: string) => `https://wa.me/${String(phone).replace(/\D/g, '')}`;
+// a number saved the local way (76 504 996, 03 123 456) gets the country code: without it the + form is not a real number and the link is dead
+const waMe = (phone: string) => `https://wa.me/${normalizePhone(phone) ?? String(phone).replace(/\D/g, '')}`;
 /** Phone as one unbroken +digits token: a spaced number ("+961 76 302 456") gets its groups reordered inside Arabic text. */
-const tel = (phone: string | null | undefined) => { const d = String(phone ?? '').replace(/\D/g, ''); return d ? `+${d.replace(/^00/, '')}` : ''; };
+const tel = (phone: string | null | undefined) => { const n = normalizePhone(phone); if (n) return `+${n}`; const d = String(phone ?? '').replace(/\D/g, ''); return d ? `+${d.replace(/^00/, '')}` : ''; };
 const lines = (e: OrderEvent, L: Locale) => e.items.map(i => `• ${i.quantity}${i.unit ? ' ' + i.unit : '×'} ${t(i.name, L)}${i.notes ? ` (${i.notes})` : ''}`).join('\n');
 const money = (e: OrderEvent, usd: number) => formatMoney(Number(usd), Number(e.order.fx_lbp_rate), e.tenant?.display_currency ?? 'both', e.tenant?.default_locale ?? 'en');
 
@@ -129,7 +131,9 @@ const itemsOneLine = (e: OrderEvent, L: Locale) => (L === 'ar'
 
 export function shopNewOrderTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
-  return { name: 'order_new_shop', lang: 'ar', params: [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — ')), P(`${origin}/pos#orders`)] };
+  const params = [P(o.number), P(e.tenant?.brand_name), P(itemsOneLine(e, L)), P(money(e, o.total_usd)), P(`${o.customer_name || ''} ${tel(o.customer_phone)} ${waMe(o.customer_phone)}`), P([addr(o.address), mapUrl(o.address)].filter(Boolean).join(' — '))];
+  // v2: the link to the shop's orders is a button under the message, like the other templates; the first version (link in the text) is the fallback until v2 is approved
+  return { name: 'order_new_shop_v2', lang: 'ar', params, fallback: { name: 'order_new_shop', lang: 'ar', params: [...params, P(`${origin}/pos#orders`)] } };
 }
 export function customerStatusTpl(e: OrderEvent, origin: string): Tpl | null {
   const text = customerStatus(e, origin); if (!text) return null;

@@ -2,7 +2,7 @@ import 'server-only';
 
 // Meta utility templates used for order notifications (mirrors docs/whatsapp-templates.md).
 // Submitted with POST /api/wa/templates (secret-protected); Meta reviews them, usually within minutes.
-export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[]; button?: { text: string; /** path on this site, e.g. /t/{{1}} */ url: string; example: string } };
+export type TemplateDef = { name: string; language: string; category: 'UTILITY' | 'AUTHENTICATION'; text: string; samples: string[]; button?: { text: string; /** path on this site, e.g. /t/{{1}}; a path without {{1}} is a fixed link and needs no example */ url: string; example?: string } };
 
 export const TEMPLATES: TemplateDef[] = [
   // Sign-in code. Meta fixes the wording of authentication templates; we only choose the options
@@ -12,6 +12,13 @@ export const TEMPLATES: TemplateDef[] = [
     name: 'order_new_shop', language: 'ar', category: 'UTILITY',
     text: '🛒 طلب جديد {{1}} عبر {{2}}.\nالطلب: {{3}}\nالإجمالي: {{4}}\nالعميل: {{5}}\nالعنوان: {{6}}\nلقبول الطلب أو رفضه افتح لوحة المتجر: {{7}}\nشكراً.',
     samples: ['BAT-000021', 'Batroun Basket', '2 كيلو بندورة، 1× ربطة خبز', '$7.50 · 671,250 ل.ل.', 'داني +96170483148', 'البترون، شارع البحر، بناية 3', 'https://suqa-dev.netlify.app/shop'],
+  },
+  {
+    // New order → the shop, with the link as a button (v1 above keeps it in the text). {{1}} order no, {{2}} market, {{3}} items, {{4}} total, {{5}} customer, {{6}} address.
+    name: 'order_new_shop_v2', language: 'ar', category: 'UTILITY',
+    text: '🛒 طلب جديد {{1}} عبر {{2}}.\nالطلب: {{3}}\nالإجمالي: {{4}}\nالعميل: {{5}}\nالعنوان: {{6}}\nلقبول الطلب أو رفضه اضغط الزر أدناه. شكراً.',
+    samples: ['BAT-000021', 'Batroun Basket', '2 كيلو بندورة، 1× ربطة خبز', '$7.50 · 671,250 ل.ل.', 'داني +96170483148', 'البترون، شارع البحر، بناية 3'],
+    button: { text: 'فتح الطلبات', url: '/pos#orders' },
   },
   {
     name: 'order_status', language: 'ar', category: 'UTILITY',
@@ -67,6 +74,6 @@ export function templateComponents(d: TemplateDef, origin: string) {
   const comps: unknown[] = [{ type: 'BODY', text: d.text, example: { body_text: [d.samples] } }];
   // A URL button's domain is fixed inside the template at Meta, so it is the site that submits it (each site has its own
   // WhatsApp account: dev → test number, prod → the real one). v3 / v2 names: the earlier ones were created with the dev address.
-  if (d.button) comps.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: d.button.text, url: origin + d.button.url, example: [origin + d.button.example] }] });
+  if (d.button) comps.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: d.button.text, url: origin + d.button.url, ...(d.button.example ? { example: [origin + d.button.example] } : {}) }] });
   return comps;
 }

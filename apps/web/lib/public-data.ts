@@ -1,3 +1,4 @@
+import { usdPrice } from '@/lib/price';
 import { unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import type { Category, Product, Shop } from '@suqa/shared';
@@ -24,14 +25,15 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
 const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_currency,price_lbp,unit,unit_kind,decimal_qty,image_url,is_available,is_active,sort_order,section,sku,vat,track_stock,visible_online,on_hand,reserved,available_days,aliases,created_at,updated_at';
 
 /** Shop + its active products in one round-trip. Cached briefly; a merchant's availability toggle shows within ~15 s. */
-export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string) => {
+export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => {
   const sb = anon();
   const { data } = await sb.from('shops').select(`*, products(${PRODUCT_COLS})`).eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active')
     .eq('products.is_active', true).order('section', { referencedTable: 'products', ascending: true, nullsFirst: false }).order('sort_order', { referencedTable: 'products' }).maybeSingle();
   if (!data) return null;
   const { products, ...shop } = data as Shop & { products: (Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string })[]; hide_online_when_zero?: boolean };
   // POS stock (21_pos): tracked items show live availability (on hand − reserved); the shop may hide items at zero.
-  const list = (products ?? []).filter(p => p.visible_online !== false).map(p => {
+  // a lira-priced item is shown and charged at its own lira price (lib/price.ts)
+  const list = (products ?? []).filter(p => p.visible_online !== false).map(p => ({ ...p, price_usd: usdPrice(p, fx) })).map(p => {
     if (!p.track_stock) return { ...p, available: null as number | null };
     const available = Math.max(0, Number(p.on_hand ?? 0) - Number(p.reserved ?? 0));
     return { ...p, available, is_available: p.is_available && available > 0 };

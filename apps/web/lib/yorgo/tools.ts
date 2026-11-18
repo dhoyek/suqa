@@ -1,5 +1,6 @@
 // The fixed set of typed tools the model may call. No tool takes SQL or free filters; every tool runs with the CALLER'S OWN
 // Supabase client, so row-level security decides what it can see — Yorgo never has more access than the person using it.
+import { usdPrice } from '@/lib/price';
 import type { ToolDef } from './model';
 
 export type Mode = 'shopper' | 'seller';
@@ -7,7 +8,7 @@ export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
 type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type From = (t: string) => any;
-export type ToolCtx = { sb: { rpc: Rpc; from?: From }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null };
+export type ToolCtx = { sb: { rpc: Rpc; from?: From }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null; fx?: number | null };   // fx: the market's lira rate, for lira-priced items
 export type Tool = ToolDef & { modes: Mode[]; roles?: Role[]; run(input: Record<string, unknown>, ctx: ToolCtx): Promise<unknown> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,7 +38,7 @@ const matchItems: Tool = {
       candidates: ((data as Row[] | null) ?? []).filter(r => r.phrase_no === i + 1).map(r => ({
         product_id: r.product_id, name_ar: r.name?.ar ?? null, name_en: r.name?.en ?? null,
         ...(ctx.mode === 'shopper' ? { shop_id: r.shop_id, shop: r.shop_name?.ar ?? r.shop_name?.en ?? null } : {}),
-        price_usd: Number(r.price_usd), ...(r.price_currency === 'lbp' ? { price_lbp: Number(r.price_lbp) } : {}), unit: r.unit,
+        price_usd: Math.round(usdPrice(r, ctx.mode === 'shopper' ? ctx.fx : null) * 100) / 100, ...(r.price_currency === 'lbp' ? { price_lbp: Number(r.price_lbp) } : {}), unit: r.unit,
         available: r.is_available, ...(r.available_days?.length ? { only_on_weekdays: r.available_days } : {}), score: Math.round(r.score * 100) / 100,
       })),
     }));
@@ -99,14 +100,14 @@ const draftBasket: Tool = {
     const found = new Map<string, ItemOut>();
     if (ids.length && ctx.sb.from) {
       const { data, error } = await ctx.sb.from('products')
-        .select('id,name,unit,price_usd,is_available,is_active,visible_online,available_days,shops!inner(id,tenant_id,slug,name,whatsapp,min_order_usd,pickup_enabled,status)').in('id', ids);
+        .select('id,name,unit,price_usd,price_currency,price_lbp,is_available,is_active,visible_online,available_days,shops!inner(id,tenant_id,slug,name,whatsapp,min_order_usd,pickup_enabled,status)').in('id', ids);
       if (error) throw new Error(String(error.message).slice(0, 100));
-      type Row = { id: string; name: Record<string, string>; unit: string | null; price_usd: number | string; is_available: boolean; is_active: boolean; visible_online: boolean | null; available_days: number[] | null;
+      type Row = { id: string; name: Record<string, string>; unit: string | null; price_usd: number | string; price_currency?: string | null; price_lbp?: number | string | null; is_available: boolean; is_active: boolean; visible_online: boolean | null; available_days: number[] | null;
         shops: { id: string; tenant_id: string; slug: string; name: Record<string, string>; whatsapp: string | null; min_order_usd: number | string | null; pickup_enabled: boolean | null; status: string } };
       for (const r of (data as Row[] | null) ?? []) {
         const sh = Array.isArray(r.shops) ? (r.shops as Row['shops'][])[0] : r.shops;
         if (!sh || sh.tenant_id !== ctx.tenantId || sh.status !== 'active' || !r.is_active || !r.is_available || r.visible_online === false) continue;
-        found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: Number(r.price_usd), days: r.available_days?.length ? r.available_days : null,
+        found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: usdPrice(r, ctx.fx), days: r.available_days?.length ? r.available_days : null,
           shop: { id: sh.id, slug: sh.slug, name: sh.name, whatsapp: sh.whatsapp, min_order_usd: Number(sh.min_order_usd ?? 0), pickup_enabled: sh.pickup_enabled !== false } });
       }
     }

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function ShopPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const tenant = await getTenant();
-  const res = await getShopWithProducts(tenant.id, slug);
+  const res = await getShopWithProducts(tenant.id, slug, tenant.fx_lbp_rate);
   if (!res) notFound();
   const { shop: s, products } = res;
   const L = await getLocale(tenant);

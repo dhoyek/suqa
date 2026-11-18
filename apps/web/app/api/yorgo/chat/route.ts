@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop },
+    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop },
   );
   if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 

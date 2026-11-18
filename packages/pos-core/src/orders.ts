@@ -194,7 +194,8 @@ export async function editOrderInfo(db: PosDb, order: Order, patch: OrderInfoPat
   const dropDriver = !closed && pickup && !!order.driver_id;
   const updated: Order = { ...order, customer_name: patch.customer_name.trim(), customer_phone: patch.customer_phone.trim() || order.customer_phone, fulfillment: patch.fulfillment,
     address: pickup ? {} : patch.address, customer_notes: patch.notes?.trim() || null, needed_at: patch.needed_at,
-    ...(closed ? {} : { delivery_fee_usd: fee / 100, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100) }),
+    // totals move only when the fee moved (a name or address fix must not re-round the LBP total)
+    ...(closed || fee === Math.round(num(order.delivery_fee_usd) * 100) ? {} : { delivery_fee_usd: fee / 100, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100) }),
     ...(dropDriver ? { driver_id: null, courier_name: null, courier_fee_cents: 0, driver_ack_at: null, driver_picked_at: null, driver_delivered_at: null } : {}),
     updated_at: new Date().toISOString() };
   await db.transaction('rw', [db.orders, db.outbox], async () => {

@@ -59,7 +59,8 @@ begin
     updated_at = now()
   where id = v_o.id;
 
-  if not v_closed then perform suqa._order_recalc(v_o.id); end if;
+  -- totals move only when the fee moved (a name or address fix must not re-round the LBP total)
+  if not v_closed and v_fee is distinct from coalesce(v_o.delivery_fee_usd, 0) then perform suqa._order_recalc(v_o.id); end if;
   select * into v_n from suqa.orders where id = v_o.id;
 
   -- the shop's customer list learns the correction (not counted as a new order)

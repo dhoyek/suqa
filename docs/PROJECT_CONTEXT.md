@@ -34,10 +34,12 @@ Search understands Arabic, Arabizi and English spellings of the same item (khebe
 Plan: `docs/yorgo/PLAN.md` in the repo. Non-negotiables: the caller's own sign-in for every tool; no service-role key on paths that read shop data; no cross-shop data; drafts only, a person confirms; never in the POS critical path; no free-form SQL; everything audited; reply in the user's language and script.
 
 - **Step A (core):** on dev. Script 77 applied on **dev** 2026-11-18, not on prod. `ANTHROPIC_API_KEY` is set on both Netlify projects (Dan entered them). First real calls made on dev: about $0.0005 per message. Model thinking is switched off for Yorgo.
-- **Step B (POS draft order):** on dev. ✨ Yorgo button in the POS top bar when `yorgo_shops.enabled` for the shop. Owner and cashier paste a customer message and get a draft order to check and send to the cart; other roles can only ask about items. Sales from a draft carry `via_yorgo` in the audit log. Draft → cart was not yet tested in a browser with an owner account.
+- **Step B (POS draft order):** on dev. ✨ Yorgo button in the POS top bar when `yorgo_shops.enabled` for the shop. Owner and cashier paste a customer message and get a draft order to check and send to the cart; other roles can only ask about items. Sales from a draft carry `via_yorgo` in the audit log. Draft → cart tested in the browser as owner on dev; a finished sale and its audit entry were not.
+- **Step C (storefront):** on dev. "✨ Ask Yorgo" button on storefront pages for signed-in customers; basket draft → normal cart → usual checkout. Tested in the browser on dev (desktop).
 - Dev switches: Yorgo on, seller mode on for Elie Grocery only. Dev caps: $10/month overall, $3 per shop, $0.50 per shopper. Suggested prod caps: $100 / $10 / $0.50.
 - API credits: Console organisation "Purple Digits", Ultra credit $200/month, no payment method on file (nothing can be charged).
-- Next: C shopper chat · D usage page · E WhatsApp · F photo tools.
+- No model training is involved: Yorgo reads the live catalog. What improves it is aliases on items and prompt rules, tested on dev with real (anonymised) customer messages.
+- Next: D usage page · E WhatsApp · F photo tools.
 
 ## Restore point
 Before the AI work: git branch `milestone/2026-11-18-pre-yorgo` and prod database snapshot schema `suqa_snap_20261118`.

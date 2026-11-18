@@ -73,30 +73,41 @@ export async function setOrderDriverPay(db: PosDb, orderId: string, cents: numbe
  * computes the amount from the orders). The customers' money is NOT touched here: it is the orders' own payments.
  * from_drawer → the matching cash-out on the open shift, so expected cash stays right.
  */
-export async function payDriver(db: PosDb, input: { driver: Pick<Driver, 'id' | 'name'>; orders: Array<Pick<Order, 'id' | 'courier_fee_cents'>>; cash_orders?: Array<{ id: string; cash_cents: number }>; currency: Currency; amount: number; rate: number; from_drawer: boolean; shift: Shift | null; note?: string | null; user_id: string; label?: string; net?: { kind: 'in' | 'out'; amount: number } }): Promise<{ id: string; amount_cents: number; cash_cents: number } | null> {
+/** One settlement with a driver: his pay for `orders` and / or the cash he hands in for `cash_orders` (dollars and lira, as he holds
+ *  them). Each is claimed once on the server. With `from_drawer` the till posts the matching cash moves on the open shift:
+ *  the cash coming in per currency, and his pay going out in the currency it is paid in. */
+export async function payDriver(db: PosDb, input: { driver: Pick<Driver, 'id' | 'name'>; orders: Array<Pick<Order, 'id' | 'courier_fee_cents'>>; cash_orders?: Array<{ id: string; usd_cents: number; lbp: number }>; currency: Currency; amount: number; rate: number; from_drawer: boolean; shift: Shift | null; note?: string | null; user_id: string; label?: string }): Promise<{ id: string; amount_cents: number; cash_cents: number; cash_lbp: number } | null> {
   const cashOrders = input.cash_orders ?? [];
   if (!input.orders.length && !cashOrders.length) return null;
   const id = newId(); const at = new Date().toISOString();
-  // one cash move for the net of the settlement: the cash he brings in minus his pay (pay only = the old cash-out)
-  const move = input.net ?? { kind: 'out' as const, amount: input.amount };
-  const fromDrawer = input.from_drawer && !!input.shift && move.amount > 0;
   const amount_cents = input.orders.reduce((s, o) => s + num(o.courier_fee_cents), 0);
-  const cash_cents = cashOrders.reduce((s, o) => s + num(o.cash_cents), 0);
+  const cash_cents = cashOrders.reduce((s, o) => s + num(o.usd_cents), 0), cash_lbp = cashOrders.reduce((s, o) => s + num(o.lbp), 0);
+  // what really moves in the drawer, per currency: cash in minus his pay (in the currency it is paid in)
+  const net = { usd: cash_cents - (input.currency === 'usd' ? input.amount : 0), lbp: cash_lbp - (input.currency === 'lbp' ? input.amount : 0) };
+  const fromDrawer = input.from_drawer && !!input.shift && (net.usd !== 0 || net.lbp !== 0);
   const cashIds = new Set(cashOrders.map(o => o.id));
   await db.transaction('rw', [db.orders, db.payments, db.outbox], async () => {
     for (const o of input.orders) { const row = await db.orders.get(o.id); if (row && !row.driver_paid_at) await db.orders.put({ ...row, driver_paid_at: at, driver_payout_id: id }); }
     if (cashIds.size) { const pays = (await db.payments.where('tender').equals('driver').toArray()).filter(p => cashIds.has(p.order_id) && !p.settled_at); for (const p of pays) await db.payments.put({ ...p, settled_at: at, reference: id }); }
     await enqueue(db, 'driver.payout', { id, driver_id: input.driver.id, order_ids: input.orders.map(o => o.id), cash_order_ids: cashOrders.map(o => o.id), currency: input.currency, amount: input.amount, rate: input.rate, from_drawer: fromDrawer, shift_id: fromDrawer ? input.shift!.id : null, note: input.note ?? null, at });
   });
-  if (fromDrawer) await cashMove(db, input.shift!, { kind: move.kind, amount: move.amount, currency: input.currency, reason: input.label ?? `driver · ${input.driver.name}`, user_id: input.user_id });
-  return { id, amount_cents, cash_cents };
+  if (fromDrawer) for (const cur of ['usd', 'lbp'] as Currency[]) {
+    const n = net[cur]; if (!n) continue;
+    await cashMove(db, input.shift!, { kind: n > 0 ? 'in' : 'out', amount: Math.abs(n), currency: cur, reason: input.label ?? `driver · ${input.driver.name}`, user_id: input.user_id });
+  }
+  return { id, amount_cents, cash_cents, cash_lbp };
 }
 
-/** Owner: correct what a driver said he collected on a delivered order (0 = nothing). Only while that cash is not settled; the server checks. */
-export async function setOrderDriverCash(db: PosDb, orderId: string, cents: number): Promise<void> {
+/** Owner: correct the cash a driver recorded on a delivered order — dollars (cents) and lira; 0 / 0 = he holds nothing for it.
+ *  Only while that cash is not settled; the server checks (and never lets it exceed the order). */
+export async function setOrderDriverCash(db: PosDb, orderId: string, usd_cents: number, lbp: number): Promise<void> {
   await db.transaction('rw', [db.orders, db.payments, db.outbox], async () => {
-    const pay = (await db.payments.where('order_id').equals(orderId).toArray()).find(p => p.tender === 'driver');
-    if (pay && !pay.settled_at) { await db.payments.put({ ...pay, amount: cents }); const o = await db.orders.get(orderId); if (o) await db.orders.put({ ...o, paid_usd_cents: Math.max(0, num(o.paid_usd_cents) + cents - num(pay.amount)) }); }
-    await enqueue(db, 'order.driver_cash', { id: orderId, cents });
+    const pays = (await db.payments.where('order_id').equals(orderId).toArray()).filter(p => p.tender === 'driver');
+    if (pays.length && pays.every(p => !p.settled_at)) {
+      for (const cur of ['usd', 'lbp'] as Currency[]) { const want = cur === 'usd' ? usd_cents : lbp; const rows = pays.filter(p => p.currency === cur); for (let i = 0; i < rows.length; i++) await db.payments.put({ ...rows[i], amount: i === 0 ? want : 0 }); }
+      const o = await db.orders.get(orderId); const old = pays.filter(p => p.currency === 'usd').reduce((s, p) => s + num(p.amount), 0);
+      if (o) await db.orders.put({ ...o, paid_usd_cents: Math.max(0, num(o.paid_usd_cents) + usd_cents - old) });
+    }
+    await enqueue(db, 'order.driver_cash', { id: orderId, usd_cents, lbp });
   });
 }

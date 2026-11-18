@@ -26,12 +26,13 @@ describe('cash collected by the driver', () => {
     let s = await shiftSummary(a.db, shift);
     expect(s.expected_usd_cents).toBe(1000);                                       // nothing of it is in the drawer
 
-    const r = await payDriver(a.db, { driver: { id: 'd1', name: 'Tony' }, orders: [o1, o2], cash_orders: [{ id: o1.id, cash_cents: 800 }, { id: o2.id, cash_cents: 800 }],
-      currency: 'usd', amount: 200, rate: RATE, from_drawer: true, shift, user_id: 'u1', net: { kind: 'in', amount: 1400 } });
-    expect(r).toMatchObject({ amount_cents: 200, cash_cents: 1600 });
+    const r = await payDriver(a.db, { driver: { id: 'd1', name: 'Tony' }, orders: [o1, o2], cash_orders: [{ id: o1.id, usd_cents: 800, lbp: 0 }, { id: o2.id, usd_cents: 300, lbp: 450000 }],
+      currency: 'usd', amount: 200, rate: RATE, from_drawer: true, shift, user_id: 'u1' });
+    expect(r).toMatchObject({ amount_cents: 200, cash_cents: 1100, cash_lbp: 450000 });
     s = await shiftSummary(a.db, shift);
-    expect(s.expected_usd_cents).toBe(2400);                                       // + 16.00 − 2.00, one movement
-    expect(s.moves.filter(m => m.kind === 'in')).toHaveLength(1);
+    expect(s.expected_usd_cents).toBe(1900);                                       // + 11.00 in − 2.00 pay: one dollar movement
+    expect(s.expected_lbp).toBe(450000);                                            // the lira as he held it
+    expect(s.moves.filter(m => m.kind === 'in')).toHaveLength(2); expect(s.moves.filter(m => m.kind === 'out')).toHaveLength(0);
     const pays = await a.db.payments.where('tender').equals('driver').toArray();
     expect(pays.every(x => x.settled_at && x.reference === r!.id)).toBe(true);
     const op = (await a.db.outbox.toArray()).find(x => x.kind === 'driver.payout')!;
@@ -42,7 +43,7 @@ describe('cash collected by the driver', () => {
     const server = new FakeServer(); const p = server.addProduct({ id: 'p1', price_usd: 3, on_hand: 10 });
     const a = await makeDevice(server, 'A');
     const o = await driverClosed(a, p);
-    await setOrderDriverCash(a.db, o.id, 500);
+    await setOrderDriverCash(a.db, o.id, 500, 0);
     expect((await a.db.payments.where('order_id').equals(o.id).toArray())[0].amount).toBe(500);
     expect((await a.db.orders.get(o.id))!.paid_usd_cents).toBe(500);
     expect((await a.db.outbox.toArray()).filter(x => x.kind === 'order.driver_cash')).toHaveLength(1);

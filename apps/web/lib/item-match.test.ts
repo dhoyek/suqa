@@ -12,4 +12,7 @@ test('search', () => {
   for (const q of ['ma2ouche', 'man2ouche', 'mankoushe', 'منقوشة', 'za3tar', 'zaatar', 'man2ouche za3tar', 'زعتر']) expect(m(q)(z), q).toBe(true);
   expect(m('mayy')(w)).toBe(true); expect(m('man2ouche')(w)).toBe(false); expect(m('ka3ke chocola')(k)).toBe(true); expect(m('bebsi')(p)).toBe(true); expect(m('pepsi 330')(p)).toBe(false); expect(m('pepsi 185')(p)).toBe(true);
   expect(m('zaatar')(k)).toBe(false);
+  const beer = foldItem('بيرة', 'Beer', 'bira'), bread = foldItem('رغيف', 'Bread loaf');
+  expect(m('bira')(beer)).toBe(true); expect(m('bira')(bread)).toBe(false); expect(m('zzzz')(bread)).toBe(false); expect(m('mayy')(bread)).toBe(false);
+  expect(m('za3tar w jebne')(foldItem('زعتر + جبنة', 'Zaatar + cheese'))).toBe(true); expect(m('za3tar w jebne')(z)).toBe(false);
 });

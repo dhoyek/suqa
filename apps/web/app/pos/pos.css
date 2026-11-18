@@ -79,9 +79,9 @@
 .pos-modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 12px; }
 .pos-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 480px; max-height: 95dvh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 .pos-modal.wide { max-width: 820px; }
-.pos-modal-title { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 17px; }
-.pos-modal-body { padding: 14px 16px; overflow: auto; }
-.pos-modal-footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); align-items: center; }
+.pos-modal-title { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 17px; }
+.pos-modal-body { padding: 14px 16px; overflow: auto; flex: 1 1 auto; min-height: 0; }
+.pos-modal-footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); align-items: center; flex: none; }
 .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
 .numpad button { min-height: 52px; font-size: 22px; font-weight: 600; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; font-family: inherit; }
 .numpad.big button { min-height: 60px; }
@@ -214,7 +214,7 @@
 .suggest-grid .chip { min-height: 42px; display: flex; align-items: center; justify-content: center; font-weight: 700; direction: ltr; }
 .pay-amount.pristine strong { color: var(--brand-primary); opacity: .75; }
 .tender-list li.pending { border-style: dashed; background: #f9fafb; }
-.pos-modal.wide .pos-modal-body { min-height: 520px; }
+.pos-modal.wide .pos-modal-body { min-height: min(520px, calc(95dvh - 200px)); }   /* roomy on a big screen, never taller than a small or zoomed one: the footer must stay on screen */
 @media (max-width: 640px) { .pos-modal.wide .pos-modal-body { min-height: 0; } }
 
 /* orders inbox */
@@ -521,7 +521,7 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* Yorgo — the assistant. One accent of its own so it is never mistaken for a till action. */
 .pos .btn.yorgo-btn { background: linear-gradient(135deg, #7c3aed, #0e7490); color: #fff; border-color: transparent; font-weight: 700; padding-inline: 12px; white-space: nowrap; }
 .yorgo-tag { font-size: 11px; font-weight: 600; background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
-.yorgo-chat { display: flex; flex-direction: column; gap: 8px; min-height: 38dvh; }
+.yorgo-chat { display: flex; flex-direction: column; gap: 8px; min-height: min(38dvh, 240px); }
 .yorgo-hello { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px dashed #c4b5fd; border-radius: 12px; background: #faf5ff; }
 .yorgo-msg { max-width: 86%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .yorgo-msg.me { align-self: flex-end; background: var(--brand-primary); color: #fff; border-end-end-radius: 4px; }

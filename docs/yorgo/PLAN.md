@@ -2,7 +2,7 @@
 
 One assistant, two modes (shopper, seller), built on the Claude API with tool use. Community project, one operator: cost control is a requirement, not an afterthought.
 
-Status: **milestone 1 (item matching) built; the AI core is not started.** Nothing below milestone 1 exists yet.
+Status: **item matching live (scripts 75, 76); step A — the core — built and tested without a key (script 77 written, not applied).** No screen uses the assistant yet.
 
 ## What the repo already gives us
 
@@ -65,6 +65,20 @@ Full CREATE TABLE text for every table lives in the schema files (base files for
 2. **Milestone 1 is split.** 1a (done): matching, aliases, test set. 1b (with milestone 2): the Claude call, conversations, metering — they are only testable once there is a first tool flow and an API key.
 3. **Aliases are public** like item names, and approved by owner, stock or the association's setup role (it is item setup, not finance).
 4. **No embeddings.** Trigram + consonant skeleton reached 98% top-3 on the pilot test set. The hook is a column on `product_search`.
+
+## What it costs (estimate)
+
+List prices checked 2026-11-18, USD per million tokens: the everyday model 0.10 in / 0.50 out (cache read 0.01); the heavy model 2 in / 10 out.
+
+| Exchange | Assumed size | Estimate |
+|---|---|---|
+| Seller pastes an order, or a shopper asks for items (2 model calls, 1 search) | ~2,900 tokens in, ~210 out | about $0.0004 |
+| The same, deep in a long conversation | ~8,000 in, ~300 out | about $0.001 |
+| Invoice or product photo on the heavy model | ~3,000 in, ~800 out | about $0.014 |
+
+So one dollar buys roughly 1,000 to 2,500 ordinary exchanges, or about 70 photos. These are estimates from assumed sizes, not measurements:
+the usage page will show real numbers once a key is in place. Script 77's defaults are $20 a month for the whole site, $5 per shop and
+$0.50 per shopper; all three are settings.
 
 ## Open points that are the operator's
 

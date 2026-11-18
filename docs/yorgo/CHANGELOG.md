@@ -51,3 +51,25 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - Test: a dedicated check that bread outscores croutons for "khebez" (it fails on 75, passes on 76).
 - Accuracy on the 85 phrases is unchanged: 83 first (98%), 84 in the first three (99%). One more expected answer was widened ("CANDEL", the catalog's own spelling).
 - Also learned on real data: searching across all shops is noisier than inside one shop ("bayd b 2awarma" puts a grocery item first). The assistant should search inside the chosen shop whenever there is one.
+
+## Step A — core (script 77, not applied yet)
+
+**Built**
+
+- `supabase/schema/77_yorgo_core.sql`: `yorgo_settings` (master switch, shopper switch, monthly caps, rate limit, history length), `yorgo_shops` (per-shop switch and cap), `yorgo_conversations`, `yorgo_messages` (content, model, tokens, cost, feedback), `yorgo_usage` (per day × shop × user); `yorgo_gate`, `yorgo_record` (server only), `yorgo_feedback`.
+- `apps/web/lib/yorgo/`: `config` (model names and prices from the environment), `model` (the only file that talks to the provider; prompt caching on the system prompt and tool list), `tools` (typed tools filtered by mode and role; `match_items` is the first), `prompts`, `core` (`runTurn`: gate → history → model with tools → metering).
+- `apps/web/app/api/yorgo/chat`: one exchange as the signed-in person. Answers "paused: off" when no key or no settings exist.
+
+**Decisions**
+
+- Usage is written by the server only (service role, two functions). A person's own token could otherwise under-report and walk past the caps. Tools and history still run with the caller's token.
+- Association admins read switches and usage numbers, never message text.
+- A shop cannot switch itself on: the association pays, so it decides.
+- A model without a price is charged at the dearest known rate, so caps never under-count.
+- Not done in this step: summarising older turns (the window is the last N turns; the `summary` column is there), drafts, any screen.
+
+**Tests**
+
+- `supabase/test/yorgo_core.sql`: off by default at every level; rate limit; shop, shopper and global caps and their order; a shop's own cap; a conversation cannot be continued by someone else or in another shop; seller, stranger, admin and anonymous each read exactly what they should; nobody signed in can write usage or call the gate.
+- `apps/web/lib/yorgo/core.test.ts` (8 tests, mock model): a seller's search is forced to their own shop and goes through their own client; closed gate = no model call; a tool outside the person's list is refused; a tool loop is stopped; cost is recorded even when the provider fails half-way; history never opens inside a tool exchange.
+- Not tested: a real call to the provider (no key yet).

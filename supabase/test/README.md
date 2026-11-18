@@ -27,3 +27,7 @@ stub and a `storage` schema stub (see the session notes in docs/pos/PLAN.md §9)
 
 `psql -v ON_ERROR_STOP=1 -f supabase/test/yorgo_match.sql` from the repo root (needs `pg_trgm` and an `extensions` schema). Loads the pilot shop's item names and 85 phrases
 (Arabic, Arabizi, English, mixed, typos), prints accuracy per kind and the misses, fails under 85% top-3, then checks who can see and decide what. Rolls back.
+
+## Yorgo core (77_yorgo_core.sql)
+
+`psql -v ON_ERROR_STOP=1 -f supabase/test/yorgo_core.sql`. Switches, rate limit, the three caps, metering, and who can read or write what. Rolls back.

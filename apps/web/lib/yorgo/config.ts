@@ -20,7 +20,7 @@ export function yorgoConfig(env: Record<string, string | undefined> = process.en
     modelDefault: env.YORGO_MODEL_DEFAULT || 'claude-haiku-5-5',
     modelHeavy: env.YORGO_MODEL_HEAVY || 'claude-sonnet-5-5',
     prices: { ...DEFAULT_PRICES, ...extra },
-    maxTokens: 700,           // an answer is a few lines or a draft, never an essay
+    maxTokens: 1024,          // an answer is a few lines or a draft, never an essay
     maxToolRounds: 4,         // model → tools → model …, then it must answer
     maxMessageChars: 2000,
   };

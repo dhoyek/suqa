@@ -73,3 +73,8 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - `supabase/test/yorgo_core.sql`: off by default at every level; rate limit; shop, shopper and global caps and their order; a shop's own cap; a conversation cannot be continued by someone else or in another shop; seller, stranger, admin and anonymous each read exactly what they should; nobody signed in can write usage or call the gate.
 - `apps/web/lib/yorgo/core.test.ts` (8 tests, mock model): a seller's search is forced to their own shop and goes through their own client; closed gate = no model call; a tool outside the person's list is refused; a tool loop is stopped; cost is recorded even when the provider fails half-way; history never opens inside a tool exchange.
 - Not tested: a real call to the provider (no key yet).
+
+## 2026-11-18 — first real call on dev
+- Script 77 applied on dev; `ANTHROPIC_API_KEY` set on Netlify (dev and prod projects).
+- The key is trimmed of stray spaces/quotes before use (first call failed with 401 for that reason).
+- Thinking is switched off in the request: the 5.5 models think by default and the thinking is billed as output inside `max_tokens`, which left no room for the answer (first call returned no text). `max_tokens` 700 → 1024.

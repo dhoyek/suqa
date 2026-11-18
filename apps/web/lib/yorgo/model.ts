@@ -25,6 +25,7 @@ export function anthropicClient(): ModelClient | null {
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: req.model, max_tokens: req.maxTokens,
+          thinking: { type: 'disabled' },      // these models think by default and thinking is billed as output inside max_tokens; item look-ups and drafts do not need it
           system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
           ...(tools.length ? { tools } : {}),
           messages: req.messages,

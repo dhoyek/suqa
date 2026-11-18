@@ -50,7 +50,10 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const ctx: ToolCtx = { sb: d.sb, tenantId: i.tenant.id, mode: i.mode, shopId: i.shopId, role: i.role };
   const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null });
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }] }];
-  const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }] }];
+  // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
+  // The note travels with this call only; what is stored is the person's own words.
+  const note = languageNote(text);
+  const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
   let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = [];
   try {
     for (let round = 0; ; round++) {
@@ -93,4 +96,21 @@ export function toTurns(rows: { role: Stored['role']; content: Block[] }[]): Tur
   const start = rows.findIndex(r => r.role === 'user');
   if (start < 0) return [];
   return rows.slice(start).map(r => ({ role: r.role === 'assistant' ? 'assistant' : 'user', content: r.content }));
+}
+
+/** Which language and script the person wrote in: Arabic script, Lebanese Arabizi (Arabic in Latin letters), or neither (no note). */
+export function detectScript(text: string): 'ar' | 'arabizi' | null {
+  const arabic = (text.match(/[\u0600-\u06FF]/g) ?? []).length, latin = (text.match(/[a-z]/gi) ?? []).length;
+  if (arabic && arabic >= latin) return 'ar';
+  const t = ` ${text.toLowerCase()} `;
+  const digitInWord = /[a-z][2357]|[2357][a-z]/.test(t.replace(/\b\d+(?:[.,]\d+)?\s?(?:kg|g|gr|l|ml|x|pcs?)\b/g, ' '));
+  const marker = /[^a-z](w|bade|badde|baddi|bede|bdi|badna|shu|chou|shou|kifak|kifik|yalla|hayda|hek|mish|ma fi|3al|khebez|kbire?|zghire?|adde|addeh|law sama7t|iza|kamen|ktir|shway|ya3ne|3ande|3anna|3andak|3andkon)[^a-z]/.test(t);
+  if (latin && (digitInWord || marker)) return 'arabizi';
+  if (arabic) return 'ar';
+  return null;
+}
+export function languageNote(text: string): string | null {
+  const k = detectScript(text);
+  return k === 'arabizi' ? '(Note from the app, not from the person: the message above is Lebanese Arabizi. Write your reply in Lebanese Arabizi too: Arabic in Latin letters with 2 3 5 7. Not English, not Arabic script.)'
+    : k === 'ar' ? '(Note from the app, not from the person: reply in Arabic script, in simple Lebanese-friendly Arabic.)' : null;
 }

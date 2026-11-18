@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { detectScript, runTurn, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
 import { toolsFor } from './tools';
 
@@ -127,5 +127,19 @@ describe('yorgo core', () => {
     expect(out.draft.lines.map(l => [l.product_id, l.quantity, l.price_usd, l.shop.slug])).toEqual([[A, 2, 1.25, 'abou-elie'], [A, 1, 1.25, 'abou-elie']]);   // hidden item dropped; a choice with one real option becomes a line
     expect(out.draft.choices).toEqual([]); expect(out.draft.not_found).toEqual(['nido']);
     expect(toolsFor('seller', 'owner').map(t => t.name)).not.toContain('draft_basket');
+  });
+  it('tells Arabic, Arabizi and English apart, and sends the note with the call only', async () => {
+    expect(detectScript('bade khebez w labne w 2 pepsi')).toBe('arabizi');
+    expect(detectScript('fi 3anna pepsi kbire?')).toBe('arabizi');
+    expect(detectScript('2 man2ouche za3tar')).toBe('arabizi');
+    expect(detectScript('عندك نسكافيه؟')).toBe('ar');
+    expect(detectScript('مرحبا بدي ربطتين خبز و pepsi')).toBe('ar');
+    expect(detectScript('do you have 2 pepsi and 1 kg sugar please')).toBeNull();
+    expect(detectScript('2 bread, 3 nescafe, 500g cheese')).toBeNull();
+    const { deps, calls } = rig({ replies: [say('tamem')] });
+    await runTurn(deps, base);
+    expect(calls.model[0].messages.at(-1)!.content).toHaveLength(2);                                   // the words + the note
+    const rec = calls.adminRpc[1][1] as { p_messages: { content: unknown[] }[] };
+    expect(rec.p_messages[0].content).toEqual([{ type: 'text', text: base.message }]);                  // stored: the words only
   });
 });

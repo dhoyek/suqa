@@ -36,6 +36,26 @@ const defaultBackoff = (tries: number) => Math.min(5 * 60_000, 1000 * 2 ** Math.
  * Outbox push + cursor pull. One instance per open POS tab; the Web Lock elects one leader per shop so only one tab talks
  * to the server. Nothing here is awaited by the sale screen.
  */
+/**
+ * Orders placed on the storefront are stored in dollars only (total_usd, line_total_usd); the till works in cents. Until the shop
+ * edits such an order the cents columns are empty, and the till showed $0.00 and "paid" for a cash-on-delivery order. Every order
+ * and line coming from the server gets its cents filled in here, on the device, from the dollars it already carries.
+ */
+export function fillCents(tbl: string, row: Record<string, unknown>): Record<string, unknown> {
+  const n = (v: unknown) => (v == null || v === '' ? null : Number(v));
+  const cents = (usd: unknown) => { const x = n(usd); return x == null || !Number.isFinite(x) ? null : Math.round(x * 100); };
+  if (tbl === 'orders' && row.total_cents == null && cents(row.total_usd) != null) {
+    const total = cents(row.total_usd)!, rate = n(row.rate_lbp_per_usd) ?? n(row.fx_lbp_rate);
+    return { ...row, total_cents: total, subtotal_cents: row.subtotal_cents ?? cents(row.subtotal_usd) ?? total - (cents(row.delivery_fee_usd) ?? 0),
+      ...(rate ? { rate_lbp_per_usd: row.rate_lbp_per_usd ?? rate, total_lbp: row.total_lbp ?? Math.round((total * rate) / 100) } : {}) };
+  }
+  if (tbl === 'order_items' && (row.line_total_cents == null || row.unit_price_cents == null)) {
+    const line = row.line_total_cents ?? cents(row.line_total_usd), unit = row.unit_price_cents ?? cents(row.unit_price_usd);
+    return { ...row, ...(line != null ? { line_total_cents: line } : {}), ...(unit != null ? { unit_price_cents: unit } : {}) };
+  }
+  return row;
+}
+
 export class SyncEngine {
   status: SyncStatus = { online: true, syncing: false, pending: 0, rejected: 0, lastSyncAt: null, lastOnlineAt: null, error: null, revoked: false, leader: false, cursor: 0 };
   private db: PosDb; private t: Transport; private deviceId: string; private opt: EngineOptions;
@@ -74,7 +94,7 @@ export class SyncEngine {
         this.db.cashMoves.clear(), this.db.stockMoves.clear(), this.db.debtSettlements.clear(), this.db.debtAllocations.clear(), this.db.shopCustomers.clear(), this.db.suppliers.clear(), this.db.purchases.clear(), this.db.purchaseLines.clear(), this.db.supplierPayments.clear(), this.db.drivers.clear()]);
       await this.db.products.bulkPut(s.products); await this.db.barcodes.bulkPut(s.product_barcodes); await this.db.categories.bulkPut(s.categories);
       await this.db.quickButtons.bulkPut(s.quick_buttons); await this.db.rates.bulkPut(s.exchange_rates); await this.db.staff.bulkPut(s.shop_members);
-      await this.db.devices.bulkPut(s.devices); await this.db.orders.bulkPut(s.orders); await this.db.orderLines.bulkPut(s.order_items);
+      await this.db.devices.bulkPut(s.devices); await this.db.orders.bulkPut(s.orders.map(o => fillCents('orders', o as never) as never)); await this.db.orderLines.bulkPut(s.order_items.map(l => fillCents('order_items', l as never) as never));
       await this.db.payments.bulkPut(s.payments); await this.db.shifts.bulkPut(s.shifts); await this.db.cashMoves.bulkPut(s.cash_moves); await this.db.stockMoves.bulkPut(s.stock_moves);
       await this.db.debtSettlements.bulkPut(s.debt_settlements ?? []); await this.db.debtAllocations.bulkPut(s.debt_allocations ?? []); await this.db.shopCustomers.bulkPut(s.shop_customers ?? []);
       await this.db.suppliers.bulkPut(s.suppliers ?? []); await this.db.purchases.bulkPut(s.purchases ?? []); await this.db.purchaseLines.bulkPut(s.purchase_lines ?? []); await this.db.supplierPayments.bulkPut(s.supplier_payments ?? []); await this.db.drivers.bulkPut(s.shop_drivers ?? []);
@@ -129,7 +149,8 @@ export class SyncEngine {
         const existing = (await table.get(key as never)) as Record<string, unknown> | undefined;
         if (r.tbl === 'orders' && !existing && r.origin_device !== this.deviceId) newOrders.push(r.row.id as string);
         // merge over the local copy: feed rows are full server rows, but the snapshot adds joined fields (e.g. staff full_name) we keep
-        await table.put(existing ? { ...existing, ...r.row } : r.row);
+        const row = fillCents(r.tbl, r.row);
+        await table.put(existing ? { ...existing, ...row } : row);
       }
       await setMeta(this.db, META.cursor, cursor);
     });
@@ -177,7 +198,22 @@ export class SyncEngine {
   }
 
   /** One sync round: push then pull. Safe to call often; concurrent calls coalesce. */
+  /** Once per start: orders already on this device from before fillCents existed get their cents too (no server trip). */
+  private repaired = false;
+  async repairCents(): Promise<number> {
+    let n = 0;
+    await this.db.transaction('rw', [this.db.orders, this.db.orderLines], async () => {
+      for (const o of await this.db.orders.filter(x => (x as unknown as Record<string, unknown>).total_cents == null).toArray()) {
+        const f = fillCents('orders', o as unknown as Record<string, unknown>); if (f !== (o as unknown)) { await this.db.orders.put(f as never); n++; } }
+      for (const l of await this.db.orderLines.filter(x => (x as unknown as Record<string, unknown>).line_total_cents == null || (x as unknown as Record<string, unknown>).unit_price_cents == null).toArray()) {
+        const f = fillCents('order_items', l as unknown as Record<string, unknown>); if (f !== (l as unknown)) { await this.db.orderLines.put(f as never); n++; } }
+    });
+    if (n) this.emit({ type: 'applied', rows: [] });
+    return n;
+  }
+
   async sync(): Promise<void> {
+    if (!this.repaired) { this.repaired = true; await this.repairCents().catch(() => 0); }
     if (this.status.syncing) { this.wake?.(); return; }
     this.setStatus({ syncing: true });
     try {

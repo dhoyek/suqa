@@ -17,8 +17,8 @@ type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: Dra
 
 const price = (p: Product, locale: L) => (p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100)));
 
-export default function YorgoPanel({ open, onClose, shopId, locale, index, online, onAddToCart }: {
-  open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean;
+export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, onAddToCart }: {
+  open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean; sells: boolean;
   onAddToCart: (lines: YorgoCartLine[], conversationId: string | null) => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -78,14 +78,14 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     <Modal open={open} onClose={onClose} wide title={<>✨ Yorgo <small className="yorgo-tag">{pt('yorgoAi', locale)}</small></>}
       actions={msgs.length ? <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>🗒</button> : undefined}
       footer={<div className="yorgo-input">
-        <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt('yorgoPlaceholder', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
+        <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt(sells ? 'yorgoPlaceholder' : 'yorgoPlaceholderItems', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
         <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>➤</button>
       </div>}>
       <div className="yorgo-chat">
         {!msgs.length && <div className="yorgo-hello">
           <p style={{ margin: 0 }}><strong>{pt('yorgoHello', locale)}</strong></p>
-          <p className="muted" style={{ margin: 0 }}>{pt('yorgoHint', locale)}</p>
+          <p className="muted" style={{ margin: 0 }}>{pt(sells ? 'yorgoHint' : 'yorgoHintItems', locale)}</p>
           {!online && <p className="pill warn" style={{ margin: 0 }}>{pt('yorgoOffline', locale)}</p>}
         </div>}
         {msgs.map(m => m.draft ? (

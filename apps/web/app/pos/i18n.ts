@@ -333,6 +333,7 @@ const T = {
   yorgoAi: { ar: 'مساعد ذكاء اصطناعي', en: 'AI assistant' }, yorgoOpen: { ar: 'يورغو — المساعد', en: 'Yorgo — assistant' },
   yorgoHello: { ar: 'أهلاً، أنا يورغو.', en: 'Hi, I am Yorgo.' },
   yorgoHint: { ar: 'الصق رسالة الزبون كما وصلت (واتساب)، أو اكتب ما يطلبه بالعربي أو بالعربيزي أو بالإنكليزي. أحضّر لك مسودة طلب، وأنت تراجعها وتضيفها إلى السلة.', en: 'Paste the customer\'s message as it came (WhatsApp), or type what they want in Arabic, Arabizi or English. I prepare a draft order; you check it and add it to the cart.' },
+  yorgoHintItems: { ar: 'اسألني عن أصناف المحل: هل الصنف موجود، ما اسمه، ما سعره. بالعربي أو بالعربيزي أو بالإنكليزي.', en: 'Ask me about the shop\'s items: is it there, what is it called, what does it cost. In Arabic, Arabizi or English.' }, yorgoPlaceholderItems: { ar: 'اسأل عن صنف…', en: 'Ask about an item…' },
   yorgoPlaceholder: { ar: 'الصق رسالة الزبون هنا…', en: 'Paste the customer\'s message here…' }, yorgoSend: { ar: 'إرسال', en: 'Send' }, yorgoNew: { ar: 'محادثة جديدة', en: 'New conversation' },
   yorgoDraft: { ar: 'مسودة طلب', en: 'Draft order' }, yorgoToCart: { ar: 'أضف إلى السلة', en: 'Add to cart' }, yorgoDiscard: { ar: 'تجاهل', en: 'Discard' },
   yorgoAdded: { ar: 'أُضيفت إلى السلة', en: 'Added to cart' }, yorgoDiscarded: { ar: 'تم التجاهل', en: 'Discarded' },

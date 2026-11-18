@@ -72,7 +72,8 @@ export default function Shell(props: {
   useEffect(() => { if (!online) return; let on = true;
     props.sb.from('yorgo_shops').select('enabled').eq('shop_id', boot.shop.id).maybeSingle().then(({ data, error }) => { if (!on || error) return; const v = !!(data as { enabled?: boolean } | null)?.enabled; setYorgoOn(v); try { localStorage.setItem(yorgoKey, v ? '1' : '0'); } catch { /* private mode */ } });
     return () => { on = false; }; }, [props.sb, boot.shop.id, online, yorgoKey]);
-  const canYorgo = yorgoOn && allowed.includes('sell') && (roleOf(staff) === 'owner' || roleOf(staff) === 'cashier');
+  const canYorgo = yorgoOn;                                                       // every role may ask about items; drafts are for those who sell (the server decides)
+  const yorgoSells = roleOf(staff) === 'owner' || roleOf(staff) === 'cashier';
   const go = (v: View) => { setView(v); setMenu(false); };                      // user pressed sync → show the icon turning briefly
   const spinning = manual || (!!status?.syncing && (status?.pending ?? 0) > 0);   // background pulls stay silent
   const syncNow = () => { setManual(true); boot.engine.poke(); setTimeout(() => setManual(false), 1500); };
@@ -114,7 +115,7 @@ export default function Shell(props: {
         {view === 'drivers' && <DriversView {...props} />}
         {view === 'settings' && <SettingsView {...props} />}
       </main>
-      {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online}
+      {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online} sells={yorgoSells}
         onAddToCart={(lines, conversation) => { setYorgoCart(c => ({ lines, conversation, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
     </div>
   );

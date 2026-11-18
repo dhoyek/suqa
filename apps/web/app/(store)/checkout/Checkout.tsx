@@ -144,6 +144,13 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
   const courier = shops.length > 1 && deliveryMode === 'courier';
   const feeUsd = pickup ? 0 : courier ? (courierFee ?? maxZoneFee) : perShopFees;
   const canOrder = (pickup || !!selected) && phoneOk && feesReady && !anyOutside && !busy && (!draft || pickup) && whenOk;
+  const addressStep = !pickup && !!draft;          // the address form is open: saving it is the next thing to do
+  // why the order cannot be placed yet, in the customer's words (first thing that is missing)
+  const blocker = !phoneOk ? (ar ? 'أدخل رقم هاتفك في أعلى الصفحة' : 'Enter your phone number at the top')
+    : !pickup && !selected ? (ar ? 'اختر عنوان التوصيل' : 'Choose a delivery address')
+    : anyOutside ? labels.outsideZone
+    : !whenOk ? (ar ? 'اختر اليوم والوقت' : 'Pick the day and time')
+    : !feesReady ? (ar ? 'جارٍ حساب رسوم التوصيل…' : 'Working out the delivery fee…') : '';
   const shopSub = (lines: { price_usd: number; qty: number }[]) => Math.round(lines.reduce((a, l) => a + l.price_usd * l.qty, 0) * 100) / 100;
 
   return (
@@ -196,7 +203,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
             <div><label className="label">{labels.addressNotes}</label><input className="input" value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })} /></div>
             <div className="row spread">
               {addresses.length > 0 && <button className="btn" onClick={() => setDraft(null)}>{labels.cancel}</button>}
-              <button className="btn primary" disabled={busy} onClick={saveAddress}>{labels.save}</button>
+              <button className="btn primary" disabled={busy} onClick={saveAddress}>📍 {ar ? 'حفظ العنوان والمتابعة' : 'Save address and continue'}</button>
             </div>
           </div>
         )}
@@ -253,9 +260,21 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{money(subtotal + feeUsd)}</strong></div>
         <div className="muted" style={{ fontSize: 13 }}>💵 {labels.payCash}</div>
         {error && <div className="error" role="alert">{error}</div>}
-        <button className="btn primary wide checkout-inline" disabled={!canOrder} onClick={submit}>{labels.placeOrder}</button>
+        {addressStep
+          ? <button className="btn primary wide checkout-inline" disabled={busy} onClick={saveAddress}>📍 {ar ? 'حفظ العنوان والمتابعة' : 'Save address and continue'}</button>
+          : <button className="btn primary wide checkout-inline" disabled={!canOrder} onClick={submit}>{labels.placeOrder}</button>}
       </section>
-      <div className="cart-bar checkout-bar"><button className="btn primary wide row spread" disabled={!canOrder} onClick={submit}><span>{labels.placeOrder}</span><span>{money(subtotal + feeUsd)}</span></button></div>
+      {/* One button at the bottom, always the next step: while the address form is open it SAVES THE ADDRESS (people used to
+          stare at a greyed-out "confirm" and never find the save button further up); otherwise it places the order, and when
+          it cannot, it says what is missing instead of just being grey. */}
+      <div className="cart-bar checkout-bar">
+        {addressStep
+          ? <button className="btn primary wide" disabled={busy} onClick={saveAddress}>📍 {ar ? 'حفظ العنوان والمتابعة' : 'Save address and continue'}</button>
+          : <>
+            {!canOrder && !busy && blocker && <div style={{ background: '#fff8e6', color: '#92400e', borderRadius: 10, padding: '6px 10px', fontSize: 13, marginBottom: 6, textAlign: 'center' }}>{blocker}</div>}
+            <button className="btn primary wide row spread" disabled={!canOrder} onClick={submit}><span>{labels.placeOrder}</span><span>{money(subtotal + feeUsd)}</span></button>
+          </>}
+      </div>
     </div>
   );
 }

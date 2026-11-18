@@ -376,3 +376,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .yorgo-input .btn { min-width: 48px; font-size: 20px; font-weight: 700; }
 .yorgo-foot { font-size: 11px; margin: 0; padding: 4px 12px 10px; text-align: center; }
 @media (max-width: 640px) { .yorgo-sheet { padding: 0; } .yorgo-box { max-width: none; height: 88dvh; border-radius: 16px 16px 0 0; } .yorgo-fab span { display: none; } .yorgo-fab { padding: 12px 14px; font-size: 20px; bottom: 76px; } }   /* above the cart bar on a phone */
+
+/* "Install the app" sheet: arrow pointing at the in-app browser's ⋯ menu */
+@keyframes install-bob { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(4px, -4px); } }

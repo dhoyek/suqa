@@ -12,6 +12,8 @@ export async function generateMetadata() {
     title: t?.brand_name ?? 'Suqa',
     description: t?.name ?? 'Local shops, delivered.',
     manifest: t ? '/manifest.webmanifest' : undefined,
+    // iPhone: open full-screen with the brand name when added to the Home Screen
+    appleWebApp: t ? { capable: true, title: t.brand_name, statusBarStyle: 'default' as const } : undefined,
     robots: isDevDeploy() ? { index: false, follow: false } : undefined,
     icons: { icon: t?.branding.app_icon_url ?? '/icons/icon-192.png', apple: t?.branding.app_icon_url ?? '/icons/icon-180.png', shortcut: '/favicon.ico' },
   };

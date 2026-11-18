@@ -6,6 +6,7 @@ import { ui } from '@/lib/ui-text';
 import { CartProvider } from '@/components/CartProvider';
 import StoreHeader from '@/components/StoreHeader';
 import ShareButton from '@/components/ShareButton';
+import InstallApp, { InstallLink } from '@/components/InstallApp';
 import { supabaseServer } from '@/lib/supabase-server';
 import { getTenantRole } from '@/lib/admin';
 import YorgoChat from '@/components/YorgoChat';
@@ -34,7 +35,9 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       </div>
       <footer className="container muted" style={{ fontSize: 12, padding: '24px 16px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <a href="/legal/privacy">{L === 'ar' ? 'سياسة الخصوصية' : 'Privacy'}</a>·<a href="/legal/terms">{L === 'ar' ? 'الشروط' : 'Terms'}</a>·<a href="/legal/delete-data">{L === 'ar' ? 'حذف البيانات' : 'Delete my data'}</a>
+        <InstallLink label={L === 'ar' ? 'ثبّت التطبيق' : 'Install the app'} />
       </footer>
+      <InstallApp brand={tenant.brand_name} locale={L === 'ar' ? 'ar' : 'en'} iconUrl={tenant.branding?.app_icon_url ?? null} />
       {yorgoOn && <YorgoChat locale={L === 'ar' ? 'ar' : 'en'} signedIn={!!user} />}
     </CartProvider>
   );

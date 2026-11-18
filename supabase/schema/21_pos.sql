@@ -240,7 +240,7 @@ create table if not exists suqa.payments (
   order_id     uuid not null references suqa.orders(id) on delete cascade,
   shop_id      uuid not null references suqa.shops(id) on delete cascade,
   tenant_id    uuid not null,
-  tender       text not null check (tender in ('cash_usd','cash_lbp','card','wallet','unpaid')),
+  tender       text not null check (tender in ('cash_usd','cash_lbp','card','wallet','unpaid','driver')),
   amount       bigint not null,                                      -- cents for usd, pounds for lbp
   currency     text not null check (currency in ('usd','lbp')),
   reference    text,

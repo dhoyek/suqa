@@ -11,7 +11,7 @@ type Row = {
   courier_fee_cents: number; paid_usd_cents: number; paid_lbp: number; customer_name: string; customer_phone: string; customer_notes: string | null; address: Record<string, unknown> | null;
   shop: { name: LocalizedText; phone: string | null; whatsapp: string | null; address_text: string | null } | null;
   items: { name: LocalizedText; quantity: number; unit: string | null; notes: string | null; voided: boolean | null }[];
-  payments: { tender: string; amount: number; currency: string }[];
+  payments: { tender: string; amount: number; currency: string; settled_at: string | null }[];
 };
 const digits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '');
 const addrText = (a: Record<string, unknown> | null) => a ? [a.label, a.line1, a.line2, a.street, a.building, a.floor, a.area, a.city, a.notes].filter(Boolean).join('، ') : '';
@@ -24,7 +24,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
   const admin = supabaseAdmin(); if (!admin || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tenant = await getTenant(); const L = await getLocale(tenant); const ar = L === 'ar';
   // driver_* step columns come from schemas 52/53; until a database has them, read the sheet without them (no buttons)
-  const SEL = 'id, number, status, driver_id, driver_ack_at, driver_picked_at, driver_delivered_at, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency)';
+  const SEL = 'id, number, status, driver_id, driver_ack_at, driver_picked_at, driver_delivered_at, placed_at, needed_at, fx_lbp_rate, subtotal_usd, delivery_fee_usd, total_usd, courier_fee_cents, paid_usd_cents, paid_lbp, customer_name, customer_phone, customer_notes, address, shop:shops(name, phone, whatsapp, address_text), items:order_items(name, quantity, unit, notes, voided), payments(tender, amount, currency, settled_at)';
   let { data, error } = await admin.from('orders').select(SEL).eq('id', id).maybeSingle();
   if (error && /driver_/.test(error.message)) ({ data, error } = await admin.from('orders').select(SEL.replace(/driver_(ack|picked|delivered)_at, /g, '')).eq('id', id).maybeSingle());
   const o = data as unknown as Row | null; if (!o) notFound();
@@ -32,7 +32,8 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
   const money = (usd: number) => { const parts = formatMoney(Number(usd), Number(o.fx_lbp_rate), tenant.display_currency ?? 'both', L).split(' · ');
     return <span className="money-stack">{parts.map((x, i) => <span key={i} dir="ltr" style={{ display: 'block', whiteSpace: 'nowrap', fontSize: i ? '0.85em' : undefined, opacity: i ? .75 : 1 }}>{x}</span>)}</span>; };
   const paidUsd = o.payments.filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Number(p.amount) / Number(o.fx_lbp_rate) : Number(p.amount) / 100), 0);
-  const due = Math.max(0, Number(o.total_usd) - paidUsd);
+  const due = Math.max(0, Math.round((Number(o.total_usd) - paidUsd) * 100) / 100);
+  const drvPays = o.payments.filter(p => p.tender === 'driver'); const withDriver = drvPays.reduce((s, p) => s + Number(p.amount) / 100, 0); const cashSettled = drvPays.length > 0 && drvPays.every(p => p.settled_at);
   const shopPhone = o.shop?.whatsapp || o.shop?.phone || ''; const map = mapUrl(o.address); const address = addrText(o.address);
   const when = (iso: string | null) => iso ? new Date(iso).toLocaleString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
   const Btn = ({ href, children, primary = false }: { href: string; children: React.ReactNode; primary?: boolean }) => <a className={`btn ${primary ? 'primary' : ''}`} href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" style={{ flex: 1, justifyContent: 'center' }}>{children}</a>;
@@ -46,21 +47,33 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
         const hm = (iso: string) => new Date(iso).toLocaleTimeString(ar ? 'ar-LB-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
         const Step = ({ done, label, at }: { done: boolean; label: string; at: string | null }) => <span className={`dstep ${done ? 'done' : ''}`}>{done ? '✓' : '○'} {label}{at ? ` ${hm(at)}` : ''}</span>;
         // both early taps are offered together: "got it" first (highlighted), "picked up" under it — he may skip straight to the second
-        type Tap = { action: string; s: string; label: string; hint: string };
+        type Tap = { action: string; s: string; c?: string; label: string; hint: string };
         const ackTap: Tap = { action: `/api/d/${o.id}/ack`, s: '', label: ar ? '✅ استلمت الرسالة — أنا قادم' : '✅ Got the message — coming', hint: ar ? 'ليعرف المحل أنك رأيت الطلب وستأتي لاستلامه.' : 'So the shop knows you saw it and are coming.' };
         const pickTap: Tap = { action: `/api/d/${o.id}/step`, s: 'picked', label: ar ? '📦 استلمت الطلب — أنا في الطريق' : '📦 Picked up — on my way', hint: ar ? 'عند خروجك من المحل ومعك الطلب. الزبون يُبلَّغ أن طلبه في الطريق.' : 'When you leave the shop with the order. The customer is told it is on its way.' };
-        const doneTap: Tap = { action: `/api/d/${o.id}/step`, s: 'delivered', label: ar ? '🏠 سلّمت الطلب للزبون' : '🏠 Handed to the customer', hint: due > 0 ? (ar ? 'بعد استلام المبلغ من الزبون.' : 'After collecting the amount.') : (ar ? 'عند تسليم الطلب.' : 'On handover.') };
-        const taps: Tap[] = o.driver_delivered_at ? [] : o.driver_picked_at ? [doneTap] : o.driver_ack_at ? [pickTap] : [ackTap, pickTap];
+        // "delivered" is final: the order closes on the shop's screen. With money to collect he says whether he has it.
+        const usd = `$${due.toFixed(2)}`;
+        const doneTap: Tap = { action: `/api/d/${o.id}/step`, s: 'delivered', c: '1', label: due > 0 ? (ar ? `🏠 سلّمت الطلب واستلمت ${usd}` : `🏠 Delivered — collected ${usd}`) : (ar ? '🏠 سلّمت الطلب للزبون' : '🏠 Handed to the customer'),
+          hint: due > 0 ? (ar ? 'يُقفل الطلب عند المحل ويُسجَّل المبلغ معك حتى تسلّمه للمحل.' : 'The order closes at the shop and the amount is recorded as with you until you hand it over.') : (ar ? 'يُقفل الطلب عند المحل.' : 'The order closes at the shop.') };
+        const noPayTap: Tap = { action: `/api/d/${o.id}/step`, s: 'delivered', c: '0', label: ar ? 'سلّمت الطلب — الزبون لم يدفع' : 'Delivered — the customer did not pay', hint: ar ? 'يُقفل الطلب ويبقى غير مدفوع؛ المحل يتابع مع الزبون.' : 'The order closes unpaid; the shop follows up with the customer.' };
+        const doneTaps: Tap[] = due > 0 ? [doneTap, noPayTap] : [doneTap];
+        const taps: Tap[] = o.driver_delivered_at ? [] : o.driver_picked_at ? doneTaps : o.driver_ack_at ? [pickTap] : [ackTap, pickTap];
         return <section className="card stack" style={{ gap: 8 }}>
           <div className="dsteps"><Step done={!!o.driver_ack_at} label={ar ? 'تأكيد' : 'Confirmed'} at={o.driver_ack_at} /><Step done={!!o.driver_picked_at} label={ar ? 'استلام' : 'Picked up'} at={o.driver_picked_at} /><Step done={!!o.driver_delivered_at} label={ar ? 'تسليم' : 'Delivered'} at={o.driver_delivered_at} /></div>
-          {taps.length ? taps.map((t, i) => <form key={t.s || 'ack'} method="post" action={t.action} className="stack" style={{ gap: 4 }}>
-              {t.s && <input type="hidden" name="s" value={t.s} />}
+          {taps.length ? taps.map((t, i) => <form key={(t.s || 'ack') + (t.c ?? '')} method="post" action={t.action} className="stack" style={{ gap: 4 }}>
+              {t.s && <input type="hidden" name="s" value={t.s} />}{t.c && <input type="hidden" name="c" value={t.c} />}
               <button className={`btn big ${i === 0 ? 'primary' : ''}`} type="submit" style={{ minHeight: i === 0 ? 64 : 52, fontSize: i === 0 ? 20 : 17 }}>{t.label}</button>
               <small className="muted">{t.hint}</small>
             </form>)
             : <div style={{ fontWeight: 700, color: '#166534' }}>✓ {ar ? 'تم التسليم — أعد المبلغ المحصّل للمحل.' : 'Delivered — bring the collected amount back to the shop.'}</div>}
         </section>;
       })()}
+      {/* closed by the driver (or the shop): what he holds for this order, and the way to his account */}
+      {o.driver_id && o.status === 'delivered' && <section className="card stack" style={{ gap: 6, background: '#ecfdf5' }}>
+        <strong style={{ color: '#166534' }}>✓ {ar ? 'تم التسليم' : 'Delivered'}{o.driver_delivered_at ? ` · ${when(o.driver_delivered_at)}` : ''}</strong>
+        {withDriver > 0 && <div>{ar ? '💵 المبلغ معك لهذا الطلب' : '💵 Cash with you for this order'}: <strong dir="ltr">${withDriver.toFixed(2)}</strong>{cashSettled ? <span className="muted"> · ✓ {ar ? 'سُلِّم للمحل' : 'handed to the shop'}</span> : <span> — {ar ? 'سلّمه للمحل' : 'hand it to the shop'}</span>}</div>}
+        {withDriver === 0 && due > 0 && <div className="muted">{ar ? 'الطلب غير مدفوع — المحل يتابع مع الزبون.' : 'Unpaid — the shop follows up with the customer.'}</div>}
+      </section>}
+      {o.driver_id && <a className="btn" href={`/d/me/${o.driver_id}`} style={{ justifyContent: 'center' }}>💰 {ar ? 'حسابي مع المحل' : 'My account with the shop'}</a>}
       {ack === 'err' && <div className="card bad">{ar ? 'تعذّر التأكيد — الطلب لم يعد مفتوحاً. اتصل بالمحل.' : 'Could not confirm — the order is no longer open. Call the shop.'}</div>}
 
       <section className="card stack">
@@ -89,7 +102,7 @@ export default async function DriverSheet({ params, searchParams }: { params: Pr
           {Number(o.courier_fee_cents) > 0 && <tr><td className="muted">{ar ? 'أجرة السائق' : 'Driver fee'}</td><td className="num muted">{money(Number(o.courier_fee_cents) / 100)}</td></tr>}
         </tbody></table>
       </section>
-      <p className="muted" style={{ fontSize: 12 }}>{ar ? 'تُحدَّث حالة الطلب من المحل عند التسليم.' : 'The shop marks the order delivered on handover.'}</p>
+      <p className="muted" style={{ fontSize: 12 }}>{ar ? 'عند ضغطك «سلّمت الطلب» يُقفل الطلب عند المحل. المحل يستطيع تصحيح المبلغ إن لزم.' : 'Your "delivered" tap closes the order at the shop. The shop can correct the amount if needed.'}</p>
     </main>
   );
 }

@@ -5,7 +5,7 @@ export type Localized = { ar?: string; en?: string };
 export type Currency = 'usd' | 'lbp';
 export type Channel = 'online' | 'walkin' | 'whatsapp' | 'phone';
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'rejected' | 'cancelled';
-export type Tender = 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'unpaid';
+export type Tender = 'cash_usd' | 'cash_lbp' | 'card' | 'wallet' | 'unpaid' | 'driver';   // 'driver' = collected by the shop's driver, not yet in the drawer (81)
 export type StockKind = 'purchase' | 'purchase_return' | 'sale' | 'return' | 'receive' | 'adjust' | 'count' | 'damaged' | 'reserve' | 'release';
 /** 'setup' = an association admin helping to configure a shop he is not a member of: items and settings only, no business data (schema 71). */
 export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
@@ -54,7 +54,7 @@ export interface OrderLine {
   price_currency: Currency; unit_price_cents: number; unit_price_lbp: number; discount_cents: number; line_total_cents: number;
   cost_cents?: number | null; notes?: string | null; voided: boolean; void_reason?: string | null;
 }
-export interface Payment { id: string; order_id: string; tender: Tender; amount: number; currency: Currency; reference?: string | null; unpaid_name?: string | null; unpaid_phone?: string | null; note?: string | null; at: string }
+export interface Payment { id: string; order_id: string; tender: Tender; amount: number; currency: Currency; reference?: string | null; unpaid_name?: string | null; unpaid_phone?: string | null; note?: string | null; settled_at?: string | null; at: string }
 export interface StockMove { id: string; shop_id: string; product_id: string; qty: number | string; kind: StockKind; ref_order_id?: string | null; ref_id?: string | null; unit_cost_cents?: number | null; note?: string | null; device_id?: string | null; user_id?: string | null; at: string }
 export interface Shift { id: string; shop_id: string; device_id: string; opened_by?: string | null; opened_at: string; float_usd_cents: number; float_lbp: number; closed_by?: string | null; closed_at?: string | null; counted_usd_cents?: number | null; counted_lbp?: number | null; expected_usd_cents?: number | null; expected_lbp?: number | null; diff_usd_cents?: number | null; diff_lbp?: number | null; note?: string | null }
 export interface CashMove { id: string; shift_id: string; kind: 'in' | 'out'; amount: number; currency: Currency; reason?: string | null; user_id?: string | null; at: string }
@@ -76,7 +76,7 @@ export interface ShopCustomer { id: string; shop_id: string; phone: string; phon
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 
 // ---- sync -------------------------------------------------------------------------------------------
-export type OpKind = 'order.merge' | 'order.info' | 'driver.payout' | 'order.driver_pay' | 'debt.unsettle' | 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert' | 'driver.delete';
+export type OpKind = 'order.merge' | 'order.info' | 'order.driver_cash' | 'driver.payout' | 'order.driver_pay' | 'debt.unsettle' | 'sale.commit' | 'sale.cancel' | 'order.status' | 'order.edit' | 'order.pay' | 'return.commit' | 'stock.move' | 'product.patch' | 'shift.open' | 'shift.close' | 'cash.move' | 'rate.set' | 'debt.settle' | 'order.delete' | 'customer.upsert' | 'supplier.upsert' | 'purchase.commit' | 'purchase.void' | 'supplier.pay' | 'customer.merge' | 'customer.delete' | 'supplier.merge' | 'supplier.delete' | 'order.needed' | 'driver.upsert' | 'driver.delete';
 export interface OutboxOp {
   seq?: number;                       // Dexie auto-increment (push order)
   op_id: string;                      // uuid v7

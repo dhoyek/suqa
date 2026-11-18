@@ -53,6 +53,7 @@ create table if not exists suqa.driver_payouts (
   from_drawer     boolean not null default false,     -- true → the POS also posted a cash-out on the open shift
   shift_id        uuid,
   collected_cents bigint not null default 0,          -- value of those deliveries (information: what he brought in)
+  cash_cents      bigint not null default 0,          -- 81: cash the driver collected himself and handed over in this settlement
   note            text,
   user_id         uuid,
   device_id       uuid,

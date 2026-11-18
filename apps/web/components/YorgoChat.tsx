@@ -153,7 +153,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
             <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={t('send')}>↑</button>
           </div>}
-          <p className="yorgo-foot muted">{t('disclaimer')}</p>
+          <p className="yorgo-foot muted">{t('disclaimer')} <a href="/legal/privacy">{locale === 'ar' ? 'الخصوصية' : 'Privacy'}</a></p>
         </div>
       </div>}
     </>

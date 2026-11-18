@@ -37,7 +37,9 @@ Plan: `docs/yorgo/PLAN.md` in the repo. Non-negotiables: the caller's own sign-i
 - **Prod switches:** Yorgo on; storefront chat on for signed-in customers; POS assistant on for Dekanet Jadde only. Caps $100/month overall, $10 per shop, $0.50 per shopper. First prod call worked (about $0.001).
 - **Dev switches:** Yorgo on; POS assistant on for Elie Grocery. Caps $10 / $3 / $0.50.
 - How it works: POS — owner and cashier paste a customer message and get a draft order to check and send to the cart (other roles can only ask about items). Storefront — "✨ Ask Yorgo" button, basket draft → normal cart → usual checkout. Sales from a POS draft carry `via_yorgo` in the audit log.
-- On dev, not yet on prod: the reply language (Arabic / Arabizi) is decided in code and passed to the model with each call.
+- Prod is at commit b0d2008 (reply language decided in code). **On dev, not yet on prod (step D):** Admin → ✨ Yorgo page (usage against caps, switches, per-shop toggles), 👍/👎 on answers, "names customers use" (a tapped choice becomes an alias suggestion the shop approves in the POS 💡 list), language note repeated after tool results.
+- **Script 78 (`yorgo_misses`, counted not-found phrases) is written and NOT applied anywhere** — waits for "approve 78".
+- Marketing kit (WhatsApp messages, video script, press note, poster brief): Claude doc "Yorgo Suqa — launch marketing kit". QR poster files not made yet.
 - No model training is involved: Yorgo reads the live catalog. What improves it is aliases on items and prompt rules, tested on dev with real (anonymised) customer messages.
 - API credits: Console organisation "Purple Digits", Ultra credit $200/month, no payment method on file (nothing can be charged). Keys `suqa-dev` and `suqa-prod` are in Netlify (Dan entered them).
 - Not tested yet: phones (Yorgo and install sheet), a finished POS sale from a draft and its audit entry, a basket spanning several shops.

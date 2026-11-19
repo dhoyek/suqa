@@ -5,7 +5,9 @@ import type { Usage } from './config';
 export type Block =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  // Sonnet 5.5's short notes between tool calls: handed back unchanged within the same exchange, never stored (core.ts)
+  | { type: 'thinking' | 'redacted_thinking'; thinking?: string; signature?: string; data?: string };
 export type Turn = { role: 'user' | 'assistant'; content: Block[] };
 export type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
 export type ModelRequest = { model: string; system: string; tools: ToolDef[]; messages: Turn[]; maxTokens: number };
@@ -25,7 +27,9 @@ export function anthropicClient(): ModelClient | null {
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: req.model, max_tokens: req.maxTokens,
-          thinking: { type: 'disabled' },      // these models think by default and thinking is billed as output inside max_tokens; item look-ups and drafts do not need it
+          // these models think by default and thinking is billed as output inside max_tokens; item look-ups and drafts do not need it.
+          // Sonnet 5.5 refuses "disabled": its lowest setting is "between_tools" (no thinking up front, short notes between tool calls).
+          ...(/^claude-sonnet-5/.test(req.model) ? { thinking: { type: 'between_tools' }, output_config: { effort: 'low' } } : { thinking: { type: 'disabled' } }),
           system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
           ...(tools.length ? { tools } : {}),
           messages: req.messages,
@@ -35,7 +39,7 @@ export function anthropicClient(): ModelClient | null {
       if (!res.ok) throw new Error(`model_http_${res.status}: ${(await res.text()).slice(0, 200)}`);
       const j = await res.json() as { content?: Block[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } };
       return {
-        content: (j.content ?? []).filter(b => b.type === 'text' || b.type === 'tool_use'),
+        content: (j.content ?? []).filter(b => b.type === 'text' || b.type === 'tool_use' || b.type === 'thinking' || b.type === 'redacted_thinking'),
         stop: j.stop_reason === 'tool_use' ? 'tool_use' : j.stop_reason === 'end_turn' ? 'end' : j.stop_reason === 'max_tokens' ? 'max_tokens' : 'other',
         usage: { input_tokens: j.usage?.input_tokens ?? 0, output_tokens: j.usage?.output_tokens ?? 0, cache_read_tokens: j.usage?.cache_read_input_tokens ?? 0, cache_write_tokens: j.usage?.cache_creation_input_tokens ?? 0 },
       };

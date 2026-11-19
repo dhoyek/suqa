@@ -60,7 +60,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
     for (let round = 0; ; round++) {
       const res = await d.model.create({ model, system, tools: tools.map(({ name, description, input_schema }) => ({ name, description, input_schema })), messages, maxTokens: d.cfg.maxTokens });
       const c = costOf(model, res.usage, d.cfg.prices); cost += c;
-      fresh.push({ role: 'assistant', content: res.content, model, ...res.usage, cost_usd: c });
+      fresh.push({ role: 'assistant', content: res.content.filter(b => b.type !== 'thinking' && b.type !== 'redacted_thinking'), model, ...res.usage, cost_usd: c });
       messages.push({ role: 'assistant', content: res.content });
       const calls = res.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');
       if (res.stop !== 'tool_use' || !calls.length) { reply = res.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').trim(); break; }

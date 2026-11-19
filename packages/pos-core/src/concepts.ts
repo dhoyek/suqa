@@ -52,7 +52,7 @@ export const CONCEPTS: Concept[] = [
     say: ['mkasarat', 'mkassarat', 'mokassarat', 'مكسرات', 'nuts', 'bzourat', 'bzurat', 'بزورات', 'pistache', 'fosto2', 'fostu2', 'فستق'],
     tags: ['nut', 'nuts', 'مكسرات', 'بزورات', 'pistach', 'فستق', 'لوز', 'almond', 'كاجو', 'cashew', 'بزر', 'peanut', 'noisette', 'بندق'] },
   { id: 'canned',
-    say: ['konserva', 'kounserva', 'conserve', 'conserves', 'معلبات', 'معلب', 'canned', 'cans'],
+    say: ['konserva', 'kounserva', 'conserve', 'conserves', 'معلبات', 'معلب', 'canned'],   // not "cans": a can of Pepsi is not tinned food
     tags: ['conserve', 'canned', 'معلب', 'tuna', 'تونة', 'تون', 'sardine', 'سردين', 'corned', 'luncheon', 'لانشون'] },
   { id: 'cleaning',
     say: ['tandif', 'tanzif', 'تنظيف', 'منظف', 'منظفات', 'cleaning', 'cleaner', 'detergent', 'detergents', 'nettoyage', 'mon7af'],

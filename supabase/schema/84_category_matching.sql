@@ -18,6 +18,9 @@
 --   Tags of four letters or fewer, and "=word", match a whole word only ("bon" = section "CHOBISC/GUM/BON", not "Bonduelle";
 --   "=water" not "watermelon"); "-word" keeps an item out ("-tuna": tuna in water is not water).
 --
+-- Speed (84b, after "pepsi cans" took 11 s on prod and the 3 s limit cut it): sections are folded once per search, a kind word
+-- is tested with one pattern per item, every step is computed once (materialized, not re-run per item), and the costly scoring by name runs only on the items the trigram pre-filter lets through.
+--
 -- Table changes: NEW table suqa.match_concepts (no grants: read only inside match_items). Idempotent: the seed upserts.
 
 select extensions.similarity('a', 'a') as pg_trgm_loaded;   -- load pg_trgm first (see 76)
@@ -74,7 +77,7 @@ insert into suqa.match_concepts (id, say, tags) values
    array['mkasarat', 'mkassarat', 'mokassarat', 'مكسرات', 'nuts', 'bzourat', 'bzurat', 'بزورات', 'pistache', 'fosto2', 'fostu2', 'فستق'],
    array['nut', 'nuts', 'مكسرات', 'بزورات', 'pistach', 'فستق', 'لوز', 'almond', 'كاجو', 'cashew', 'بزر', 'peanut', 'noisette', 'بندق']),
   ('canned',
-   array['konserva', 'kounserva', 'conserve', 'conserves', 'معلبات', 'معلب', 'canned', 'cans'],
+   array['konserva', 'kounserva', 'conserve', 'conserves', 'معلبات', 'معلب', 'canned'],
    array['conserve', 'canned', 'معلب', 'tuna', 'تونة', 'تون', 'sardine', 'سردين', 'corned', 'luncheon', 'لانشون']),
   ('cleaning',
    array['tandif', 'tanzif', 'تنظيف', 'منظف', 'منظفات', 'cleaning', 'cleaner', 'detergent', 'detergents', 'nettoyage', 'mon7af'],
@@ -101,65 +104,78 @@ begin
   if p_tenant is null or p_phrases is null or cardinality(p_phrases) = 0 then return; end if;
   if cardinality(p_phrases) > 40 then raise exception 'too_many_phrases'; end if;
   return query
-  with q as (
+  with q as materialized (
     select i::int as no, left(ph, 80) as raw, suqa.norm_text(left(ph, 80)) as qn
     from unnest(p_phrases) with ordinality as u(ph, i)
-  ), kw as (                     -- every way to say a kind, folded. By sound only for the Arabic-script names (one word, 3+ sounds), so an
+  ), kw as materialized (                     -- every way to say a kind, folded. By sound only for the Arabic-script names (one word, 3+ sounds), so an
                                  -- Arabizi word reaches its Arabic kind ("machroub" = مشروب) while English words must be written as listed
                                  -- (by sound "galaxy" would be "glaces" and "gillette" "gelato")
     select c.id, x.sn, case when x.sn ~ ' ' or x.sn !~ '[ء-ي]' or length(suqa.skel_text(x.sn)) < 3 then null else suqa.skel_text(x.sn) end as ss
     from suqa.match_concepts c, unnest(c.say) w, lateral (select suqa.norm_text(w) as sn) x where x.sn <> ''
-  ), kt as (                     -- "=word": a whole word whatever its length; "-word": keeps an item out of the kind
+  ), kt as materialized (                     -- "=word": a whole word whatever its length; "-word": keeps an item out of the kind
     select c.id, x.tn, x.neg, (x.eq or length(replace(x.tn, ' ', '')) <= 4) as whole
     from suqa.match_concepts c, unnest(c.tags) t,
          lateral (select suqa.norm_text(regexp_replace(t, '^[-=]+', '')) as tn, t like '-%' as neg, regexp_replace(t, '^-', '') like '=%' as eq) x
     where x.tn <> ''
-  ), qt as (
+  ), qt as materialized (
     select q.no, t.w, t.i::int as i, suqa.skel_text(t.w) as ws from q, unnest(string_to_array(q.qn, ' ')) with ordinality t(w, i) where t.w <> ''
-  ), hit as (                    -- word i of phrase no names a kind: as written, or the same sound (+ one sound: "machroubet")
+  ), hit as materialized (                    -- word i of phrase no names a kind: as written, or the same sound (+ one sound: "machroubet")
     select qt.no, qt.i, kw.id from qt join kw on kw.sn !~ ' '
        and (qt.w = kw.sn or (kw.ss is not null and (qt.ws = kw.ss or (left(qt.ws, length(kw.ss)) = kw.ss and length(qt.ws) - length(kw.ss) <= 1))))
     union
     select qt.no, qt.i, kw.id from qt join q on q.no = qt.no join kw on kw.sn ~ ' '
        and (' ' || q.qn || ' ') like ('% ' || kw.sn || ' %') and qt.w = any(string_to_array(kw.sn, ' '))
-  ), qx as (                     -- per phrase: does it name a kind, and the words left to match by name
+  ), wk as materialized (                     -- per kind word of a phrase: ONE pattern of its tags, and one of its exclusions (cheap to test per item)
+    select h.no, h.i,
+           '(' || string_agg(distinct case when kt.whole then ' ' || kt.tn || ' ' else ' ' || kt.tn end, '|') filter (where not kt.neg) || ')' as pos,
+           '(' || string_agg(distinct case when kt.whole then ' ' || kt.tn || ' ' else ' ' || kt.tn end, '|') filter (where kt.neg) || ')' as neg
+    from hit h join kt on kt.id = h.id group by h.no, h.i
+  ), qx as materialized (                     -- per phrase: does it name a kind, and the words left to match by name
     select q.no, q.raw, q.qn, suqa.skel_text(q.qn) as qs,
            exists (select 1 from hit h where h.no = q.no) as has_kind,
            coalesce((select string_agg(qt.w, ' ' order by qt.i) from qt where qt.no = q.no and not exists (select 1 from hit h where h.no = qt.no and h.i = qt.i)), '') as rn
     from q
-  ), cand as (
-    select qx.no, qx.raw, qx.qn, qx.qs, qx.has_kind, qx.rn, suqa.skel_text(qx.rn) as rs,
-           s.product_id as pid, s.norm, s.skel, s.name_ar, s.name_en, s.alias_norms,
-           ' ' || s.norm || ' ' || suqa.norm_text(p.section) || ' ' as txt
-    from qx
-    join suqa.product_search s on s.tenant_id = p_tenant and (p_shop is null or s.shop_id = p_shop)
-    join suqa.products p on p.id = s.product_id
-    where qx.qn <> ''
-      and (qx.qn <% s.norm or qx.qs <% s.skel or qx.qn = any(s.alias_norms) or qx.has_kind)   -- cheap trigram pre-filter (threshold set on the function)
-  ), scored as (
-    select c.no, c.raw, c.pid, c.rn, c.has_kind,
+  ), qy as materialized (
+    select qx.*, suqa.skel_text(qx.rn) as rs from qx
+  ), secs as materialized (                   -- each section folded once: a shop has a few dozen, not one per item
+    select x.sec, ' ' || suqa.norm_text(x.sec) || ' ' as sn
+    from (select distinct coalesce(p.section, '') as sec from suqa.products p
+          where p.tenant_id = p_tenant and (p_shop is null or p.shop_id = p_shop) and p.is_active) x
+  ), base as materialized (
+    select s.product_id as pid, s.norm, s.skel, s.name_ar, s.name_en, s.alias_norms, ' ' || s.norm || ' ' || x.sn as txt
+    from suqa.product_search s
+    join suqa.products p on p.id = s.product_id and p.is_active
+    join secs x on x.sec = coalesce(p.section, '')
+    where s.tenant_id = p_tenant and (p_shop is null or s.shop_id = p_shop)
+  ), cand0 as materialized (
+    select qy.no, qy.raw, qy.qn, qy.qs, qy.has_kind, qy.rn, qy.rs, b.pid, b.norm, b.skel, b.name_ar, b.name_en, b.alias_norms,
+           (qy.qn <% b.norm or qy.qs <% b.skel or qy.qn = any(b.alias_norms)
+            or (qy.has_kind and qy.rn <> '' and (qy.rn <% b.norm or qy.rs <% b.skel))) as by_name,   -- cheap trigram pre-filter
+           -- of the kind: for EVERY kind word of the phrase, the item carries one of its tags and none of its exclusions
+           (qy.has_kind and not exists (select 1 from wk where wk.no = qy.no
+                                          and not (b.txt ~ wk.pos and (wk.neg is null or b.txt !~ wk.neg)))) as of_kind
+    from qy cross join base b
+    where qy.qn <> ''
+  ), cand as materialized (
+    select * from cand0 where by_name or (of_kind and rn = '')   -- a phrase that is only a kind: every item of it
+  ), scored as materialized (
+    select c.no, c.raw, c.pid, c.rn, c.has_kind, c.of_kind,
            (c.qn = c.name_ar or c.qn = c.name_en or c.qn = any(c.alias_norms)) as exact,
-           -- of the kind: for EVERY kind word of the phrase, the item carries a tag of that kind ("بوظة شوكولا" = ice cream AND chocolate)
-           (c.has_kind and not exists (
-              select 1 from hit h where h.no = c.no and not exists (
-                select 1 from hit h2 where h2.no = h.no and h2.i = h.i
-                  and exists (select 1 from kt where kt.id = h2.id and not kt.neg
-                                and case when kt.whole then c.txt like ('% ' || kt.tn || ' %') else c.txt like ('% ' || kt.tn || '%') end)
-                  and not exists (select 1 from kt where kt.id = h2.id and kt.neg
-                                and case when kt.whole then c.txt like ('% ' || kt.tn || ' %') else c.txt like ('% ' || kt.tn || '%') end)))) as of_kind,
-           -- by name, the whole phrase (exactly as 76) …
-           (word_similarity(c.qn, c.norm) + (select avg(word_similarity(tok, c.norm)) from unnest(string_to_array(c.qn, ' ')) tok)) / 2 as w_norm,
-           case when length(replace(c.qs, ' ', '')) >= 3
-                then (word_similarity(c.qs, c.skel) + (select avg(word_similarity(tok, c.skel)) from unnest(string_to_array(c.qs, ' ')) tok)) / 2 else 0 end as w_skel,
-           greatest(similarity(c.qn, c.name_ar), similarity(c.qn, c.name_en),
-                    case when length(replace(c.qs, ' ', '')) >= 3
-                         then greatest(similarity(c.qs, suqa.skel_text(c.name_ar)), similarity(c.qs, suqa.skel_text(c.name_en))) * 0.9 else 0 end) as whole,
+           -- by name, the whole phrase (exactly as 76) — only for the items the pre-filter let through
+           case when not c.by_name then 0 else
+             (word_similarity(c.qn, c.norm) + (select avg(word_similarity(tok, c.norm)) from unnest(string_to_array(c.qn, ' ')) tok)) / 2 end as w_norm,
+           case when not c.by_name or length(replace(c.qs, ' ', '')) < 3 then 0 else
+             (word_similarity(c.qs, c.skel) + (select avg(word_similarity(tok, c.skel)) from unnest(string_to_array(c.qs, ' ')) tok)) / 2 end as w_skel,
+           case when not c.by_name then greatest(similarity(c.qn, c.name_ar), similarity(c.qn, c.name_en))   -- an item found only by its kind: a light tie-break
+                else greatest(similarity(c.qn, c.name_ar), similarity(c.qn, c.name_en),
+                              case when length(replace(c.qs, ' ', '')) >= 3
+                                   then greatest(similarity(c.qs, suqa.skel_text(c.name_ar)), similarity(c.qs, suqa.skel_text(c.name_en))) * 0.9 else 0 end) end as whole,
            -- … and the words left once the kind words are taken out ("machroub pepsi" → "pepsi")
-           case when c.rn = '' or not c.has_kind then 0 else
+           case when c.rn = '' or not c.of_kind then 0 else
              (word_similarity(c.rn, c.norm) + (select avg(word_similarity(tok, c.norm)) from unnest(string_to_array(c.rn, ' ')) tok)) / 2 end as r_norm,
-           case when c.rn = '' or not c.has_kind or length(replace(c.rs, ' ', '')) < 3 then 0 else
+           case when c.rn = '' or not c.of_kind or length(replace(c.rs, ' ', '')) < 3 then 0 else
              (word_similarity(c.rs, c.skel) + (select avg(word_similarity(tok, c.skel)) from unnest(string_to_array(c.rs, ' ')) tok)) / 2 end as r_skel,
-           case when c.rn = '' or not c.has_kind then 0 else
+           case when c.rn = '' or not c.of_kind then 0 else
              greatest(similarity(c.rn, c.name_ar), similarity(c.rn, c.name_en),
                       case when length(replace(c.rs, ' ', '')) >= 3
                            then greatest(similarity(c.rs, suqa.skel_text(c.name_ar)), similarity(c.rs, suqa.skel_text(c.name_en))) * 0.9 else 0 end) end as r_whole

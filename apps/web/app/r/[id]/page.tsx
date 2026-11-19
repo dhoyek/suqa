@@ -21,9 +21,10 @@ type Row = {
   placed_at: string; accepted_at: string | null; delivered_at: string | null; closed_at: string | null; needed_at: string | null; eta_minutes: number | null;
   reject_reason: string | null; cancel_reason: string | null; address: Record<string, unknown> | null; delivery_fee_usd: number | string | null;
   rate_lbp_per_usd: number; subtotal_cents: number; discount_cents: number; total_cents: number; total_lbp: number; change_usd_cents: number; change_lbp: number;
+  fx_lbp_rate?: number | string | null; subtotal_usd?: number | string | null; total_usd?: number | string | null;
   tenant_id: string; driver_id: string | null; courier_name: string | null;
   shop: { name: Record<string, string>; phone?: string | null; whatsapp?: string | null; receipt_footer?: string | null; address_text?: string | null } | null;
-  items: Array<{ name: Record<string, string>; quantity: number | string; unit?: string | null; notes?: string | null; price_currency: string; unit_price_cents: number; unit_price_lbp: number; discount_cents: number; line_total_cents: number; voided: boolean }>;
+  items: Array<{ name: Record<string, string>; quantity: number | string; unit?: string | null; notes?: string | null; price_currency: string; unit_price_cents: number; unit_price_lbp: number; discount_cents: number; line_total_cents: number; unit_price_usd?: number | string | null; line_total_usd?: number | string | null; voided: boolean }>;
   payments: Array<{ tender: string; amount: number; currency: string }>;
 };
 
@@ -31,9 +32,18 @@ export default async function OrderPublicPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const admin = supabaseAdmin(); const t = await getTenant();
   if (!admin || !/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const { data } = await admin.from('orders').select('id, number, local_number, status, channel, fulfillment, placed_at, accepted_at, delivered_at, closed_at, needed_at, eta_minutes, reject_reason, cancel_reason, address, delivery_fee_usd, rate_lbp_per_usd, subtotal_cents, discount_cents, total_cents, total_lbp, change_usd_cents, change_lbp, tenant_id, driver_id, courier_name, shop:shops(name, phone, whatsapp, receipt_footer, address_text), items:order_items(name, quantity, unit, notes, price_currency, unit_price_cents, unit_price_lbp, discount_cents, line_total_cents, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
+  const { data } = await admin.from('orders').select('id, number, local_number, status, channel, fulfillment, placed_at, accepted_at, delivered_at, closed_at, needed_at, eta_minutes, reject_reason, cancel_reason, address, delivery_fee_usd, rate_lbp_per_usd, subtotal_cents, discount_cents, total_cents, total_lbp, change_usd_cents, change_lbp, fx_lbp_rate, subtotal_usd, total_usd, tenant_id, driver_id, courier_name, shop:shops(name, phone, whatsapp, receipt_footer, address_text), items:order_items(name, quantity, unit, notes, price_currency, unit_price_cents, unit_price_lbp, discount_cents, line_total_cents, unit_price_usd, line_total_usd, voided), payments(tender, amount, currency)').eq('id', id).maybeSingle();
   const o = data as unknown as Row | null;
   if (!o || o.tenant_id !== t.id) notFound();
+  // Orders placed on the storefront are kept in dollars only (no cents, no till rate): fill them from the dollars at the
+  // market's rate, the same way the POS does on the device — otherwise this page showed $0.00, "paid" and $1 = 0.
+  const c = (v: unknown) => (v == null || v === '' ? null : Math.round(Number(v) * 100));
+  o.rate_lbp_per_usd = Number(o.rate_lbp_per_usd) || Number(o.fx_lbp_rate) || Number(t.fx_lbp_rate) || 0;
+  o.total_cents = o.total_cents ?? c(o.total_usd) ?? 0;
+  o.subtotal_cents = o.subtotal_cents ?? c(o.subtotal_usd) ?? 0;
+  o.discount_cents = o.discount_cents ?? 0;
+  o.total_lbp = o.total_lbp ?? (o.rate_lbp_per_usd ? Math.round((o.total_cents * o.rate_lbp_per_usd) / 100 / 1000) * 1000 : 0);
+  for (const i of o.items) { i.unit_price_cents = i.unit_price_cents ?? c(i.unit_price_usd) ?? 0; i.line_total_cents = i.line_total_cents ?? c(i.line_total_usd) ?? 0; i.discount_cents = i.discount_cents ?? 0; if (i.price_currency !== 'lbp' || !Number(i.unit_price_lbp)) i.price_currency = 'usd'; }
   // pickup: has he already told the shop he is coming? (column from schema 67; a database without it simply shows no button)
   const { data: cm, error: cmErr } = await admin.from('orders').select('customer_coming_at').eq('id', id).maybeSingle();
   const comingAt = (cm as { customer_coming_at?: string | null } | null)?.customer_coming_at ?? null;

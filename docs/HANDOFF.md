@@ -155,6 +155,8 @@ Message shorthand he uses: "approve NN", "release", "fix 21" (= fix order HS-000
 10. Local `supabase/test/smoke.sql` exited with code 3 on the last run — **not investigated** (may be pre-existing or fixture drift). Check before relying on it.
 11. Commit messages for 80/81/82 say "not applied" — they were applied later; trust this note and the database.
 12. Old branches `order-info-edit`, `driver-cash`, `lbp-price` are fully merged; safe to delete with Dan's OK. `milestone/2026-11-18-pre-yorgo` is a restore point (plus prod DB snapshot schema `suqa_snap_20261118`).
+14. **Shop page item limit (fixed on dev 2026-11-19, `3bb4b70`, not yet on prod):** the storefront read a shop's items in one API call, which Supabase caps at 1,000 rows — Dekanet Jadde (1,159 items) lost its last 159 (e.g. most water) from the page and the search. Now paged in `lib/public-data.ts`. Any new list query over a whole shop's items must page too (`.range`).
+15. **Short Arabizi words** ("miyah", "mayye", "may") rarely match: the matcher compares consonant skeletons and a one-consonant word (مياه → "m") is only matched as typed or through an item alias. Options given to Dan: add aliases, or teach the matcher (client `lib/item-match` / pos-core `item-match.ts` AND `suqa.norm_text/skel_text` in the DB must stay in step).
 13. Dev test data left: BAT-000105 and BAT-000084 closed by the test driver with a settlement; BAT-000108 pending test order with a lira item; Elie Grocery rate history has 89,600 then 89,500 entries.
 
 ---

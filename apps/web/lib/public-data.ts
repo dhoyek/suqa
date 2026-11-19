@@ -27,10 +27,20 @@ const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_curr
 /** Shop + its active products in one round-trip. Cached briefly; a merchant's availability toggle shows within ~15 s. */
 export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => {
   const sb = anon();
-  const { data } = await sb.from('shops').select(`*, products(${PRODUCT_COLS})`).eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active')
-    .eq('products.is_active', true).order('section', { referencedTable: 'products', ascending: true, nullsFirst: false }).order('sort_order', { referencedTable: 'products' }).maybeSingle();
+  const { data } = await sb.from('shops').select('*').eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active').maybeSingle();
   if (!data) return null;
-  const { products, ...shop } = data as Shop & { products: (Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string })[]; hide_online_when_zero?: boolean };
+  const shop = data as Shop & { hide_online_when_zero?: boolean };
+  // The database API answers at most 1,000 rows per request: a shop with more items (Dekanet Jadde has 1,159) lost the rest —
+  // they were neither shown nor found by the search. Read them page by page.
+  type Row = Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string };
+  const products: Row[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await sb.from('products').select(PRODUCT_COLS).eq('shop_id', shop.id).eq('is_active', true)
+      .order('section', { ascending: true, nullsFirst: false }).order('sort_order').order('id').range(from, from + 999);
+    if (error) throw error;
+    products.push(...((page ?? []) as unknown as Row[]));
+    if (!page || page.length < 1000) break;
+  }
   // POS stock (21_pos): tracked items show live availability (on hand − reserved); the shop may hide items at zero.
   // a lira-priced item is shown and charged at its own lira price (lib/price.ts)
   const list = (products ?? []).filter(p => p.visible_online !== false).map(p => ({ ...p, price_usd: usdPrice(p, fx) })).map(p => {

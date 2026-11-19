@@ -67,9 +67,12 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
         const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_basket').map(toDraft).filter((d): d is Draft => !!d);
+        // a new basket replaces the one still open on screen; clear_draft takes it away
+        const cleared = (r.drafts ?? []).some(d => d.kind === 'clear_draft');
+        if (cleared || drafts.length) setMsgs(ms => ms.map(x => (x.draft?.state === 'open' ? { ...x, draft: { ...x.draft, state: 'discarded' } } : x)));
         if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
-        if (!r.reply && !drafts.length) push({ from: 'note', text: t('error') });
+        if (!r.reply && !drafts.length && !cleared) push({ from: 'note', text: t('error') });
       } else if (r.status === 'paused') push({ from: 'note', text: t(r.reason === 'rate' ? 'rate' : r.reason === 'off' ? 'off' : 'cap') });
       else { if (r.conversation_id) conv.current = r.conversation_id; push({ from: 'note', text: t(r.error === 'unauthorized' ? 'signIn' : 'error') }); }
     } catch { push({ from: 'note', text: t('error') }); }

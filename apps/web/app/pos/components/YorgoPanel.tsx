@@ -56,9 +56,12 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
         const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_order').map(toDraft).filter((d): d is Draft => !!d);
+        // a new draft replaces the one still open on screen; clear_draft takes it away
+        const cleared = (r.drafts ?? []).some(d => d.kind === 'clear_draft');
+        if (cleared || drafts.length) setMsgs(ms => ms.map(x => (x.draft?.state === 'open' ? { ...x, draft: { ...x.draft, state: 'discarded' } } : x)));
         if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
-        if (!r.reply && !drafts.length) push({ from: 'note', text: pt('yorgoError', locale) });
+        if (!r.reply && !drafts.length && !cleared) push({ from: 'note', text: pt('yorgoError', locale) });
       } else if (r.status === 'paused') {
         push({ from: 'note', text: pt(r.reason === 'rate' ? 'yorgoRate' : r.reason === 'off' ? 'yorgoOff' : 'yorgoCap', locale) });
       } else {

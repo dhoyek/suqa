@@ -27,3 +27,24 @@ test('POS catalog search: exact first, then Arabizi / alias / typo, all offline'
   expect(names('ma2ouche')).toEqual(['Zaatar']); expect(names('mayy')).toEqual(['Water']); expect(names('khebez')).toEqual(['Arabic bread']); expect(names('bebsi')).toEqual(['Pepsi']);
   expect(names('pepsi')).toEqual(['Pepsi']); expect(names('zzzz')).toEqual([]);
 });
+
+test('kinds of item (84): "machroub" finds the drinks by their section, "miyah" the water', () => {
+  const pepsi = foldItem('بيبسي 2 ل', 'PEPSI 2L', 'SYRO JUS/SOFTDR'), jallab = foldItem('جلاب', 'JALLAB', 'SYRO JUS/SOFTDR'), water = foldItem('مياه ٦×١٫٥ ل', 'WATER 6x1.5L', 'WATER');
+  const milk = foldItem('روني حليب', 'RONI MILK', 'CHOBISC/GUM/BON'), choc = foldItem('روني شوكولا', 'RONI CHOCLT', 'CHOBISC/GUM/BON'), clean = foldItem('منظف أرض', 'FLOOR CLEANER', 'DETERG/ANTISEPT');
+  const m = (q: string) => makeMatcher(q)!;
+  for (const q of ['machroub', 'mashroub', 'machroubet', 'مشروبات', 'drinks']) {
+    expect([pepsi, jallab, water].every(m(q)), q).toBe(true); expect([milk, choc, clean].some(m(q)), q).toBe(false);
+  }
+  expect(m('machroub pepsi')(pepsi)).toBe(true); expect(m('machroub pepsi')(jallab)).toBe(false);
+  for (const q of ['miyah', 'may', 'mayye']) { expect(m(q)(water), q).toBe(true); expect(m(q)(milk), q).toBe(false); }
+  expect(m('chokola')(choc)).toBe(true); expect(m('tandif')(clean)).toBe(true);
+  expect(m('galaxy')(foldItem('GIANT CHOCOLATE ICE CREAM', 'ICE CREAM'))).toBe(false);
+});
+
+test('the kinds of item are the same in the till and in the database (84)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { CONCEPTS } = await import('./concepts');
+  const sql = readFileSync(new URL('../../../supabase/schema/84_category_matching.sql', import.meta.url), 'utf8');
+  const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]`;
+  for (const c of CONCEPTS) expect(sql.includes(`('${c.id}',\n   ${lit(c.say)},\n   ${lit(c.tags)})`), c.id).toBe(true);
+});

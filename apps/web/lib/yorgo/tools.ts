@@ -16,7 +16,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const matchItems: Tool = {
   name: 'match_items',
   description: 'Find real catalog items for what the person called them. Pass each item\'s words WITHOUT the quantity (Arabic, Arabizi or English as written). '
-    + 'Returns up to 4 candidates per phrase with score (1 = exact name or alias), price and availability. This is the ONLY source of item names and prices.',
+    + 'A kind of item works too ("machroub", "may", "chokola", "dekhen", "drinks"): it returns items of that kind (matched_on "kind"); with a name ("machroub pepsi") the name decides. '
+    + 'Returns up to 6 candidates per phrase with score (1 = exact name or alias), price and availability. This is the ONLY source of item names and prices.',
   input_schema: {
     type: 'object', additionalProperties: false, required: ['phrases'],
     properties: {
@@ -30,16 +31,16 @@ const matchItems: Tool = {
     if (!phrases.length) throw new Error('phrases_required');
     // a seller only ever searches their own shop, whatever the model asks for
     const shop = ctx.mode === 'seller' ? ctx.shopId : (typeof input.shop_id === 'string' && UUID.test(input.shop_id) ? input.shop_id : null);
-    const { data, error } = await ctx.sb.rpc('match_items', { p_tenant: ctx.tenantId, p_phrases: phrases, p_shop: shop, p_limit: 4 });
+    const { data, error } = await ctx.sb.rpc('match_items', { p_tenant: ctx.tenantId, p_phrases: phrases, p_shop: shop, p_limit: 6 });
     if (error) throw new Error(error.message);
-    type Row = { phrase_no: number; product_id: string; shop_id: string; shop_name: Record<string, string>; name: Record<string, string>; unit: string | null; price_usd: number | string; price_currency: string; price_lbp: number; is_available: boolean; available_days: number[] | null; score: number };
+    type Row = { phrase_no: number; matched_on?: string; product_id: string; shop_id: string; shop_name: Record<string, string>; name: Record<string, string>; unit: string | null; price_usd: number | string; price_currency: string; price_lbp: number; is_available: boolean; available_days: number[] | null; score: number };
     return phrases.map((phrase, i) => ({
       phrase,
       candidates: ((data as Row[] | null) ?? []).filter(r => r.phrase_no === i + 1).map(r => ({
         product_id: r.product_id, name_ar: r.name?.ar ?? null, name_en: r.name?.en ?? null,
         ...(ctx.mode === 'shopper' ? { shop_id: r.shop_id, shop: r.shop_name?.ar ?? r.shop_name?.en ?? null } : {}),
         price_usd: Math.round(usdPrice(r, ctx.mode === 'shopper' ? ctx.fx : null) * 100) / 100, ...(r.price_currency === 'lbp' ? { price_lbp: Number(r.price_lbp) } : {}), unit: r.unit,
-        available: r.is_available, ...(r.available_days?.length ? { only_on_weekdays: r.available_days } : {}), score: Math.round(r.score * 100) / 100,
+        available: r.is_available, ...(r.available_days?.length ? { only_on_weekdays: r.available_days } : {}), score: Math.round(r.score * 100) / 100, ...(r.matched_on === 'kind' ? { matched_on: 'kind' } : {}),
       })),
     }));
   },
@@ -125,7 +126,17 @@ const draftBasket: Tool = {
   },
 };
 
-const ALL: Tool[] = [matchItems, draftOrder, draftBasket];
+// Takes the open draft off the screen ("remove the options", "start over"). A new draft_order / draft_basket replaces it anyway.
+const clearDraft: Tool = {
+  name: 'clear_draft',
+  description: 'Remove the draft (basket or order, with its choices) that is open on the person\'s screen, when they ask to remove it or start over. '
+    + 'To change a draft, call the draft tool again instead: the new draft replaces the old one.',
+  input_schema: { type: 'object', additionalProperties: false, properties: {} },
+  modes: ['shopper', 'seller'], roles: ['owner', 'cashier'],
+  async run() { return { ok: true, removed_from_screen: true, draft: { cleared: true } }; },
+};
+
+const ALL: Tool[] = [matchItems, draftOrder, draftBasket, clearDraft];
 
 /** The tools this person may use. The model is never shown a tool outside this list, and a call to one is refused. */
 export function toolsFor(mode: Mode, role: Role | null): Tool[] {

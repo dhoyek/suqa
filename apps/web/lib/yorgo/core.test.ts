@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { detectScript, runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { askedLanguage, detectScript, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
 import { toolsFor } from './tools';
 
@@ -31,7 +31,7 @@ describe('yorgo core', () => {
     const r = await runTurn(deps, base);
     expect(r).toMatchObject({ status: 'ok', conversation_id: 'conv-1', reply: 'زعتر × 2 — 200,000 ل.ل.' });
     // the seller's own shop, whatever shop the model asked for; through the caller's client, never the service role
-    expect(calls.userRpc).toEqual([['match_items', { p_tenant: 't1', p_phrases: ['man2ouche za3tar'], p_shop: 'shop-A', p_limit: 4 }]]);
+    expect(calls.userRpc).toEqual([['match_items', { p_tenant: 't1', p_phrases: ['man2ouche za3tar'], p_shop: 'shop-A', p_limit: 6 }]]);
     expect(calls.adminRpc.map(c => c[0])).toEqual(['yorgo_gate', 'yorgo_record']);
     const rec = calls.adminRpc[1][1] as { p_messages: { role: string; cost_usd?: number }[]; p_shop: string };
     expect(rec.p_messages.map(m => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
@@ -94,7 +94,8 @@ describe('yorgo core', () => {
   it('tool list follows mode and role; an unknown model is priced at the dearest rate', () => {
     expect(toolsFor('seller', null)).toHaveLength(0);
     expect(toolsFor('seller', 'setup').map(t => t.name)).toEqual(['match_items']);
-    expect(toolsFor('shopper', null).map(t => t.name)).toEqual(['match_items', 'draft_basket']);
+    expect(toolsFor('seller', 'stock').map(t => t.name)).not.toContain('clear_draft'); expect(toolsFor('seller', 'cashier').map(t => t.name)).toContain('clear_draft');
+    expect(toolsFor('shopper', null).map(t => t.name)).toEqual(['match_items', 'draft_basket', 'clear_draft']);
     expect(costOf('some-new-model', usage, cfg.prices)).toBe(costOf('claude-sonnet-5-5', usage, cfg.prices));
     expect(costOf('claude-haiku-5-5', usage, cfg.prices)).toBeCloseTo((1000 * 0.10 + 100 * 0.50 + 2000 * 0.01) / 1e6, 9);
   });
@@ -141,5 +142,20 @@ describe('yorgo core', () => {
     expect(calls.model[0].messages.at(-1)!.content).toHaveLength(2);                                   // the words + the note
     const rec = calls.adminRpc[1][1] as { p_messages: { content: unknown[] }[] };
     expect(rec.p_messages[0].content).toEqual([{ type: 'text', text: base.message }]);                  // stored: the words only
+  });
+  it('replies in the language asked for, else English to English and Arabic to Arabic or Arabizi', () => {
+    expect(replyLanguage('bade khebez w labne')).toBe('ar');
+    expect(replyLanguage('عندك نسكافيه؟')).toBe('ar');
+    expect(replyLanguage('do you have pepsi')).toBe('en');
+    expect(askedLanguage('b3atle l text bil arabic')).toBe('ar');
+    expect(askedLanguage('b3atle bil arabe chou 3am bet2oul')).toBe('ar');
+    expect(askedLanguage('please answer in English')).toBe('en');
+    expect(askedLanguage('ktebe bil arabizi')).toBe('arabizi');
+    expect(askedLanguage('bade khebez 3arabe')).toBeNull();
+    // a request holds for the rest of the conversation, until another one
+    const h = [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'b3atle bil english' }] }, { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'ok' }] }];
+    expect(replyLanguage('fi pepsi?', h)).toBe('en');
+    expect(replyLanguage('la2 bil 3arabe', h)).toBe('ar');
+    expect(languageNote('fi pepsi?')).toMatch(/never mention it: write your reply in Arabic script/);
   });
 });

@@ -92,4 +92,35 @@ do $$ declare n int; v_id uuid; v_eggs uuid := (select id from cat where en = 'E
   if n <> 1 then raise exception 'approved alias is not an exact hit for the public'; end if;
 end $$;
 select 'yorgo match: access rules hold' as result;
+-- ---- 84: by kind of item. A small shop laid out like Dekanet Jadde: drinks in "SYRO JUS/SOFTDR", water in "WATER". ----
+insert into suqa.shops (id, tenant_id, slug, name, status, pos_enabled) values
+  ('7e570000-0000-4000-8000-0000000000c3', '7e570000-0000-4000-8000-000000000001', 'dekane', '{"en":"Dekane"}', 'active', true);
+insert into suqa.products (tenant_id, shop_id, name, section, price_usd, visible_online) values
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"بيبسي 2 ل","en":"PEPSI 2L"}', 'SYRO JUS/SOFTDR', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"ميرندا 2 ل","en":"MIRANDA 2L"}', 'SYRO JUS/SOFTDR', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"جلاب","en":"JALLAB"}', 'SYRO JUS/SOFTDR', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"مياه ٦×١٫٥ ل","en":"WATER 6x1.5L"}', 'WATER', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"روني حليب","en":"RONI MILK"}', 'CHOBISC/GUM/BON', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"روني شوكولا","en":"RONI CHOCLT"}', 'CHOBISC/GUM/BON', 1, true),
+  ('7e570000-0000-4000-8000-000000000001', '7e570000-0000-4000-8000-0000000000c3', '{"ar":"منظف أرض","en":"FLOOR CLEANER"}', 'DETERG/ANTISEPT', 1, true);
+do $$ declare t uuid := '7e570000-0000-4000-8000-000000000001'; sh uuid := '7e570000-0000-4000-8000-0000000000c3'; n int; v text; begin
+  -- every drink, nothing else, however "drinks" is written
+  foreach v in array array['machroub', 'mashroub', 'machroubet', 'مشروبات', 'drinks'] loop
+    if (select count(*) from suqa.match_items(t, array[v], sh, 10) m where m.name->>'en' in ('PEPSI 2L','MIRANDA 2L','JALLAB','WATER 6x1.5L')) <> 4
+       or exists (select 1 from suqa.match_items(t, array[v], sh, 10) m where m.name->>'en' in ('RONI MILK','RONI CHOCLT','FLOOR CLEANER')) then
+      raise exception '84: "%" should give the 4 drinks only', v; end if;
+  end loop;
+  -- a kind and a name: the name decides
+  select m.name->>'en' into v from suqa.match_items(t, array['machroub pepsi'], sh, 1) m;
+  if v is distinct from 'PEPSI 2L' then raise exception '84: machroub pepsi gave %', v; end if;
+  -- water, not milk
+  foreach v in array array['miyah', 'may', 'mayye'] loop
+    if (select m.name->>'en' from suqa.match_items(t, array[v], sh, 1) m) is distinct from 'WATER 6x1.5L'
+       or exists (select 1 from suqa.match_items(t, array[v], sh, 10) m where m.name->>'en' = 'RONI MILK') then raise exception '84: % should be water only', v; end if;
+  end loop;
+  if (select string_agg(m.name->>'en', ',') from suqa.match_items(t, array['chokola'], sh, 10) m) is distinct from 'RONI CHOCLT' then raise exception '84: chokola'; end if;
+  if (select string_agg(m.name->>'en', ',') from suqa.match_items(t, array['tandif'], sh, 10) m) is distinct from 'FLOOR CLEANER' then raise exception '84: tandif'; end if;
+  raise notice 'yorgo match: kinds of item hold';
+end $$;
+
 rollback;

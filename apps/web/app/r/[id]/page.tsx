@@ -138,7 +138,7 @@ export default async function OrderPublicPage({ params }: { params: Promise<{ id
 
         {!stopped && <section className={`card track-pay ${due > 0 ? 'due' : 'paid'}`}>
           {due > 0
-            ? <><span>💵 {pickup ? (ar ? 'المطلوب عند الاستلام' : 'To pay at pickup') : (ar ? 'المطلوب عند التسليم' : 'To pay on delivery')}</span><span className="money-stack" dir="ltr"><strong>{usd(due)}</strong><small>{lbp(Math.round((due * rate) / 100), ar)}</small></span></>
+            ? <><span>💵 {pickup ? (ar ? 'المطلوب عند الاستلام' : 'To pay at pickup') : (ar ? 'المطلوب عند التسليم' : 'To pay on delivery')}</span><span className="money-stack" dir="ltr"><strong>{usd(due)}</strong><small>{lbp(Math.round((due * rate) / 100 / 1000) * 1000, ar)}</small></span></>
             : <span>✓ {ar ? 'مدفوع' : 'Paid'}</span>}
         </section>}
       </>}

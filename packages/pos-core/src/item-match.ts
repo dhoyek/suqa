@@ -41,29 +41,38 @@ export type Folded = { norm: string; skels: string[] };
 export const foldItem = (...parts: (string | null | undefined)[]): Folded => { const all = parts.filter(Boolean).join(' '); return { norm: normText(all), skels: skelWords(all) }; };
 
 // ---- kinds of item (concepts.ts): "machroub" finds every drink, "machroub pepsi" the Pepsi ----
-type Kind = { say: { n: string; s: string | null }[]; tags: string[] };
-let kinds: Kind[] | null = null;
-const getKinds = (): Kind[] => kinds ??= CONCEPTS.map(c => ({
-  // by sound only towards the Arabic-script names (as in 84): "machroub" = مشروب, while "galaxy" is not "glaces"
-  say: c.say.map(w => { const n = normText(w); const sk = n.includes(' ') || !/[ء-ي]/.test(n) ? null : skelWord(n); return { n, s: sk && sk.length >= 3 ? sk : null }; }).filter(x => x.n),
-  tags: c.tags.map(normText).filter(Boolean),
-}));
-/** does an item's folded text carry one of these tags? short tags only as whole words, longer ones at the start of a word */
-export const hasTag = (norm: string, tags: string[]): boolean => {
-  const t = ` ${norm} `;
-  return tags.some(g => g.replace(/ /g, '').length <= 4 ? t.includes(` ${g} `) : t.includes(` ${g}`));
+type Tag = { t: string; whole: boolean };
+type Kind = { say: { n: string; s: string | null }[]; tags: Tag[]; not: Tag[] };
+const tagOf = (raw: string): Tag & { neg: boolean } => {
+  const neg = raw.startsWith('-'), eq = raw.replace(/^-/, '').startsWith('='); const t = normText(raw.replace(/^[-=]+/, ''));
+  return { t, neg, whole: eq || t.replace(/ /g, '').length <= 4 };
 };
-// by sound: the same word, or with one more sound at the end ("machroubet" = machroub + t, "chipset")
+let kinds: Kind[] | null = null;
+const getKinds = (): Kind[] => kinds ??= CONCEPTS.map(c => {
+  const tags = c.tags.map(tagOf).filter(x => x.t);
+  return {
+    // by sound only towards the Arabic-script names (as in 84): "machroub" = مشروب, while "galaxy" is not "glaces"
+    say: c.say.map(w => { const n = normText(w); const sk = n.includes(' ') || !/[ء-ي]/.test(n) ? null : skelWord(n); return { n, s: sk && sk.length >= 3 ? sk : null }; }).filter(x => x.n),
+    tags: tags.filter(x => !x.neg), not: tags.filter(x => x.neg),
+  };
+});
+const tagIn = (t: string, g: Tag) => (g.whole ? t.includes(` ${g.t} `) : t.includes(` ${g.t}`));
+/** is an item (its folded names, aliases and section) of one of these kinds? */
+export const ofKind = (norm: string, ks: Kind[]): boolean => {
+  const t = ` ${norm} `;
+  return ks.some(k => k.tags.some(g => tagIn(t, g)) && !k.not.some(g => tagIn(t, g)));
+};
+// by sound: the same word, or with one more sound at the end ("machroubet" = machroub + t)
 const sameKindWord = (w: string, say: string) => w === say || (w.startsWith(say) && w.length - say.length <= 1);
 /** the words of a search that name a kind of item, and the tags of those kinds; the other words are left as typed */
-export function kindsIn(qn: string): { words: Map<number, string[]>; rest: string[] } {
-  const ws = qn.split(' ').filter(Boolean); const words = new Map<number, string[]>();
+export function kindsIn(qn: string): { words: Map<number, Kind[]>; rest: string[] } {
+  const ws = qn.split(' ').filter(Boolean); const words = new Map<number, Kind[]>();
   for (const k of getKinds()) {
     for (const s of k.say) {
       if (s.n.includes(' ')) {                                                   // "soft drink", "ice cream": the words in a row
         const sw = s.n.split(' ');
-        for (let i = 0; i + sw.length <= ws.length; i++) if (sw.every((w, j) => ws[i + j] === w)) sw.forEach((_, j) => words.set(i + j, [...(words.get(i + j) ?? []), ...k.tags]));
-      } else ws.forEach((w, i) => { if (w === s.n || (s.s && sameKindWord(skelWord(w), s.s))) words.set(i, [...(words.get(i) ?? []), ...k.tags]); });
+        for (let i = 0; i + sw.length <= ws.length; i++) if (sw.every((w, j) => ws[i + j] === w)) sw.forEach((_, j) => words.set(i + j, [...(words.get(i + j) ?? []), k]));
+      } else ws.forEach((w, i) => { if (w === s.n || (s.s && sameKindWord(skelWord(w), s.s))) words.set(i, [...(words.get(i) ?? []), k]); });
     }
   }
   return { words, rest: ws.filter((_, i) => !words.has(i)) };
@@ -74,12 +83,13 @@ export function makeMatcher(query: string): ((item: Folded) => boolean) | null {
   const qn = normText(query);
   if (!qn) return null;
   const { words: kindWords } = kindsIn(qn);
-  const toks = qn.split(' ').map((w, i) => ({ w, s: skelWord(w), num: /^[0-9]+$/.test(w), tags: kindWords.get(i) ?? null }));
+  const toks = qn.split(' ').map((w, i) => ({ w, s: skelWord(w), num: /^[0-9]+$/.test(w), kinds: kindWords.get(i) ?? null }));
   return (item: Folded) => {
-    if (item.norm.includes(qn)) return true;                                   // as typed
+    if (!kindWords.size && item.norm.includes(qn)) return true;                // as typed
     return toks.every(t => {
+      // a word that names a kind of item: the items of that kind, or that word itself — no guessing by sound ("may" is not "mayonnaise")
+      if (t.kinds) return ` ${item.norm} `.includes(` ${t.w} `) || ofKind(item.norm, t.kinds);
       if (item.norm.includes(t.w)) return true;
-      if (t.tags && hasTag(item.norm, t.tags)) return true;                      // the word names a kind of item, and this item is of that kind
       if (t.num) return false;                                                   // a size or count must be there as written
       if (t.s.length < 2) return t.w.length <= 2;                                // "w", "b", "el" join words and carry no weight; a longer word with no sound to compare ("mayy", "zzzz") must be there as typed
       if (t.s.length === 2) return item.skels.includes(t.s);                     // two sounds: the same word only ("bira" = بيرة, not "bread")

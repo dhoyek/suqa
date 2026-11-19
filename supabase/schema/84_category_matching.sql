@@ -6,7 +6,7 @@
 --
 -- NOW:
 --   * suqa.match_concepts — the kinds of item and how people call them (say: Arabic, Arabizi, English, French) and the words that
---     mark an item of that kind in its name, aliases or section (tags). Seeded with 17 kinds; the same list is in
+--     mark an item of that kind in its name, aliases or section (tags). Seeded with 18 kinds; the same list is in
 --     packages/pos-core/src/concepts.ts for the storefront and till search (a test keeps the two in step).
 --   * suqa.match_items — a word of the phrase that names a kind (as written, or by sound for words of 3+ sounds:
 --     "mashroub", "machroubet", "مشروبات" = machroub) now stands for every item of that kind:
@@ -15,7 +15,8 @@
 --       "miyah" / "may"   → water, not milk;   "بوظة شوكولا" → items that are ice cream AND chocolate
 --     The score by name alone (76) is always kept as a floor, so nothing found before is lost; a phrase with no kind word is
 --     scored exactly as before. By sound only towards the Arabic names of a kind ("machroub" = مشروب). Same signature, same access.
---   Tags of four letters or fewer match a whole word only ("bon" = section "CHOBISC/GUM/BON", not "Bonduelle").
+--   Tags of four letters or fewer, and "=word", match a whole word only ("bon" = section "CHOBISC/GUM/BON", not "Bonduelle";
+--   "=water" not "watermelon"); "-word" keeps an item out ("-tuna": tuna in water is not water).
 --
 -- Table changes: NEW table suqa.match_concepts (no grants: read only inside match_items). Idempotent: the seed upserts.
 
@@ -35,13 +36,13 @@ revoke all on suqa.match_concepts from public, anon, authenticated;
 insert into suqa.match_concepts (id, say, tags) values
   ('drinks',
    array['machroub', 'mashroub', 'machroubet', 'mashroubet', 'mashroubat', 'مشروب', 'مشروبات', 'drink', 'drinks', 'beverage', 'beverages', 'boisson', 'boissons', 'soft drink', 'soft drinks', 'soda', 'sodas'],
-   array['drink', 'beverage', 'boisson', 'softdr', 'soft drink', 'soda', 'مشروب', 'مشروبات', 'jus', 'juice', 'عصير', 'water', 'مياه', 'ماء', 'cola', 'كولا', 'pepsi', 'بيبسي', '7up', 'سفن', 'miranda', 'mirinda', 'ميرندا', 'sprite', 'سبرايت', 'fanta', 'فانتا', 'energy', 'طاقة', 'red bull', 'ريد بول', 'ice tea', 'nestea', 'gazeuse', 'غازية', 'syro', 'sirop', 'شراب', 'جلاب', 'tamarind', 'تمر هندي']),
+   array['drink', 'beverage', 'boisson', 'softdr', 'soft drink', 'soda', 'مشروب', 'مشروبات', 'jus', 'juice', 'عصير', '=water', 'مياه', 'cola', 'كولا', 'pepsi', 'بيبسي', '7up', 'سفن', 'miranda', 'mirinda', 'ميرندا', 'sprite', 'سبرايت', 'fanta', 'فانتا', 'energy', 'طاقة', 'red bull', 'ريد بول', 'ice tea', 'nestea', 'gazeuse', 'غازية', 'syro', 'sirop', 'شراب', 'جلاب', 'tamarind', 'تمر هندي', '-vape', '-فيب', '-tuna', '-تونا', '-micellar', '-ميسيلار', '-vodka', '-فودكا']),
   ('water',
    array['may', 'mayy', 'maye', 'mayye', 'mayyeh', 'mai', 'miyah', 'miyeh', 'mia', 'مي', 'مية', 'مياه', 'ماء', 'water', 'eau'],
-   array['water', 'eau', 'مياه', 'ماء', 'sohat', 'صحة', 'tannourine', 'تنورين', 'sannine', 'صنين', 'rim', 'ريم', 'نسمة', 'aquafina', 'nestle pure']),
+   array['=water', 'مياه', 'sohat', 'صحة', 'tannourine', 'تنورين', 'sannine', 'صنين', 'rim', 'ريم', 'نسمة', 'aquafina', 'nestle pure', '-tuna', '-تونا', '-تونة', '-micellar', '-ميسيلار', '-gum', '-علكة', '-vape', '-فيب', '-wipes', '-محارم']),
   ('juice',
    array['3asir', '3aseer', 'asir', 'aseer', 'عصير', 'عصاير', 'juice', 'juices', 'jus'],
-   array['juice', 'jus', 'juicy', 'عصير', 'nectar', 'نكتار']),
+   array['juice', 'juicy', 'عصير', 'nectar', 'نكتار', 'jus de']),
   ('chocolate',
    array['chokola', 'chocola', 'shokola', 'chocolat', 'chocolate', 'chocolates', 'choco', 'شوكولا', 'شوكولاته', 'شوكولاتة', 'شوكولا'],
    array['choco', 'شوكولا', 'cacao', 'kitkat', 'kit kat', 'snickers', 'twix', 'mars', 'galaxy', 'kinder', 'nutella', 'bounty', 'milka', 'toblerone', 'unica', 'يونيكا']),
@@ -81,10 +82,12 @@ insert into suqa.match_concepts (id, say, tags) values
   ('tobacco',
    array['dekhen', 'dikhen', 'dukhan', 'دخان', 'cigarette', 'cigarettes', 'sigara', 'sigarat', 'سيجارة', 'سجائر', 'tabac', 'tobacco', 'ma3asel', 'معسل'],
    array['tabac', 'tobacco', 'cigarette', 'دخان', 'سجائر', 'سيجارة', 'marlboro', 'مارلبورو', 'cedars', 'سيدرز', 'winston', 'ونستون', 'gitanes', 'معسل', 'ma3sal', 'kent', 'davidoff']),
+  ('beer',
+   array['beer', 'beers', 'bira', 'birra', 'بيرة', 'بيره', 'biere', 'bière'],
+   array['beer', 'bira', 'بيرة', 'biere', 'almaza', 'ألمازة', 'ألمازا', 'heineken', 'هاينكن', 'efes', 'إفس', 'beirut beer', 'بيرة بيروت', 'corona', 'kronenbourg', 'stella']),
   ('alcohol',
-   array['alcohol', 'alcool', 'ka7oul', 'kohol', 'كحول', 'beer', 'bira', 'بيرة', 'wine', 'nbid', 'نبيذ', 'arak', '3ara2', 'عرق', 'whisky', 'whiskey', 'vodka'],
+   array['alcohol', 'alcool', 'ka7oul', 'kohol', 'كحول', 'wine', 'nbid', 'نبيذ', 'arak', '3ara2', 'عرق', 'whisky', 'whiskey', 'vodka'],
    array['alcool', 'alcohol', 'beer', 'bira', 'بيرة', 'wine', 'نبيذ', 'arak', 'عرق', 'whisk', 'ويسكي', 'vodka', 'فودكا', 'almaza', 'ألمازا', 'heineken', 'tequila'])
-
 on conflict (id) do update set say = excluded.say, tags = excluded.tags, updated_at = now();
 
 create or replace function suqa.match_items(p_tenant uuid, p_phrases text[], p_shop uuid default null, p_limit int default 5)
@@ -106,9 +109,11 @@ begin
                                  -- (by sound "galaxy" would be "glaces" and "gillette" "gelato")
     select c.id, x.sn, case when x.sn ~ ' ' or x.sn !~ '[ء-ي]' or length(suqa.skel_text(x.sn)) < 3 then null else suqa.skel_text(x.sn) end as ss
     from suqa.match_concepts c, unnest(c.say) w, lateral (select suqa.norm_text(w) as sn) x where x.sn <> ''
-  ), kt as (
-    select c.id, x.tn, length(replace(x.tn, ' ', '')) <= 4 as whole
-    from suqa.match_concepts c, unnest(c.tags) t, lateral (select suqa.norm_text(t) as tn) x where x.tn <> ''
+  ), kt as (                     -- "=word": a whole word whatever its length; "-word": keeps an item out of the kind
+    select c.id, x.tn, x.neg, (x.eq or length(replace(x.tn, ' ', '')) <= 4) as whole
+    from suqa.match_concepts c, unnest(c.tags) t,
+         lateral (select suqa.norm_text(regexp_replace(t, '^[-=]+', '')) as tn, t like '-%' as neg, regexp_replace(t, '^-', '') like '=%' as eq) x
+    where x.tn <> ''
   ), qt as (
     select q.no, t.w, t.i::int as i, suqa.skel_text(t.w) as ws from q, unnest(string_to_array(q.qn, ' ')) with ordinality t(w, i) where t.w <> ''
   ), hit as (                    -- word i of phrase no names a kind: as written, or the same sound (+ one sound: "machroubet")
@@ -137,8 +142,11 @@ begin
            -- of the kind: for EVERY kind word of the phrase, the item carries a tag of that kind ("بوظة شوكولا" = ice cream AND chocolate)
            (c.has_kind and not exists (
               select 1 from hit h where h.no = c.no and not exists (
-                select 1 from hit h2 join kt on kt.id = h2.id where h2.no = h.no and h2.i = h.i
-                  and case when kt.whole then c.txt like ('% ' || kt.tn || ' %') else c.txt like ('% ' || kt.tn || '%') end))) as of_kind,
+                select 1 from hit h2 where h2.no = h.no and h2.i = h.i
+                  and exists (select 1 from kt where kt.id = h2.id and not kt.neg
+                                and case when kt.whole then c.txt like ('% ' || kt.tn || ' %') else c.txt like ('% ' || kt.tn || '%') end)
+                  and not exists (select 1 from kt where kt.id = h2.id and kt.neg
+                                and case when kt.whole then c.txt like ('% ' || kt.tn || ' %') else c.txt like ('% ' || kt.tn || '%') end)))) as of_kind,
            -- by name, the whole phrase (exactly as 76) …
            (word_similarity(c.qn, c.norm) + (select avg(word_similarity(tok, c.norm)) from unnest(string_to_array(c.qn, ' ')) tok)) / 2 as w_norm,
            case when length(replace(c.qs, ' ', '')) >= 3

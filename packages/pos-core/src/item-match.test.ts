@@ -48,3 +48,13 @@ test('the kinds of item are the same in the till and in the database (84)', asyn
   const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]`;
   for (const c of CONCEPTS) expect(sql.includes(`('${c.id}',\n   ${lit(c.say)},\n   ${lit(c.tags)})`), c.id).toBe(true);
 });
+
+test('kinds: whole words and exclusions ("may" is not mayonnaise, tuna in water is not water)', () => {
+  const m = (q: string) => makeMatcher(q)!;
+  expect(m('may')(foldItem('مايونيز', 'Mayonnaise'))).toBe(false);
+  expect(m('miyah')(foldItem('تونا بالماء', 'Tuna in water'))).toBe(false);
+  expect(m('miyah')(foldItem('فيب بطيخ', 'vape watermalon', 'AIR REFRESHNING'))).toBe(false);
+  expect(m('machroub')(foldItem('فيب بطيخ', 'vape watermalon', 'AIR REFRESHNING'))).toBe(false);
+  expect(m('chokola')(foldItem('فواكه مشكّلة', 'fweke mchakale', 'AIR REFRESHNING'))).toBe(false);
+  expect(m('miyah')(foldItem('تنورين 1.5 ل', 'Tannourine 1.5L', 'WATER'))).toBe(true);
+});

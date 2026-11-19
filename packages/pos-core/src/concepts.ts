@@ -12,7 +12,9 @@ export type Concept = { id: string; say: string[]; tags: string[] };
 export const CONCEPTS: Concept[] = [
   { id: 'drinks',
     say: ['machroub', 'mashroub', 'machroubet', 'mashroubet', 'mashroubat', 'مشروب', 'مشروبات', 'drink', 'drinks', 'beverage', 'beverages', 'boisson', 'boissons', 'soft drink', 'soft drinks', 'soda', 'sodas'],
-    tags: ['drink', 'beverage', 'boisson', 'softdr', 'soft drink', 'soda', 'مشروب', 'مشروبات', 'jus', 'juice', 'عصير', '=water', 'مياه', 'cola', 'كولا', 'pepsi', 'بيبسي', '7up', 'سفن', 'miranda', 'mirinda', 'ميرندا', 'sprite', 'سبرايت', 'fanta', 'فانتا', 'energy', 'طاقة', 'red bull', 'ريد بول', 'ice tea', 'nestea', 'gazeuse', 'غازية', 'syro', 'sirop', 'شراب', 'جلاب', 'tamarind', 'تمر هندي', '-vape', '-فيب', '-tuna', '-تونا', '-micellar', '-ميسيلار', '-vodka', '-فودكا'] },
+    tags: ['drink', 'beverage', 'boisson', 'softdr', 'soft drink', 'soda', 'مشروب', 'مشروبات', 'jus', 'juice', 'عصير', '=water', 'مياه', 'cola', 'كولا', 'pepsi', 'بيبسي', '7up', 'سفن', 'miranda', 'mirinda', 'ميرندا', 'sprite', 'سبرايت', 'fanta', 'فانتا', 'energy', 'طاقة', 'red bull', 'ريد بول', 'ice tea', 'nestea', 'gazeuse', 'غازية', 'syro', 'sirop', 'شراب', 'جلاب', 'tamarind', 'تمر هندي', '-vape', '-فيب', '-tuna', '-تونا', '-micellar', '-ميسيلار',
+           // alcohol is asked for by its own words (bira, 3ara2, alcohol): "machroub" means soft drinks
+           '-alcool', '-alcohol', '-كحول', '-روحية', '-beer', '-bira', '-بيرة', '-arak', '-عرق', '-whisk', '-ويسكي', '-vodka', '-فودكا', '-wine', '-نبيذ', '-liqueur', '-ليكور', '-gin', '-rum'] },
   { id: 'water',
     say: ['may', 'mayy', 'maye', 'mayye', 'mayyeh', 'mai', 'miyah', 'miyeh', 'mia', 'مي', 'مية', 'مياه', 'ماء', 'water', 'eau'],
     tags: ['=water', 'مياه', 'sohat', 'صحة', 'tannourine', 'تنورين', 'sannine', 'صنين', 'rim', 'ريم', 'نسمة', 'aquafina', 'nestle pure', '-tuna', '-تونا', '-تونة', '-micellar', '-ميسيلار', '-gum', '-علكة', '-vape', '-فيب', '-wipes', '-محارم'] },

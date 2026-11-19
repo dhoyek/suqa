@@ -58,3 +58,9 @@ test('kinds: whole words and exclusions ("may" is not mayonnaise, tuna in water 
   expect(m('chokola')(foldItem('فواكه مشكّلة', 'fweke mchakale', 'AIR REFRESHNING'))).toBe(false);
   expect(m('miyah')(foldItem('تنورين 1.5 ل', 'Tannourine 1.5L', 'WATER'))).toBe(true);
 });
+
+test('"machroub" is soft drinks, not alcohol', () => {
+  const m = (q: string) => makeMatcher(q)!;
+  expect(m('machroub')(foldItem('بيرة ألمازة 50 سل', 'Almaza beer', 'ALCOOL مشروبات روحية'))).toBe(false);
+  expect(m('bira')(foldItem('بيرة ألمازة 50 سل', 'Almaza beer', 'ALCOOL'))).toBe(true);
+});

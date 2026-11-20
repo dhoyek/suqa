@@ -165,6 +165,8 @@ describe('yorgo core', () => {
     expect(isGarbled('Total: 5 Ø dollars')).toBe(false);                                   // one odd letter is not mojibake
     const mixed = `${moji('جهّزت لك السلة من فرن الضيعة')}\n\nSorry, that came out garbled. Let me write it cleanly:\n\n${good}`;
     expect(cleanReply(mixed)).toBe(good);
+    // the very text seen on prod (another code page: Ų, Ŗ, Ž)
+    expect(cleanReply(`ØŖŲ… ŲØ³ŲŲØ§Ø¡ ŲØ¨ØŲ Ø§ŲŲ\nŲŲ ŲŲŲ ŲŲŲ ŲŲŲŲ\nSorry, that came out garbled.\n${good}`)).toBe(good);
     // the model corrected itself in the same reply: one call, the clean part is shown and stored
     const a = rig({ replies: [say(mixed)] });
     const ra = await runTurn(a.deps, { ...base, mode: 'shopper', shopId: null, role: null });

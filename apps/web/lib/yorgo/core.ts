@@ -106,7 +106,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
 
 const GARBLED_NOTE = '(App note — follow it, never mention it: your last reply came out as broken characters. Write the same answer again in clean text, with no apology.)';
 /** Arabic that came out as mojibake ("Ø§Ù„Ø³Ù„Ø©" for "السلة"): UTF-8 bytes shown as Latin-1. Seen from the model itself (prod, 2026-11-20). */
-const MOJIBAKE = /[ØÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;
+const MOJIBAKE = /[ØŲ]|[ÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;   // Ø / Ų lead almost every broken Arabic letter, whatever the code page
 export function isGarbled(text: string): boolean { return (text.match(MOJIBAKE) ?? []).length >= 3; }
 /** The reply the person sees: lines of broken characters are dropped, and with them the model's own "sorry, that came out
  *  garbled, let me write it cleanly". A clean reply is returned untouched. */

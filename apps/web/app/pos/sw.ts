@@ -17,4 +17,23 @@ const serwist = new Serwist({
   fallbacks: { entries: [{ url: '/pos', matcher: ({ request }) => request.destination === 'document' }] },
 });
 self.addEventListener('message', e => { if (e.data?.type === 'SKIP_WAITING') void self.skipWaiting(); });
+// 🔔 new order (85_push_notifications): show it even when the POS is closed; tapping it opens (or brings forward) the POS on Talabat.
+self.addEventListener('push', e => {
+  let d: { title?: string; body?: string; url?: string; tag?: string } = {};
+  try { d = e.data?.json() ?? {}; } catch { d = { body: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Suqa', {
+    body: d.body ?? '', tag: d.tag, data: { url: d.url || '/pos#orders' }, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+    requireInteraction: true, renotify: !!d.tag, vibrate: [200, 100, 200],
+  } as NotificationOptions));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL((e.notification.data as { url?: string } | null)?.url || '/pos#orders', self.location.origin).href;
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const pos = wins.find(w => new URL(w.url).pathname.startsWith('/pos'));
+    if (pos) { await pos.focus(); try { await (pos as WindowClient).navigate(url); } catch { /* same page: the hash is enough */ } return; }
+    await self.clients.openWindow(url);
+  })());
+});
 serwist.addEventListeners();

@@ -25,6 +25,8 @@ import PurchasesView from './views/PurchasesView';
 
 export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'purchases' | 'shift' | 'reports' | 'drivers' | 'settings';
 const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'drivers', 'settings'];
+// the menu in groups by how often they are used: every day · people · goods · back office (a thin line between groups)
+const GROUP: Record<View, number> = { sell: 0, orders: 0, shift: 0, debts: 0, customers: 1, drivers: 1, items: 2, stock: 2, purchases: 2, reports: 3, settings: 3 };
 const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', stock: '📦', purchases: '🚚', shift: '💵', reports: '📊', drivers: '🛵', settings: '⚙️' };
 const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', stock: 'stock', purchases: 'purchasesNav', shift: 'shift', reports: 'reports', drivers: 'driversNav', settings: 'settings' };
 
@@ -34,7 +36,7 @@ export default function Shell(props: {
   updateReady: boolean; onUpdate: () => void; busyRef: MutableRefObject<boolean>; onLock: () => void; reindex: () => void; setLocale: (l: L) => void;
 }) {
   const { boot, locale, status, staff, updateReady, onUpdate, onLock } = props;
-  const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : 'sell'));
+  const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? (location.hash.slice(1) as View) : (() => { try { return localStorage.getItem('suqa-pos-start') === 'orders' ? 'orders' : 'sell'; } catch { return 'sell'; } })()));   // the device's start screen (Settings → this device)
   useEffect(() => { history.replaceState(null, '', `#${view}`); }, [view]);
   // the shop's approval PIN: cached copy first, then the server's (again whenever the till comes back online)
   useEffect(() => { void initApproval(props.sb, boot.db, boot.shop.id); }, [props.sb, boot]);
@@ -92,7 +94,7 @@ export default function Shell(props: {
         <button className="btn icon pos-menu-btn" aria-label="menu" onClick={() => setMenu(m => !m)}>☰{pendingCount > 0 && view !== 'orders' && <span className="nav-badge">{pendingCount}</span>}</button>
         <span className="pos-menu-current">{ICON[view]} {pt(LABEL[view], locale)}</span>
         <nav className={`pos-nav ${menu ? 'open' : ''}`} onClick={e => { if (e.target === e.currentTarget) setMenu(false); }}>
-          {viewsFor(roleOf(staff)).map(v => <button key={v} className={view === v ? 'active' : ''} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
+          {viewsFor(roleOf(staff)).map((v, i, all) => <button key={v} className={`${view === v ? 'active' : ''}${i > 0 && GROUP[all[i - 1]] !== GROUP[v] ? ' nav-group' : ''}`} onClick={() => go(v)}><span className="ico">{ICON[v]}{v === 'orders' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}</span><span>{pt(LABEL[v], locale)}</span></button>)}
         </nav>
         <div className="pos-status">
           {multiShop && <span className="pill pos-shopname" title={shopName}>🏪 {shopName}</span>}
@@ -106,6 +108,7 @@ export default function Shell(props: {
         </div>
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
+      {view === 'sell' && pendingCount > 0 && <button className="pos-neworder" onClick={() => setView('orders')}>🛎 {pendingCount} {pt('newOrderBanner', locale)} · {pt('openOrders', locale)} ›</button>}
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} yorgoCart={yorgoCart} onYorgoTaken={() => setYorgoCart(null)} />}
         {view === 'orders' && <OrdersView {...props} focus={orderFocus} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}

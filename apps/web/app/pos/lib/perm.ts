@@ -13,9 +13,10 @@ export const roleOf = (s: { role?: Staff['role'] } | null | undefined): PosRole 
  *  setup:   an association admin configuring the shop — items (no cost), shop settings, staff, devices. No sales, money or history.
  */
 const VIEWS_BY_ROLE: Record<PosRole, View[]> = {
-  owner:   ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'drivers', 'settings'],   // drivers: deliveries, pay and settlements — owner only
-  stock:   ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'settings'],
-  cashier: ['sell', 'orders', 'customers', 'debts', 'items', 'shift', 'settings'],
+  // in the order of the menu: every day · people · goods · back office
+  owner:   ['sell', 'orders', 'shift', 'debts', 'customers', 'drivers', 'items', 'stock', 'purchases', 'reports', 'settings'],   // drivers: deliveries, pay and settlements — owner only
+  stock:   ['sell', 'orders', 'shift', 'debts', 'customers', 'items', 'stock', 'purchases', 'reports', 'settings'],
+  cashier: ['sell', 'orders', 'shift', 'debts', 'customers', 'items', 'settings'],
   setup:   ['items', 'settings'],
 };
 export const viewsFor = (role: PosRole): View[] => VIEWS_BY_ROLE[role];

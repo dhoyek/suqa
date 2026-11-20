@@ -4,6 +4,7 @@ import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp'
 import { normalizePhone } from '@/lib/whatsapp';
 import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, shopCustomerComing, shopCustomerComingTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
+import { pushToShop } from '@/lib/server/push';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,17 @@ function authorized(req: Request): boolean {
 export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const e = (await req.json()) as OrderEvent & { phone_number_id?: string | null; order: { tenant_id?: string } };
-  if (!waConfigured()) return NextResponse.json({ skipped: 'whatsapp_not_configured' });
+  // 🔔 a new order from the storefront (or Yorgo): a notification on every device of the shop's staff that turned it on
+  // (85_push_notifications) — whether WhatsApp is set up or not. Orders typed into the shop's own POS do not notify the shop.
+  const push = e.event === 'order.created' && e.shop?.id && (!e.channel || e.channel === 'online')
+    ? (() => { const ar = (e.tenant?.default_locale ?? 'ar') === 'ar'; const n = e.items?.length ?? 0;
+        return pushToShop(e.shop!.id, {
+          title: ar ? `🛒 طلب جديد ${e.order.number}` : `🛒 New order ${e.order.number}`,
+          body: [e.order.customer_name, `$${Number(e.order.total_usd ?? 0).toFixed(2)}`, n ? (ar ? `${n} صنف` : `${n} items`) : '', e.order.fulfillment === 'pickup' ? (ar ? 'استلام' : 'pickup') : (ar ? 'توصيل' : 'delivery')].filter(Boolean).join(' · '),
+          url: `/pos#orders`, tag: `order-${e.order.id}`,
+        }).catch(err => { console.error('[push] order', (err as Error).message); return null; }); })()
+    : null;
+  if (!waConfigured()) { await push; return NextResponse.json({ skipped: 'whatsapp_not_configured' }); }
 
   const u = new URL(req.url);
   const origin = `https://${req.headers.get('x-forwarded-host') ?? u.host}`;
@@ -66,5 +77,6 @@ export async function POST(req: Request) {
     if (e.driver?.phone) to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
   }
   await Promise.all(sends);
+  await push;
   return NextResponse.json({ ok: true, sent: sends.length });
 }

@@ -358,6 +358,15 @@ const T = {
   invoice: { ar: 'فاتورة', en: 'Invoice' }, preview: { ar: 'معاينة', en: 'Preview' }, backToCart: { ar: 'رجوع للسلة', en: 'Back to cart' },
   waFromPhone: { ar: 'إرسال من واتساب هذا الجهاز', en: 'Send from this device\'s WhatsApp' }, sendInvoiceWa: { ar: 'إرسال الفاتورة على واتساب', en: 'Send invoice on WhatsApp' },
   saleDetails: { ar: 'تفاصيل البيع', en: 'Sale details' }, payments: { ar: 'الدفعات', en: 'Payments' },
+  // this device: start screen + notifications (2026-11-20)
+  startScreen: { ar: 'الشاشة الأولى عند الفتح', en: 'Opens on' },
+  pushTitle: { ar: 'إشعار عند وصول طلب جديد', en: 'Notify me of new orders' }, pushOn: { ar: 'مفعّل', en: 'On' }, pushTurnOff: { ar: 'إيقاف', en: 'Turn off' }, pushTurnOn: { ar: '🔔 تفعيل الإشعارات', en: '🔔 Turn on notifications' },
+  pushUnsupported: { ar: 'هذا المتصفح لا يدعم الإشعارات', en: 'This browser does not support notifications' },
+  pushBlocked: { ar: 'الإشعارات محظورة لهذا الموقع — فعّلها من إعدادات المتصفح', en: 'Notifications are blocked for this site — allow them in the browser settings' },
+  pushNotSetUp: { ar: 'الإشعارات غير مفعّلة على الموقع بعد', en: 'Notifications are not set up on the site yet' },
+  pushIosHome: { ar: 'على الآيفون: أضف نقطة البيع إلى الشاشة الرئيسية (مشاركة ← إضافة إلى الشاشة الرئيسية) ثم افتحها من هناك', en: 'On iPhone: add the POS to the home screen (Share → Add to Home Screen), then open it from there' },
+  pushNote: { ar: 'يصل الإشعار حتى لو كانت نقطة البيع مغلقة. الضغط عليه يفتح الطلبات.', en: 'It arrives even with the POS closed. Tapping it opens the orders.' },
+  newOrderBanner: { ar: 'طلب جديد', en: 'New order' }, openOrders: { ar: 'افتح الطلبات', en: 'Open orders' },
   // operations log (Reports → سجل العمليات)
   opsTab: { ar: 'سجل العمليات', en: 'Operations log' }, opsMoney: { ar: 'العمليات المالية', en: 'Money operations' }, opsAll: { ar: 'الكل', en: 'All' },
   opsEveryone: { ar: 'كل الموظفين', en: 'All staff' }, opsAllTypes: { ar: 'كل الأنواع', en: 'All types' }, opsFailed: { ar: 'مرفوضة', en: 'Rejected' },

@@ -9,6 +9,7 @@ import ShopSettings from '../components/ShopSettings';
 import ApprovalPinPanel from '../components/ApprovalPinPanel';
 import BackupPanel from '../components/BackupPanel';
 import RatePanel from '../components/RatePanel';
+import { pushDisable, pushEnable, pushState, type PushState } from '../lib/push';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
@@ -17,6 +18,15 @@ import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type Prin
 
 export default function SettingsView({ boot, sb, locale, status, staff, tick, setLocale }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number; setLocale: (l: L) => void }) {
   const [big, setBig] = useState(() => { try { return localStorage.getItem('suqa-pos-big') === '1'; } catch { return false; } });
+  // the screen this device opens on (Bay3 at the counter, Talabat on a phone that handles orders)
+  const [start, setStart] = useState<'sell' | 'orders'>(() => { try { return localStorage.getItem('suqa-pos-start') === 'orders' ? 'orders' : 'sell'; } catch { return 'sell'; } });
+  const pickStart = (v: 'sell' | 'orders') => { setStart(v); try { localStorage.setItem('suqa-pos-start', v); } catch {} };
+  // 🔔 notifications for new online orders on this device
+  const [push, setPush] = useState<PushState | null>(null); const [pushBusy, setPushBusy] = useState(false); const [pushErr, setPushErr] = useState<string | null>(null);
+  useEffect(() => { void pushState().then(setPush); }, []);
+  const togglePush = async () => { setPushBusy(true); setPushErr(null);
+    try { setPush(push === 'on' ? await pushDisable(sb) : await pushEnable(sb, boot.shop.id, `${staff.display_name || staff.full_name || ''} · ${navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? ''}`.slice(0, 80))); }
+    catch (e) { setPushErr((e as Error).message); } finally { setPushBusy(false); } };
   const toggleBig = (v: boolean) => { setBig(v); try { localStorage.setItem('suqa-pos-big', v ? '1' : '0'); } catch {} document.documentElement.classList.toggle('pos-big', v); };
   const [devices, setDevices] = useState<Device[]>([]);
   const [members, setMembers] = useState<Staff[]>([]);
@@ -117,6 +127,23 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         </div>
         <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('perDevice', locale)}</p>
       </section>
+      {!setup && <section className="card">
+        <h3 style={{ marginTop: 0 }}>📱 {pt('thisDevice', locale)}</h3>
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>{pt('startScreen', locale)}</span>
+            <div className="seg"><button className={start === 'sell' ? 'active' : ''} onClick={() => pickStart('sell')}>🧾 {pt('sell', locale)}</button><button className={start === 'orders' ? 'active' : ''} onClick={() => pickStart('orders')}>📥 {pt('ordersNav', locale)}</button></div>
+          </div>
+          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>🔔 {pt('pushTitle', locale)}</span>
+            {push === 'on' || push === 'off'
+              ? <button className={`btn ${push === 'on' ? '' : 'primary'}`} disabled={pushBusy} onClick={() => void togglePush()}>{push === 'on' ? `✓ ${pt('pushOn', locale)} · ${pt('pushTurnOff', locale)}` : pt('pushTurnOn', locale)}</button>
+              : <span className="muted" style={{ fontSize: 13 }}>{push ? pt(({ unsupported: 'pushUnsupported', blocked: 'pushBlocked', not_set_up: 'pushNotSetUp', ios_home: 'pushIosHome' } as const)[push], locale) : '…'}</span>}
+          </div>
+          {pushErr && <div className="bad" style={{ fontSize: 13 }}>{pushErr}</div>}
+          <p className="muted" style={{ fontSize: 12, margin: 0 }}>{pt('pushNote', locale)}</p>
+        </div>
+      </section>}
       <section className="card">
         <h3 style={{ marginTop: 0 }}>🖨 {pt('printer', locale)}</h3>
         <div className="stack" style={{ gap: 10 }}>

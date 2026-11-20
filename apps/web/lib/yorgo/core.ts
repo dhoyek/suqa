@@ -2,7 +2,7 @@
 // the WhatsApp webhook later. No provider or database client is created here: both are passed in, so this file is testable as is.
 import { costOf, type Usage, type YorgoConfig } from './config';
 import type { Block, ModelClient, Turn } from './model';
-import { systemPrompt } from './prompts';
+import { systemPrompt, type ShopHint } from './prompts';
 import { toolsFor, type Mode, type Role, type ToolCtx } from './tools';
 
 type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
@@ -16,9 +16,10 @@ export type TurnInput = {
   tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; userId: string; mode: Mode; channel: 'app' | 'pos' | 'whatsapp';
   shopId: string | null; shopName?: string | null; role: Role | null; conversationId: string | null; message: string;
   focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
+  shops?: ShopHint[];                                   // shopper mode: the open shops (public), so "min 3end el mir" finds its shop
 };
 export type TurnResult =
-  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number }
+  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[] }
   | { status: 'paused'; reason: 'off' | 'rate' | 'cap_global' | 'cap_shop' | 'cap_user' }
   | { status: 'error'; error: string; conversation_id?: string };
 
@@ -48,14 +49,14 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   // 3. the model, with the tools this person may use
   const tools = toolsFor(i.mode, i.role);
   const ctx: ToolCtx = { sb: d.sb, tenantId: i.tenant.id, mode: i.mode, shopId: i.shopId, role: i.role, fx: Number(i.tenant.fx_lbp_rate ?? 0) || null };
-  const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null });
+  const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null, shops: i.mode === 'shopper' ? i.shops : undefined });
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }] }];
   // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
   // The note travels with this call only; what is stored is the person's own words.
   const note = languageNote(text, history);
   const model = i.mode === 'shopper' ? d.cfg.modelShopper : d.cfg.modelDefault;      // customers get the stronger model (config.ts)
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
-  let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false;
+  let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false; const missed: string[] = [];
   try {
     for (let round = 0; ; round++) {
       const res = await d.model.create({ model, system, tools: tools.map(({ name, description, input_schema }) => ({ name, description, input_schema })), messages, maxTokens: d.cfg.maxTokens });
@@ -86,7 +87,14 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
           const out = await tool.run(call.input ?? {}, ctx) as Record<string, unknown> | unknown[];
           // a draft goes to the screen, not back to the model: the model only learns that it was shown
           if (out && !Array.isArray(out) && out.draft) { drafts.push({ kind: call.name, ...(out.draft as object) }); const { draft: _d, ...rest } = out; void _d; results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(rest) }); }
-          else results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(out) });
+          else {
+            // asked for and not in any catalog (nothing came back, or nothing close): counted for the shops, whatever the model then says
+            if (call.name === 'match_items' && Array.isArray(out)) for (const r of out as { phrase?: string; candidates?: { score?: number; matched_on?: string }[] }[]) {
+              const best = Math.max(0, ...(r.candidates ?? []).map(c => (c.matched_on === 'kind' ? 1 : Number(c.score) || 0)));
+              if (r.phrase && best < MISS_BELOW && !missed.some(m => m.toLowerCase() === r.phrase!.toLowerCase())) missed.push(r.phrase);
+            }
+            results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(out) });
+          }
         } catch (e) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify({ error: (e as Error).message.slice(0, 120) }), is_error: true });
         }
@@ -101,9 +109,10 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const id = typeof rec.data === 'string' ? rec.data : conversationId;
   if (rec.error || !id) return { status: 'error', error: 'record_failed' };
   if (failure || (!reply && !drafts.length)) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
-  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6 };
+  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6, missed };
 }
 
+const MISS_BELOW = 0.45;      // best candidate under this = the person asked for something no shop lists (yorgo_misses)
 const GARBLED_NOTE = '(App note — follow it, never mention it: your last reply came out as broken characters. Write the same answer again in clean text, with no apology.)';
 /** Arabic that came out as mojibake ("Ø§Ù„Ø³Ù„Ø©" for "السلة"): UTF-8 bytes shown as Latin-1. Seen from the model itself (prod, 2026-11-20). */
 const MOJIBAKE = /[ØŲ]|[ÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;   // Ø / Ų lead almost every broken Arabic letter, whatever the code page
@@ -160,7 +169,21 @@ export function replyLanguage(text: string, history: Turn[] = []): Lang {
   const asked = askedLanguage(text) ?? [...history].reverse().filter(h => h.role === 'user')
     .map(h => askedLanguage(h.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join(' '))).find(Boolean) ?? null;
   if (asked) return asked;
-  return detectScript(text) ? 'ar' : 'en';
+  const own = detectScript(text);
+  if (own) return 'ar';
+  // "eh", "1", "yes", "330ml" say nothing about the language: keep the one of their last real message
+  if (isShortNeutral(text)) for (const h of [...history].reverse()) {
+    if (h.role !== 'user') continue;
+    const t = h.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).filter(x => !x.startsWith('(App note')).join(' ').trim();
+    if (!t || isShortNeutral(t)) continue;
+    return detectScript(t) ? 'ar' : 'en';
+  }
+  return 'en';
+}
+/** a message too short to carry a language: up to three words, no Arabic letters, no Arabizi marker */
+export function isShortNeutral(text: string): boolean {
+  const t = text.trim();
+  return !!t && !/[\u0600-\u06FF]/.test(t) && detectScript(t) === null && t.split(/\s+/).length <= 3;
 }
 export function languageNote(text: string, history: Turn[] = []): string {
   const k = replyLanguage(text, history);

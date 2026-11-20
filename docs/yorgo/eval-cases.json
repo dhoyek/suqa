@@ -1,0 +1,25 @@
+{
+  "about": "Yorgo test set (shopper chat, dev catalog). Each case is one conversation; each step is one customer message with what a good answer looks like. Run with docs/yorgo/eval-runner.js before and after every change to the prompt, the tools or the model. Messages are modelled on real customer chats (prod, Nov 2026).",
+  "cases": [
+    { "id": "list-arabizi", "steps": [
+      { "say": "badde 2 pepsi w kis chips w rabtet khebez", "expect": { "lang": "ar", "draft": true, "question": false } } ] },
+    { "id": "ask-then-order-then-add", "steps": [
+      { "say": "fi 3endkon man2ouche za3tar?", "expect": { "lang": "ar" } },
+      { "say": "eh badde we7de min 3end jneinet baytna", "expect": { "lang": "ar", "draft": true, "question": false, "shop": "jneinet-baytna" } },
+      { "say": "zedle ice tea", "expect": { "lang": "ar", "draft": true, "add": true, "question": false } },
+      { "say": "eh", "expect": { "lang": "ar" } } ] },
+    { "id": "food-not-seeds", "steps": [
+      { "say": "badde za3tar", "expect": { "lang": "ar", "draft": true, "question": false, "not_shop": "abi-hanna-agriculture" } } ] },
+    { "id": "shop-by-owner-name", "steps": [
+      { "say": "badde salmon set min 3end tony", "expect": { "lang": "ar", "draft": true, "shop": "b4-sushi" } } ] },
+    { "id": "kind-browse", "steps": [
+      { "say": "chou fi machroubet?", "expect": { "lang": "ar", "draft": true, "short": true } } ] },
+    { "id": "english-pick-size", "steps": [
+      { "say": "do you have pepsi cans?", "expect": { "lang": "en" } },
+      { "say": "330ml", "expect": { "lang": "en", "draft": true, "question": false } } ] },
+    { "id": "not-found", "steps": [
+      { "say": "badde lawze naye", "expect": { "lang": "ar" } } ] },
+    { "id": "shop-by-name-arabizi", "steps": [
+      { "say": "badde panadol w vitamin c min 3end saydaliyet rita", "expect": { "lang": "ar", "draft": true, "question": false, "shop": "pharmacie-rita" } } ] }
+  ]
+}

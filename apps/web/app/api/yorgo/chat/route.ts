@@ -7,6 +7,7 @@ import { anthropicClient } from '@/lib/yorgo/model';
 import { yorgoConfig } from '@/lib/yorgo/config';
 import { runTurn } from '@/lib/yorgo/core';
 import type { Mode, Role } from '@/lib/yorgo/tools';
+import type { ShopHint } from '@/lib/yorgo/prompts';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -40,16 +41,26 @@ export async function POST(req: Request) {
     if (fs) focusShop = { id: fs.id as string, name: (fs.name as { ar?: string; en?: string })?.ar ?? (fs.name as { en?: string })?.en ?? '' };
   }
 
+  // the open shops, as the customer may call them (names + "known as"): public data, read with the caller's own access
+  let shops: ShopHint[] = [];
+  if (mode === 'shopper') {
+    const { data: sh } = await sb.from('shops').select('id,name,known_as,known_as_en,description').eq('tenant_id', tenant.id).eq('status', 'active').order('sort_order', { ascending: true }).limit(60);
+    type S = { id: string; name: { ar?: string; en?: string } | null; known_as: string | null; known_as_en: string | null; description: { ar?: string; en?: string } | null };
+    shops = ((sh as S[] | null) ?? []).map(x => ({ id: x.id, name_ar: x.name?.ar ?? null, name_en: x.name?.en ?? null, known_as: x.known_as, known_as_en: x.known_as_en, about: x.description?.en || x.description?.ar || null }));
+  }
+
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop },
+    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop, shops },
   );
   if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 
   // for 👍 / 👎: the id of the answer just stored (the person's own conversation; the switch-keeping client reads one number)
   const { data: last } = await admin.from('yorgo_messages').select('id').eq('conversation_id', result.conversation_id).eq('role', 'assistant').order('id', { ascending: false }).limit(1).maybeSingle();
   // what was asked for and not found, as a counted phrase only (script 78; quietly skipped where it is not installed)
-  const missed = (result.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []);
+  // (a draft's not_found, and what the search itself came back empty for — also when the answer was only text)
+  const missed = [...new Map([...(result.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []), ...result.missed].map(m => [m.trim().toLowerCase(), m.trim()])).values()].filter(Boolean).slice(0, 20);
   if (missed.length) await admin.rpc('yorgo_miss', { p_tenant: tenant.id, p_shop: mode === 'seller' ? shopId : focusShop?.id ?? null, p_phrases: missed }).then(() => null, () => null);
-  return NextResponse.json({ ...result, message_id: (last?.id as number | undefined) ?? null });
+  const { missed: _m, ...out } = result; void _m;
+  return NextResponse.json({ ...out, message_id: (last?.id as number | undefined) ?? null });
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { askedLanguage, cleanReply, detectScript, isGarbled, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { askedLanguage, cleanReply, detectScript, isGarbled, isShortNeutral, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
 import { toolsFor } from './tools';
+import { systemPrompt } from './prompts';
 
 const cfg = yorgoConfig({});
 const usage = { input_tokens: 1000, output_tokens: 100, cache_read_tokens: 2000, cache_write_tokens: 0 };
@@ -182,5 +183,36 @@ describe('yorgo core', () => {
     const c = rig({ replies: [say(moji(good)), say(moji(good))] });
     const rc = await runTurn(c.deps, { ...base, mode: 'shopper', shopId: null, role: null });
     expect(c.calls.model.length).toBe(2); expect(JSON.stringify(rc)).not.toContain('Ø');
+  });
+  it('a short answer keeps the conversation language; a shop is found by name or by who it is known as; an added item is marked add', async () => {
+    const said = (role: 'user' | 'assistant', text: string) => ({ role, content: [{ type: 'text' as const, text }] });
+    expect(isShortNeutral('eh')).toBe(true); expect(isShortNeutral('330ml')).toBe(true); expect(isShortNeutral('badde pepsi')).toBe(false);
+    const arabic = [said('user', 'b3atle eza 7ada 3endo laban 3iran'), said('assistant', 'إي، فرن الضيعة عندو.')];
+    expect(replyLanguage('eh', arabic)).toBe('ar'); expect(replyLanguage('1', arabic)).toBe('ar'); expect(replyLanguage('yes', arabic)).toBe('ar');
+    expect(replyLanguage('yes', [said('user', 'do you have pepsi cans'), said('assistant', 'Yes.')])).toBe('en');
+    expect(replyLanguage('1', [...arabic, said('user', 'eh'), said('assistant', 'تمام')])).toBe('ar');          // skips the earlier short answer too
+    expect(replyLanguage('can you find a store that sells pepsi', arabic)).toBe('en');                             // a real English sentence still switches
+    const p = systemPrompt({ brand: 'Suq', mode: 'shopper', role: null, shops: [{ id: 'shop-9', name_ar: 'فرن الضيعة', name_en: 'Furn El Dayaa', known_as: 'إيلي المير', known_as_en: 'Elie El Mir' }] });
+    expect(p).toContain('shop-9 | فرن الضيعة / Furn El Dayaa | known as: إيلي المير / Elie El Mir'); expect(p).toContain('add:true'); expect(p).not.toContain('how many would');
+    expect(systemPrompt({ brand: 'Suq', mode: 'seller', role: 'cashier', shopName: 'A' })).not.toContain('known as');
+    // add: the draft that reaches the screen says so, and options may be up to 6 for a customer
+    const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+    const t = toolsFor('shopper', null).find(x => x.name === 'draft_basket')!;
+    const rows = [1, 2, 3, 4, 5, 6].map(n => ({ id: id(n), name: { en: `P${n}` }, unit: null, price_usd: 1, is_available: true, is_active: true, visible_online: true, available_days: null, shops: { id: 's1', tenant_id: 't1', slug: 's', name: { en: 'S' }, whatsapp: null, min_order_usd: 0, pickup_enabled: true, status: 'active' } }));
+    const sb = { rpc: async () => ({ data: null, error: null }), from: () => ({ select: () => ({ in: async () => ({ data: rows, error: null }) }) }) };
+    const out = await t.run({ add: true, lines: [{ product_id: id(1), quantity: 2 }], choices: [{ phrase: 'pepsi', options: [1, 2, 3, 4, 5, 6].map(id) }] }, { sb, tenantId: 't1', mode: 'shopper', shopId: null, role: null }) as { draft: { add?: boolean; choices: { options: unknown[] }[] }; added_to_open_draft?: boolean };
+    expect(out.draft.add).toBe(true); expect(out.added_to_open_draft).toBe(true); expect(out.draft.choices[0].options.length).toBe(6);
+    expect(((await t.run({ lines: [{ product_id: id(1), quantity: 1 }] }, { sb, tenantId: 't1', mode: 'shopper', shopId: null, role: null })) as { draft: { add?: boolean } }).draft.add).toBeUndefined();
+  });
+  it('gives each candidate its category, and counts what no shop has even when the answer is only text', async () => {
+    const { deps, calls } = rig({ replies: [toolCall({ phrases: ['za3tar', 'lawze naye'] }), say('ما لقيت لوز ني.')] });
+    deps.sb.rpc = async () => ({ data: [
+      { phrase_no: 1, product_id: 'p1', shop_id: 's1', shop_name: { ar: 'أ' }, name: { en: 'Thyme seeds' }, unit: null, price_usd: 1, price_currency: 'usd', price_lbp: 0, is_available: true, available_days: null, score: 0.9 },
+      { phrase_no: 2, product_id: 'p2', shop_id: 's1', shop_name: { ar: 'أ' }, name: { en: 'Smoked almonds' }, unit: null, price_usd: 1, price_currency: 'usd', price_lbp: 0, is_available: true, available_days: null, score: 0.3 }], error: null });
+    const hist = { select: () => hist, eq: () => hist, order: () => hist, limit: async () => ({ data: [], error: null }) };
+    deps.sb.from = ((tb: string) => (tb === 'products' ? { select: () => ({ in: async () => ({ data: [{ id: 'p1', section: 'Seeds' }, { id: 'p2', section: 'Nuts' }], error: null }) }) } : hist)) as never;
+    const r = await runTurn(deps, { ...base, mode: 'shopper', shopId: null, role: null, message: 'badde za3tar w lawze naye' });
+    expect(r).toMatchObject({ status: 'ok', missed: ['lawze naye'] });
+    expect(JSON.stringify(calls.model[1].messages.at(-1))).toContain('\\"category\\":\\"Seeds\\"');
   });
 });

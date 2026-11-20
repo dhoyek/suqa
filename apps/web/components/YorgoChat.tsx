@@ -15,7 +15,7 @@ type Line = Item & { key: string; quantity: number; note?: string };
 type Choice = { key: string; phrase: string; quantity: number; options: Item[] };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
 type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
-type DraftIn = { kind?: string; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[] }[]; not_found?: string[] };
+type DraftIn = { kind?: string; add?: boolean; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[] }[]; not_found?: string[] };
 type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
 
 const T = {
@@ -66,13 +66,27 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
-        const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_basket').map(toDraft).filter((d): d is Draft => !!d);
+        const baskets = (r.drafts ?? []).filter(d => d.kind === 'draft_basket');
+        // "add" (zid, kamen): the new items join the basket still open on screen — the card moves down, under the answer
+        const stamp = `a${Date.now()}`;
+        const adds = baskets.filter(d => d.add).map(toDraft).filter((d): d is Draft => !!d);
+        const drafts = baskets.filter(d => !d.add).map(toDraft).filter((d): d is Draft => !!d);
         // a new basket replaces the one still open on screen; clear_draft takes it away
         const cleared = (r.drafts ?? []).some(d => d.kind === 'clear_draft');
         if (cleared || drafts.length) setMsgs(ms => ms.map(x => (x.draft?.state === 'open' ? { ...x, draft: { ...x.draft, state: 'discarded' } } : x)));
         if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
-        if (!r.reply && !drafts.length && !cleared) push({ from: 'note', text: t('error') });
+        if (adds.length) setMsgs(ms => {
+          const open = [...ms].reverse().find(x => x.draft?.state === 'open');
+          let d: Draft = open?.draft ?? { lines: [], choices: [], notFound: [], state: 'open' };
+          adds.forEach((a, n) => {
+            const lines = [...d.lines];
+            for (const l of a.lines) { const i = lines.findIndex(x => x.product_id === l.product_id); if (i >= 0) lines[i] = { ...lines[i], quantity: lines[i].quantity + l.quantity }; else lines.push({ ...l, key: `${stamp}${n}${l.key}` }); }
+            d = { ...d, lines, choices: [...d.choices, ...a.choices.map(c => ({ ...c, key: `${stamp}${n}${c.key}` }))], notFound: [...new Set([...d.notFound, ...a.notFound])] };
+          });
+          return [...ms.filter(x => x !== open), { id: ++seq.current, from: 'yorgo' as const, text: '', draft: d }];
+        });
+        if (!r.reply && !drafts.length && !adds.length && !cleared) push({ from: 'note', text: t('error') });
       } else if (r.status === 'paused') push({ from: 'note', text: t(r.reason === 'rate' ? 'rate' : r.reason === 'off' ? 'off' : 'cap') });
       else { if (r.conversation_id) conv.current = r.conversation_id; push({ from: 'note', text: t(r.error === 'unauthorized' ? 'signIn' : 'error') }); }
     } catch { push({ from: 'note', text: t('error') }); }

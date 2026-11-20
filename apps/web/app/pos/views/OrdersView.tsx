@@ -13,7 +13,7 @@ import Modal, { NumPad } from '../components/Modal';
 import PayDialog from '../components/PayDialog';
 import ReturnDialog from '../components/ReturnDialog';
 import OwnerPin from '../components/OwnerPin';
-import { useConfirm } from '@/components/ConfirmProvider';
+import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import OrderDetailSheet from '../components/OrderDetailSheet';
 import CustomerDialog from '../components/CustomerDialog';
 import { newOrderChime } from '../lib/chime';
@@ -78,6 +78,19 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
   };
   useEffect(() => { void reload(); }, [boot, tick, range]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 86: customers asking to cancel an order the shop already accepted — read online with every sync tick; answered here
+  const confirmCr = useConfirm(); const notifyMsg = useNotify(); const alertMsg = (m: string) => notifyMsg(m);
+  const [cancelReq, setCancelReq] = useState<Record<string, { reason: string | null; at: string }>>({});
+  useEffect(() => { if (!online) return; let on = true;
+    sb.from('order_cancel_requests').select('order_id, reason, created_at').eq('shop_id', boot.shop.id).eq('status', 'open').then(({ data }) => {
+      if (on) setCancelReq(Object.fromEntries(((data ?? []) as { order_id: string; reason: string | null; created_at: string }[]).map(r => [r.order_id, { reason: r.reason, at: r.created_at }]))); });
+    return () => { on = false; }; }, [sb, boot.shop.id, tick, online]);
+  const answerCancel = async (o: Order, accept: boolean) => {
+    if (!(await confirmCr(accept ? pt('crAcceptQ', locale) : pt('crRefuseQ', locale), { danger: accept }))) return;
+    const { error } = await sb.rpc('shop_answer_cancel', { p_order: o.id, p_accept: accept, p_note: null });
+    if (error) { alertMsg(error.message === 'has_payments' ? pt('crHasPayments', locale) : error.message); return; }
+    setCancelReq(r => { const n = { ...r }; delete n[o.id]; return n; }); boot.engine.poke();
+  };
   // opened from "order saved" on the sell screen: show that order (its column on, filters off), open it and bring it into view
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
@@ -187,6 +200,10 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
                   {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
+                  {cancelReq[o.id] && !o.closed_at && <div className="cancel-req" onClick={e => e.stopPropagation()}>
+                    <strong>⚠️ {pt('crAsked', locale)}</strong>{cancelReq[o.id].reason ? <span> — {cancelReq[o.id].reason}</span> : null}
+                    <div className="row" style={{ gap: 6, marginTop: 6 }}><button className="btn danger" onClick={() => void answerCancel(o, true)}>✕ {pt('crAccept', locale)}</button><button className="btn" onClick={() => void answerCancel(o, false)}>{pt('crRefuse', locale)}</button></div>
+                  </div>}
                   {mergeable[o.id] && <button className="merge-hint" onClick={e => { e.stopPropagation(); setDialog({ k: 'merge', o }); }}>🔗 {pt('omHint', locale)} ({mergeable[o.id].map(x => x.number ?? x.local_number).join('، ')}) — <u>{pt('mergeBtn', locale)}</u></button>}
                   {isStale(o) && <div className="stale-hint" onClick={e => e.stopPropagation()}>⏳ {pt('staleHint', locale)}
                     {NEXT[o.status].includes('cancelled') && <button className="link-btn" style={{ color: '#991b1b' }} onClick={() => act(o, 'cancelled')}>{pt('act_cancelled', locale)}</button>}</div>}

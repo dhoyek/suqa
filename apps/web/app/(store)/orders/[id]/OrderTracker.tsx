@@ -58,6 +58,27 @@ export default function OrderTracker(props: { initial: Row; extra: Extra; rating
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o.id, open]);
 
+  // 86: "I received it" closes the order; after the shop accepted, cancelling is a request the shop answers
+  const [req, setReq] = useState<{ status: 'open' | 'accepted' | 'refused'; shop_note: string | null } | null>(null);
+  useEffect(() => { sb.from('order_cancel_requests').select('status, shop_note').eq('order_id', o.id).maybeSingle().then(({ data }) => setReq((data as typeof req) ?? null)); }, [o.id, o.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inProgress = ['accepted', 'preparing', 'ready', 'out_for_delivery'].includes(o.status);
+  async function received() {
+    if (!(await ask(ar ? 'تأكيد: استلمت هذا الطلب؟' : 'Confirm: you received this order?'))) return;
+    setBusy(true);
+    const { error } = await sb.rpc('customer_confirm_received', { p_order: o.id });
+    setBusy(false);
+    if (error) notify(friendlyError(error, L)); else { setO(prev => ({ ...prev, status: 'delivered' })); router.refresh(); }
+  }
+  async function askCancel() {
+    if (!(await ask(ar ? 'طلب إلغاء هذا الطلب؟ المحل سيقبل أو يرفض.' : 'Ask the shop to cancel this order? The shop will accept or refuse.', { danger: true }))) return;
+    const reason = window.prompt(ar ? 'السبب (اختياري)' : 'Reason (optional)') ?? '';
+    setBusy(true);
+    const r = await fetch('/api/orders/cancel-request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ order_id: o.id, reason }) });
+    setBusy(false);
+    if (!r.ok) { const j = await r.json().catch(() => ({})) as { error?: string }; notify(friendlyError({ message: j.error ?? 'error' } as never, L)); return; }
+    setReq({ status: 'open', shop_note: null });
+  }
+
   async function cancel() {
     if (!(await ask(`${labels.cancelOrder}?`, { danger: true }))) return;
     const { error } = await sb.from('orders').update({ status: 'cancelled' }).eq('id', o.id);
@@ -198,7 +219,11 @@ export default function OrderTracker(props: { initial: Row; extra: Extra; rating
         <a className="btn" href={`/r/${o.id}`} target="_blank" rel="noreferrer">🧾 {ar ? 'الإيصال' : 'Receipt'}</a>
         <Link href={`/s/${o.shop.slug}`} className="btn">🏪 {ar ? 'صفحة المحل' : 'Shop page'}</Link>
         {o.status === 'pending' && <button className="btn danger" onClick={cancel}>{labels.cancelOrder}</button>}
+        {inProgress && <button className="btn primary" disabled={busy} onClick={received}>✅ {ar ? 'استلمت الطلب' : 'I received it'}</button>}
+        {inProgress && req?.status !== 'open' && <button className="btn danger" disabled={busy} onClick={askCancel}>{ar ? 'طلب إلغاء' : 'Ask to cancel'}</button>}
       </div>
+      {req?.status === 'open' && inProgress && <div className="card" style={{ background: '#fff7ed' }}>⏳ {ar ? 'طلبت إلغاء هذا الطلب — بانتظار رد المحل.' : 'You asked to cancel this order — waiting for the shop.'}</div>}
+      {req?.status === 'refused' && inProgress && <div className="card">✕ {ar ? 'رفض المحل الإلغاء' : 'The shop refused to cancel'}{req.shop_note ? ` — ${req.shop_note}` : ''}</div>}
     </div>
   );
 }

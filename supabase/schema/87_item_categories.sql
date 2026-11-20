@@ -163,7 +163,7 @@ from suqa.tenants t cross join (values
     (810, 'Burritos', 'بوريتو'),
     (820, 'Plates', 'صحون'),
     (830, 'Home Cooking', 'أكل بيتي'),
-    (840, 'Ready to Fry', 'جاهز للقلي'),
+    (840, 'Fried Food (Makali)', 'مقالي'),
     (850, 'Sushi Cakes', 'كيك سوشي'),
     (860, 'Sashimi', 'ساشيمي'),
     (870, 'Salmon Sets', 'سيتات سلمون'),
@@ -283,7 +283,7 @@ left join (values
     ('سناك', 'Snack'),
     ('صحن', 'Plates'),
     ('Akel', 'Home Cooking'),
-    ('Lil 2ale', 'Ready to Fry'),
+    ('Lil 2ale', 'Fried Food (Makali)'),
     ('AIR REFRESHNING', 'Other'),
     ('ALL TYPES', 'Other'),
     ('Others', 'Other')

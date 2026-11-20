@@ -25,9 +25,12 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
 const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_currency,price_lbp,unit,unit_kind,decimal_qty,image_url,is_available,is_active,sort_order,section,sku,vat,track_stock,visible_online,on_hand,reserved,available_days,aliases,created_at,updated_at';
 
 /** Shop + its active products in one round-trip. Cached briefly; a merchant's availability toggle shows within ~15 s. */
-export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => {
-  const sb = anon();
-  const { data } = await sb.from('shops').select('*').eq('tenant_id', tenantId).eq('slug', slug).eq('status', 'active').maybeSingle();
+type Db = ReturnType<typeof anon>;
+/** One shop and what its customers see of it. `anyStatus`: also a shop not active yet (the owner's / admin's preview). */
+async function loadShop(sb: Db, tenantId: string, slug: string, fx: number | string | null | undefined, anyStatus = false) {
+  let q = sb.from('shops').select('*').eq('tenant_id', tenantId).eq('slug', slug);
+  if (!anyStatus) q = q.eq('status', 'active');
+  const { data } = await q.maybeSingle();
   if (!data) return null;
   const shop = data as Shop & { hide_online_when_zero?: boolean };
   // The database API answers at most 1,000 rows per request: a shop with more items (Dekanet Jadde has 1,159) lost the rest —
@@ -49,7 +52,22 @@ export const getShopWithProducts = unstable_cache(async (tenantId: string, slug:
     return { ...p, available, is_available: p.is_available && available > 0 };
   }).filter(p => !(shop.hide_online_when_zero && p.available === 0));
   return { shop: shop as Shop, products: list };
-}, ['shop-page'], { revalidate: 15, tags: ['shop'] });
+}
+
+export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => loadShop(anon(), tenantId, slug, fx),
+  ['shop-page'], { revalidate: 15, tags: ['shop'] });
+
+/** Preview of a shop that is not active (pending / suspended…): only for the association's admins and the shop's own staff.
+ *  Read with the service key (the public key cannot see an inactive shop), never cached, and only after the caller is checked. */
+export async function getShopPreview(admin: Db, tenantId: string, slug: string, fx: number | string | null | undefined, userId: string) {
+  const res = await loadShop(admin, tenantId, slug, fx, true);
+  if (!res) return null;
+  const [{ data: tm }, { data: sm }] = await Promise.all([
+    admin.from('tenant_members').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
+    admin.from('shop_members').select('user_id').eq('shop_id', res.shop.id).eq('user_id', userId).maybeSingle(),
+  ]);
+  return tm || sm ? res : null;
+}
 
 /** Lowest and highest delivery fee among the zones a shop serves (its own fee for a zone replaces the zone's). null = no zones. */
 export const getShopFeeRange = unstable_cache(async (shopId: string): Promise<{ min: number; max: number } | null> => {

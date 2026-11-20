@@ -31,6 +31,8 @@ export default function ShopsList({ initial, locale: L, labels }: { initial: Row
           </div>
           <span className={`badge ${badge(s.status)}`}>{(SHOP_STATUS_LABEL[s.status] as any)[L]}</span>
           <div className="row">
+            {/* see the shop as its customers will, before approving it (preview of a shop that is not active) */}
+            <a className="btn ghost" href={`/s/${s.slug}`} target="_blank" rel="noreferrer" title={L === 'ar' ? 'معاينة المتجر' : 'Preview the store'}>👁</a>
             {s.status === 'pending' && <button className="btn ok" onClick={() => setStatus(s, 'active')}>{labels.approve}</button>}
             {s.status === 'active' && <button className="btn" onClick={() => setStatus(s, 'paused')}>{labels.pause}</button>}
             {s.status === 'paused' && <button className="btn ok" onClick={() => setStatus(s, 'active')}>{labels.resume}</button>}

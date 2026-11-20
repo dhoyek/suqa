@@ -142,7 +142,7 @@ export default function ShopEditor(props: {
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <ShareButton whatsapp className="btn primary" path={`/s/${shop.slug}`} locale={ar ? 'ar' : 'en'} label={ar ? 'إرسال عبر واتساب' : 'Send on WhatsApp'} text={text} />
             <ShareButton copy path={`/s/${shop.slug}`} locale={ar ? 'ar' : 'en'} label={ar ? 'مشاركة' : 'Share'} text={text} />
-            <a className="btn ghost" href={`/s/${shop.slug}`} target="_blank" rel="noreferrer">↗ {ar ? 'فتح المتجر' : 'Open store'}</a>
+            <a className="btn ghost" href={`/s/${shop.slug}`} target="_blank" rel="noreferrer">{shop.status === 'active' ? `↗ ${ar ? 'فتح المتجر' : 'Open store'}` : `👁 ${ar ? 'معاينة المتجر (غير مفعّل)' : 'Preview store (not active)'}`}</a>
           </div>
         </section>); })()}
       <section className="card stack">

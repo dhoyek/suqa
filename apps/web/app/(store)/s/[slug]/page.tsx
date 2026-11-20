@@ -1,7 +1,9 @@
 import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
-import { getShopWithProducts, getShopFeeRange } from '@/lib/public-data';
+import { getShopWithProducts, getShopFeeRange, getShopPreview } from '@/lib/public-data';
+import { supabaseServer } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { ui } from '@/lib/ui-text';
 import { isOpenNow, reopenLabel } from '@/lib/hours';
 import { t as tr } from '@suqa/shared';
@@ -15,7 +17,14 @@ export const dynamic = 'force-dynamic';
 export default async function ShopPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const tenant = await getTenant();
-  const res = await getShopWithProducts(tenant.id, slug, tenant.fx_lbp_rate);
+  let res = await getShopWithProducts(tenant.id, slug, tenant.fx_lbp_rate);
+  // not active (pending, suspended…): customers get "not found"; the association's admins and the shop's own staff get a preview
+  let preview = false;
+  if (!res) {
+    const { data: { user } } = await (await supabaseServer()).auth.getUser();
+    const admin = supabaseAdmin();
+    if (user && admin) { res = await getShopPreview(admin as never, tenant.id, slug, tenant.fx_lbp_rate, user.id); preview = !!res; }
+  }
   if (!res) notFound();
   const { shop: s, products } = res;
   const L = await getLocale(tenant);
@@ -29,6 +38,9 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
 
   return (
     <>
+      {preview && <div className="card" style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', marginBottom: 10 }}>
+        👁 <strong>{ar ? 'معاينة' : 'Preview'}</strong> — {ar ? `هذا المتجر غير مفعّل (${({ pending: 'قيد المراجعة', paused: 'متوقف مؤقتاً', disabled: 'معطّل' } as Record<string, string>)[String(s.status)] ?? s.status}): الزبائن لا يرونه ولا يمكنهم الطلب منه. تراه أنت لأنك مدير أو من فريق المتجر.` : `This shop is not active (${s.status}): customers cannot see it or order from it. You see it because you are an admin or on the shop's team.`}
+      </div>}
       <header style={{ marginBottom: 12 }}>
         {s.cover_url && <img className="shop-cover" src={s.cover_url} alt="" />}
         <div className="row" style={{ gap: 12, alignItems: 'center' }}>

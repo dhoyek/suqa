@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { hashPin, isValidPin, type Conflict, type Device, type OutboxOp, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { hashPin, isValidPin, type CatalogIndex, type Conflict, type Device, type OutboxOp, type Staff, type SyncStatus } from '@suqa/pos-core';
 import Modal from '../components/Modal';
 import StaffPanel from '../components/StaffPanel';
 import DriversPanel from '../components/DriversPanel';
@@ -9,6 +9,7 @@ import ShopSettings from '../components/ShopSettings';
 import ApprovalPinPanel from '../components/ApprovalPinPanel';
 import BackupPanel from '../components/BackupPanel';
 import RatePanel from '../components/RatePanel';
+import SectionOrderPanel from '../components/SectionOrderPanel';
 import { pushDisable, pushEnable, pushState, type PushState } from '../lib/push';
 import { pt, type L, type Key } from '../i18n';
 import { APP_VERSION, fmtTime, type Booted } from '../lib/boot';
@@ -16,7 +17,7 @@ import { can, roleOf } from '../lib/perm';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { doPrint, loadPrintSettings, savePrintSettings, testPrintHtml, type PrintSettings } from '../lib/print';
 
-export default function SettingsView({ boot, sb, locale, status, staff, tick, setLocale }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number; setLocale: (l: L) => void }) {
+export default function SettingsView({ boot, sb, locale, status, staff, tick, setLocale, index, reindex }: { boot: Booted; sb: SupabaseClient; locale: L; status: SyncStatus | null; staff: Staff; tick: number; setLocale: (l: L) => void; index: CatalogIndex; reindex: () => void }) {
   const [big, setBig] = useState(() => { try { return localStorage.getItem('suqa-pos-big') === '1'; } catch { return false; } });
   // the screen this device opens on (Bay3 at the counter, Talabat on a phone that handles orders)
   const [start, setStart] = useState<'sell' | 'orders'>(() => { try { return localStorage.getItem('suqa-pos-start') === 'orders' ? 'orders' : 'sell'; } catch { return 'sell'; } });
@@ -127,6 +128,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         </div>
         <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('perDevice', locale)}</p>
       </section>
+      {['owner', 'stock', 'setup'].includes(role) && <SectionOrderPanel boot={boot} sb={sb} locale={locale} index={index} online={online} onSaved={reindex} />}
       {!setup && <section className="card">
         <h3 style={{ marginTop: 0 }}>📱 {pt('thisDevice', locale)}</h3>
         <div className="stack" style={{ gap: 12 }}>

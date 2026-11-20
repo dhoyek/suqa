@@ -1,7 +1,7 @@
 import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
-import { getShopWithProducts, getShopFeeRange, getShopPreview, getItemCategories } from '@/lib/public-data';
+import { getShopWithProducts, getShopFeeRange, getShopPreview, getItemCategories, getShopSectionOrder } from '@/lib/public-data';
 import { supabaseServer } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { ui } from '@/lib/ui-text';
@@ -28,8 +28,11 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
   if (!res) notFound();
   const { shop: s } = res;
   // item categories are shared by all shops (87): their names in both languages, and their order on the page
-  const icats = await getItemCategories(tenant.id);
-  const catOrder = new Map(icats.map((c, i) => [c.key, i]));
+  // … in the shop's own order when it set one (89): its listed sections first, the rest after them in the shared order
+  const [icats, own] = await Promise.all([getItemCategories(tenant.id), getShopSectionOrder(s.id)]);
+  const ownAt = new Map(own.map((k, i) => [k, i]));
+  const catOrder = new Map([...icats].map((c, i) => [c.key, ownAt.has(c.key) ? ownAt.get(c.key)! : 1e5 + i]));
+  for (const [k, i] of ownAt) if (!catOrder.has(k)) catOrder.set(k, i);
   const products = icats.length ? [...res.products].sort((a, b) => (catOrder.get(a.section ?? '') ?? 1e6) - (catOrder.get(b.section ?? '') ?? 1e6)) : res.products;   // stable: the order inside a category is kept
   const sectionNames = { ...((s as unknown as { section_names?: Record<string, { ar?: string; en?: string }> | null }).section_names ?? {}), ...Object.fromEntries(icats.map(c => [c.key, c.name])) };
   const L = await getLocale(tenant);

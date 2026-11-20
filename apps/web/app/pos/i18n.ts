@@ -67,6 +67,8 @@ const T = {
   // settings
   devices: { ar: 'الأجهزة', en: 'Devices' },
   thisDevice: { ar: 'هذا الجهاز', en: 'this device' },
+  sectionOrder: { ar: 'ترتيب الأقسام', en: 'Section order' }, sectionOrderHint: { ar: 'رتّب أقسام متجرك كما تريد أن تظهر في صفحة المتجر وفي أزرار البيع. بدون ترتيب خاص تتبع ترتيب الجمعية.', en: 'Put your shop\'s sections in the order you want on your store page and on the sale chips. Without your own order they follow the association\'s.' },
+  sectionOrderReset: { ar: 'العودة إلى ترتيب الجمعية', en: 'Back to the association\'s order' }, needsInternet: { ar: 'يحتاج إنترنت', en: 'Needs internet' },
   revoke: { ar: 'إلغاء الجهاز', en: 'Revoke' },
   revokeConfirm: { ar: 'إلغاء هذا الجهاز؟ سيتوقف عن المزامنة وتُمسح بياناته المحلية عند اتصاله.', en: 'Revoke this device? It stops syncing and wipes its local data on next connect.' },
   revokedAt: { ar: 'مُلغى', en: 'revoked' },

@@ -100,10 +100,10 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
   const reloadIndex = async (b: Booted) => {
     const [ps, bs, cs, qs] = await Promise.all([b.db.products.toArray(), b.db.barcodes.toArray(), b.db.categories.toArray(), b.db.quickButtons.toArray()]);
     index.current.load(ps, bs, cs, qs);
-    index.current.setShared(cachedItemCats(b.shop.tenant_id));   // the shared item categories kept on this device (offline too)
+    index.current.setShared(cachedItemCats(b.shop.tenant_id, b.shop.id));   // the shared item categories kept on this device (offline too)
   };
   // …refreshed from the server once per start (and saved on the device for the next reload of the index)
-  useEffect(() => { if (boot) void refreshItemCats(sb, boot.shop.tenant_id, index.current).then(ok => { if (ok) setTick(t => t + 1); }); }, [boot, sb]);
+  useEffect(() => { if (boot) void refreshItemCats(sb, boot.shop.tenant_id, index.current, boot.shop.id).then(ok => { if (ok) setTick(t => t + 1); }); }, [boot, sb]);
 
   useEffect(() => { void start(); }, [start]);
   // the person at the till follows the staff list: a role or name changed elsewhere applies at once, a removed / deactivated one is locked out

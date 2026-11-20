@@ -82,3 +82,8 @@ export const getItemCategories = unstable_cache(async (tenantId: string): Promis
   const { data, error } = await anon().from('item_categories').select('key,name,sort_order').eq('tenant_id', tenantId).order('sort_order').order('key');
   return error ? [] : ((data as { key: string; name: { ar?: string; en?: string }; sort_order: number }[] | null) ?? []);
 }, ['item-categories'], { revalidate: 60, tags: ['item-categories'] });
+/** A shop's own order of its sections (89); empty = the association's shared order. Quietly empty where 89 is not installed. */
+export const getShopSectionOrder = unstable_cache(async (shopId: string): Promise<string[]> => {
+  const { data, error } = await anon().from('shop_section_order').select('keys').eq('shop_id', shopId).maybeSingle();
+  return error ? [] : (((data as { keys?: string[] } | null)?.keys) ?? []);
+}, ['shop-section-order'], { revalidate: 60, tags: ['shop-section-order'] });

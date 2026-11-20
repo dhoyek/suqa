@@ -99,3 +99,24 @@ Found on prod after 75: "khebez" returned two crouton items ahead of "Arabic bre
 - **👍 / 👎** under Yorgo's answers in the POS and on the storefront (`/api/yorgo/feedback` → `yorgo_feedback`, as the person). The chat route now returns `message_id`.
 - **Names customers use:** tapping one of Yorgo's choices records "phrase → item" (`alias_suggest`, script 75). In the POS panel, 💡 lists what is waiting; owner / stock / association setup approve (becomes an alias) or reject (`alias_decide`).
 - **Script 78 (`yorgo_misses`) written, NOT applied:** counted "asked for and not found" phrases per shop / whole market, no person and no conversation. The route already calls `yorgo_miss` and ignores the error where it is not installed; the POS 💡 list and the admin page show misses once it is.
+
+## 2026-11-20 — the current chat, tightened (no database script)
+
+From reading the real customer chats on prod (50 messages): half the answers asked a question, "add" replaced the basket, shops were
+not recognised by name, short answers flipped the language, a typo matched seeds, the same item was searched again and again, items were
+listed as long text, and nothing reached `yorgo_misses`.
+
+- **Garbled text** (`core.ts` `isGarbled` / `cleanReply`): mojibake lines and the model's own apology are dropped before the reply is
+  shown or stored; a fully garbled answer is asked again once.
+- **Draft first, ask rarely** (`prompts.ts`): no quantity = 1, unsure = choices, never "how many" / "which one" in text, one question at most.
+- **Add to the open basket**: `draft_basket { add: true }` → the storefront card merges the new lines and choices (`YorgoChat.tsx`);
+  without `add` the draft replaces the one on screen, as before.
+- **Shops by name**: the open shops (id, names, `known_as`, what they sell) are in the shopper prompt; "min 3end X", "3endo".
+  Fill "known as" on the shop (Admin → shop) with the names customers use.
+- **Language**: a short neutral answer ("eh", "1", "330ml") keeps the language of the person's last real message (`isShortNeutral`).
+- **Category on every candidate** (`match_items` → `category`, the shared list of 87): food is not seeds or tools.
+- **Search once** per item per conversation; a pick from the last answer is drafted without a new search.
+- **Kind questions** ("chou fi machroubet") come back as one choices entry (up to 6 options), not a text list.
+- **Misses**: phrases the search itself found nothing close for (best score < 0.45) are counted, also when the answer was only text.
+- **Test set**: `docs/yorgo/eval-cases.json` + `eval-runner.js` (browser, dev, signed in). First run after these changes: 12 / 12,
+  2 of 12 answers with a question (both on "do you have…" questions), 30 model calls, $0.13.

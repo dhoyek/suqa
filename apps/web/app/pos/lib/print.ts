@@ -38,9 +38,10 @@ export function doPrint(html: string, st: PrintSettings = loadPrintSettings()): 
 const fmtDT = (iso: string, L: L) => new Date(iso).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
 /** Sale receipt. `again` marks a reprint. */
-export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], shop: Shop, L: L, st: PrintSettings, opts: { cashier?: string; again?: boolean; serverNumber?: string | null } = {}): string {
+/** `draft`: the cart before payment (invoice preview) — no number, no payments, marked "not paid" so it never passes for a receipt. */
+export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], shop: Shop, L: L, st: PrintSettings, opts: { cashier?: string; again?: boolean; serverNumber?: string | null; draft?: boolean; feeCents?: number } = {}): string {
   const rate = num(o.rate_lbp_per_usd);
-  const no = opts.serverNumber ?? o.number ?? o.local_number ?? '';
+  const no = opts.draft ? pt('draftInvoice', L) : opts.serverNumber ?? o.number ?? o.local_number ?? '';
   const rows = lines.filter(l => !l.voided).map(l => {
     const unit = l.price_currency === 'usd' ? fmtUsd(num(l.unit_price_cents)) : fmtLbp(num(l.unit_price_lbp), L);
     return `<tr><td class="q"><i>${esc(sheetQty(num(l.quantity), l.unit))}</i></td><td>${esc(text(l.name, L))}${l.discount_cents ? ` <small>−${fmtUsd(num(l.discount_cents))}</small>` : ''}${l.notes ? `<div class="u nt">» ${esc(l.notes)}</div>` : ''}<div class="u">${ltr(unit)}</div></td><td class="a">${ltr(fmtUsd(num(l.line_total_cents)))}</td></tr>`;
@@ -52,7 +53,9 @@ export function receiptHtml(o: Order, lines: OrderLine[], payments: Payment[], s
     <div class="no">${esc(no)}</div><div class="ev">${esc(fmtDT(o.placed_at, L))}${opts.cashier ? ' · ' + esc(opts.cashier) : ''}</div>
     ${o.customer_name || o.customer_phone ? `<div class="ev">${esc(o.customer_name || '')} ${ltr(esc(o.customer_phone || ''))}</div>` : ''}<hr>
     <table>${rows}</table><hr>
+    ${opts.draft ? `<div class="ft rp">${esc(pt('notPaidYet', L))}</div>` : ''}
     ${num(o.discount_cents) ? `<div class="ft">${esc(pt('discount', L))}: ${ltr('−' + fmtUsd(num(o.discount_cents)))}</div>` : ''}
+    ${opts.feeCents ? `<div class="ft">${esc(pt('deliveryFee', L))}: ${ltr(fmtUsd(opts.feeCents))}</div>` : ''}
     <div class="tot">${ltr(fmtUsd(num(o.total_cents)))}${st.showLbp ? '<span class="sep">·</span>' + ltr(fmtLbp(roundLbp(num(o.total_lbp) || usdToLbp(num(o.total_cents), rate), shop.lbp_rounding_step ?? 5000), L)) : ''}</div>
     <div class="ev">${esc(pt('rate', L))} ${ltr(rate.toLocaleString('en-US'))} / $1</div><hr>
     ${pays}${change}

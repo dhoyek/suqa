@@ -7,11 +7,12 @@ import Modal from './Modal';
 import OwnerPin from './OwnerPin';
 
 /** Full or partial return against a delivered order: pick quantities, stock or damaged, refund in $ or ل.ل. Owner approval (PIN for cashiers). */
-export default function ReturnDialog({ boot, locale, order, lines, staff, onDone, onClose }: { boot: Booted; locale: L; order: Order; lines: OrderLine[]; staff: Staff; onDone: () => void; onClose: () => void }) {
+/** `full` (Reports → operations log → cancel a sale): every line pre-filled with its whole quantity, and the reason given there. */
+export default function ReturnDialog({ boot, locale, order, lines, staff, onDone, onClose, full, presetReason }: { boot: Booted; locale: L; order: Order; lines: OrderLine[]; staff: Staff; onDone: () => void; onClose: () => void; full?: boolean; presetReason?: string }) {
   const live = lines.filter(l => !l.voided);
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [qty, setQty] = useState<Record<string, number>>(() => (full ? Object.fromEntries(live.map(l => [l.id, num(l.quantity)])) : {}));
   const [dest, setDest] = useState<Record<string, 'stock' | 'damaged'>>({});
-  const [cur, setCur] = useState<Currency>('usd'); const [reason, setReason] = useState(''); const [gate, setGate] = useState(false); const [members, setMembers] = useState<Staff[]>([]);
+  const [cur, setCur] = useState<Currency>('usd'); const [reason, setReason] = useState(presetReason ?? ''); const [gate, setGate] = useState(false); const [members, setMembers] = useState<Staff[]>([]);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
   const rate = num(order.rate_lbp_per_usd) || 89500; const step = boot.shop.lbp_rounding_step ?? 5000;
   const amount = useMemo(() => live.reduce((s, l) => s + Math.round((num(l.line_total_cents) / num(l.quantity)) * (qty[l.id] ?? 0)), 0), [live, qty]);

@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, localStock, num, shiftSummary, text, todaySummary, type CatalogIndex, type Order, type Report, type Shift, type ShiftSummary, type SyncStatus } from '@suqa/pos-core';
 import { pt, posErr, type L } from '../i18n';
 import ApprovalsReport from '../components/ApprovalsReport';
+import OpsLog from '../components/OpsLog';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 import type { Staff } from '@suqa/pos-core';
@@ -13,7 +14,7 @@ import { downloadCsv, downloadXlsx, flat, usd, type Row } from '../lib/export';
 
 type Today = Awaited<ReturnType<typeof todaySummary>>;
 type Preset = 'today' | 'yesterday' | 'week' | 'month' | 'lastMonth' | 'custom';
-type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stock' | 'unpaid' | 'shifts' | 'approvals';
+type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stock' | 'unpaid' | 'shifts' | 'approvals' | 'ops';
 
 function presetRange(p: Preset): [string, string] {
   const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -151,7 +152,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               <div className="kpi"><span>{pt('grossMargin', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.cost_cents)}</strong><small>{pt('cost', locale)} {N(rep.totals.cost_cents)}{rep.totals.total_cents ? ` · ${Math.round(((rep.totals.total_cents - rep.totals.cost_cents) / rep.totals.total_cents) * 100)}%` : ''}</small></div>
             </div>
             <div className="seg wrap" style={{ marginTop: 12 }}>
-              {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab' } as const)[x], locale)}</button>)}
+              {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals', 'ops'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab', ops: 'opsTab' } as const)[x], locale)}</button>)}
             </div>
             <div style={{ marginTop: 10, overflowX: 'auto' }}>
               {tab === 'overview' && <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
@@ -201,6 +202,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 {rep.unpaid.map((u, n) => <tr key={n}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}
               </tbody></table>}
+              {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} />}
               {tab === 'approvals' && <ApprovalsReport boot={boot} sb={sb} locale={locale} index={index} from={range[0]} to={range[1]} />}
               {tab === 'shifts' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('openedAt', locale)}</th><th>{pt('closedAt', locale)}</th><th>{pt('expected', locale)}</th><th>{pt('counted', locale)}</th><th>{pt('diff', locale)}</th></tr>

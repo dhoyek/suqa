@@ -8,6 +8,7 @@ import DriverPicker from '../components/DriverPicker';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
+import { invoiceText, waHref } from '../lib/invoice';
 import Modal, { NumPad } from '../components/Modal';
 import PayDialog from '../components/PayDialog';
 import ReturnDialog from '../components/ReturnDialog';
@@ -212,6 +213,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                         {menu === o.id && <div className="order-menu" onClick={() => setMenu(null)}>
                           <button onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨 {pt('print', locale)}</button>
                           <button onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
+                          <a href={waHref(o.customer_phone, invoiceText(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 {pt('sendInvoiceWa', locale)}</a>
                           <label><input type="checkbox" checked={o.notify_customer !== false} onClick={e => e.stopPropagation()} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
                           {o.status === 'delivered' && <button onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
                           {NEXT[o.status].includes('rejected') && <button className="danger" onClick={() => act(o, 'rejected')}>✕ {pt('act_rejected', locale)}</button>}

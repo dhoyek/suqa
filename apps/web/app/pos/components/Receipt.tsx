@@ -6,6 +6,7 @@ import Modal from './Modal';
 import ReturnDialog from './ReturnDialog';
 import CustomerPick from './CustomerPick';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
+import { invoiceText, waHref } from '../lib/invoice';
 import type { Booted } from '../lib/boot';
 
 /**
@@ -95,6 +96,8 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
               </span>
             : <input className="input" inputMode="tel" placeholder={pt('customerPhone', locale)} value={phone} onChange={e => { setPhone(e.target.value); setWaState('idle'); }} />}
           <button className="btn" onClick={sendWa} disabled={!phone.trim() || waState === 'sending'}>{waState === 'sent' ? '✓ ' + pt('sent', locale) : '💬 ' + pt('sendWhatsApp', locale)} <kbd>W</kbd></button>
+          {/* the same invoice from this phone's own WhatsApp: works offline-first and outside the 24 h window */}
+          <a className="btn" title={pt('waFromPhone', locale)} href={waHref(phone, invoiceText({ ...order, number: serverNumber ?? order.number }, lines, payments, shop, locale, { url }))} target="_blank" rel="noreferrer">📱</a>
         </div>
         {waState === 'error' && <p className="bad">WhatsApp: {pt('sendFailed', locale)}</p>}
         {boot && staff && <button className="btn ghost" onClick={() => setRet(true)}>↩ {pt('returnItems', locale)}</button>}

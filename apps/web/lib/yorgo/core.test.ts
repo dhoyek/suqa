@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { askedLanguage, detectScript, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { askedLanguage, cleanReply, detectScript, isGarbled, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
 import { toolsFor } from './tools';
 
@@ -157,5 +157,28 @@ describe('yorgo core', () => {
     expect(replyLanguage('fi pepsi?', h)).toBe('en');
     expect(replyLanguage('la2 bil 3arabe', h)).toBe('ar');
     expect(languageNote('fi pepsi?')).toMatch(/never mention it: write your reply in Arabic script/);
+  });
+  it('never shows or keeps broken characters: garbled lines and the apology are dropped, a fully garbled answer is asked again once', async () => {
+    const moji = (t: string) => Buffer.from(t, 'utf8').toString('latin1');                 // "السلة" → "Ø§Ù„Ø³Ù„Ø©"
+    const good = 'جهّزت لك السلة: زعتر، جبنة ولحمة.';
+    expect(isGarbled(good)).toBe(false); expect(cleanReply(good)).toBe(good);
+    expect(isGarbled('Total: 5 Ø dollars')).toBe(false);                                   // one odd letter is not mojibake
+    const mixed = `${moji('جهّزت لك السلة من فرن الضيعة')}\n\nSorry, that came out garbled. Let me write it cleanly:\n\n${good}`;
+    expect(cleanReply(mixed)).toBe(good);
+    // the model corrected itself in the same reply: one call, the clean part is shown and stored
+    const a = rig({ replies: [say(mixed)] });
+    const ra = await runTurn(a.deps, { ...base, mode: 'shopper', shopId: null, role: null });
+    expect(ra).toMatchObject({ status: 'ok', reply: good }); expect(a.calls.model.length).toBe(1);
+    expect(JSON.stringify(a.calls.adminRpc.find(c => c[0] === 'yorgo_record'))).not.toMatch(/Ø|garbled/);
+    // nothing readable at all: asked once more, the clean answer is the reply
+    const b = rig({ replies: [say(moji(good)), say(good)] });
+    const rb = await runTurn(b.deps, { ...base, mode: 'shopper', shopId: null, role: null });
+    expect(rb).toMatchObject({ status: 'ok', reply: good }); expect(b.calls.model.length).toBe(2);
+    expect(JSON.stringify(b.calls.model[1].messages.at(-1))).toContain('broken characters');
+    expect(JSON.stringify(b.calls.adminRpc.find(c => c[0] === 'yorgo_record'))).not.toContain('Ø');
+    // still broken the second time: no third call, and nothing garbled is shown
+    const c = rig({ replies: [say(moji(good)), say(moji(good))] });
+    const rc = await runTurn(c.deps, { ...base, mode: 'shopper', shopId: null, role: null });
+    expect(c.calls.model.length).toBe(2); expect(JSON.stringify(rc)).not.toContain('Ø');
   });
 });

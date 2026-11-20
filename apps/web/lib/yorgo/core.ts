@@ -55,15 +55,28 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const note = languageNote(text, history);
   const model = i.mode === 'shopper' ? d.cfg.modelShopper : d.cfg.modelDefault;      // customers get the stronger model (config.ts)
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
-  let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = [];
+  let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false;
   try {
     for (let round = 0; ; round++) {
       const res = await d.model.create({ model, system, tools: tools.map(({ name, description, input_schema }) => ({ name, description, input_schema })), messages, maxTokens: d.cfg.maxTokens });
       const c = costOf(model, res.usage, d.cfg.prices); cost += c;
-      fresh.push({ role: 'assistant', content: res.content.filter(b => b.type !== 'thinking' && b.type !== 'redacted_thinking'), model, ...res.usage, cost_usd: c });
+      // what is kept (and read back as history next time) never holds broken characters: see cleanReply
+      fresh.push({ role: 'assistant', content: storedBlocks(res.content), model, ...res.usage, cost_usd: c });
       messages.push({ role: 'assistant', content: res.content });
       const calls = res.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');
-      if (res.stop !== 'tool_use' || !calls.length) { reply = res.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').trim(); break; }
+      if (res.stop !== 'tool_use' || !calls.length) {
+        const raw = res.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').trim();
+        reply = cleanReply(raw);
+        // the whole answer came out broken: ask once more (rare; the model usually corrects itself in the same reply)
+        if (isGarbled(raw) && reply.length < 12 && !retried && round < d.cfg.maxToolRounds) {
+          retried = true; reply = '';
+          const again: Block[] = [{ type: 'text', text: GARBLED_NOTE }, ...(note ? [{ type: 'text' as const, text: note }] : [])];
+          fresh.push({ role: 'tool', content: [{ type: 'text', text: GARBLED_NOTE }] });
+          messages.push({ role: 'user', content: again });
+          continue;
+        }
+        break;
+      }
       if (round >= d.cfg.maxToolRounds) { failure = 'too_many_tool_rounds'; break; }
       const results: Block[] = [];
       for (const call of calls) {
@@ -89,6 +102,28 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   if (rec.error || !id) return { status: 'error', error: 'record_failed' };
   if (failure || (!reply && !drafts.length)) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
   return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6 };
+}
+
+const GARBLED_NOTE = '(App note — follow it, never mention it: your last reply came out as broken characters. Write the same answer again in clean text, with no apology.)';
+/** Arabic that came out as mojibake ("Ø§Ù„Ø³Ù„Ø©" for "السلة"): UTF-8 bytes shown as Latin-1. Seen from the model itself (prod, 2026-11-20). */
+const MOJIBAKE = /[ØÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;
+export function isGarbled(text: string): boolean { return (text.match(MOJIBAKE) ?? []).length >= 3; }
+/** The reply the person sees: lines of broken characters are dropped, and with them the model's own "sorry, that came out
+ *  garbled, let me write it cleanly". A clean reply is returned untouched. */
+export function cleanReply(text: string): string {
+  if (!isGarbled(text)) return text;
+  const sorry = /garbled|scrambled|came out (wrong|broken)|write (it|that) (again )?cleanly|rewrite (it|that)|مشوّه|مشوه|غير مقروء|بشكل صحيح/i;
+  return text.split('\n').filter(l => (l.match(MOJIBAKE) ?? []).length < 2 && !(sorry.test(l) && l.length < 160)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+/** what is stored of a model answer: no thinking, and text without broken characters (an emptied text block is dropped) */
+function storedBlocks(content: Block[]): Block[] {
+  const out: Block[] = [];
+  for (const b of content) {
+    if (b.type === 'thinking' || b.type === 'redacted_thinking') continue;
+    if (b.type === 'text') { const t = cleanReply((b as { text: string }).text); if (t) out.push({ ...b, text: t } as Block); continue; }
+    out.push(b);
+  }
+  return out.length ? out : [{ type: 'text', text: '…' }];
 }
 
 /** Stored rows → what the model expects. Tool results travel as user turns; the window must open on a real user message,

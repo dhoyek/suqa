@@ -79,7 +79,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
         <div className="r-foot muted">{pt('cashier', locale)}: {cashier}<br />{shop.receipt_footer || pt('thanks', locale)}</div>
       </div>
       <div className="receipt-actions">
-        <button className="btn primary big" onClick={onNew} autoFocus>{pt('newSale', locale)} ↵{auto != null ? ` · ${auto}` : ''}</button>
+        <button className="btn primary big" onClick={onNew} autoFocus>{pt('newSale', locale)}<kbd>↵</kbd>{auto != null ? ` · ${auto}` : ''}</button>
         {auto != null && <button className="btn ghost" style={{ minHeight: 32 }} onClick={() => setAuto(null)}>⏸ {pt('autoNewIn', locale)} {auto} — {pt('stayHere', locale)}</button>}
         <div className="row" style={{ gap: 8 }}>
           <button className={`btn ${printed ? '' : 'primary'}`} style={{ flex: 1 }} onClick={print}>{printed ? `✓ ${pt('printed', locale)} · ${pt('reprint', locale)}` : `🖨 ${pt('print', locale)}`} <kbd>P</kbd></button>
@@ -101,7 +101,7 @@ export default function Receipt({ result, shop, locale, cashier, serverNumber, o
         </div>
         {waState === 'error' && <p className="bad">WhatsApp: {pt('sendFailed', locale)}</p>}
         {boot && staff && <button className="btn ghost" onClick={() => setRet(true)}>↩ {pt('returnItems', locale)}</button>}
-        <p className="muted" style={{ fontSize: 12 }}>↵ {pt('newSale', locale)} · P {pt('print', locale)} · W {pt('sendWhatsApp', locale)}</p>
+        <p className="muted kbd-hint" style={{ fontSize: 12 }}>↵ {pt('newSale', locale)} · P {pt('print', locale)} · W {pt('sendWhatsApp', locale)}</p>
       </div>
       {showQr && <Modal open onClose={() => setShowQr(false)} title={pt('receipt', locale)}>
         <div style={{ textAlign: 'center' }}>{qr ? <img src={qr} alt="QR" width={280} height={280} /> : <p className="muted">…</p>}<p className="muted">{pt('qrHint', locale)}</p><p style={{ fontSize: 12, direction: 'ltr' }}>{url}</p></div>

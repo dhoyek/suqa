@@ -409,6 +409,8 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .r-unpaid { margin: 6px 0; padding: 6px 8px; border: 2px dashed #991b1b; color: #991b1b; font-weight: 800; text-align: center; border-radius: 6px; }
 .r-change { font-weight: 700; }
 .receipt-actions kbd { font-size: 10px; opacity: .6; margin-inline-start: 4px; }
+/* keyboard shortcuts mean nothing on a touch screen (phones, tablets without a keyboard): hide the keys and the hint line */
+@media (hover: none) and (pointer: coarse) { kbd, .kbd-hint { display: none !important; } }
 
 /* orders board: ⋯ menu, detail sheet */
 .order-menu { position: absolute; inset-inline-end: 0; top: 100%; z-index: 20; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 200px; display: flex; flex-direction: column; padding: 4px; }

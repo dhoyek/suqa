@@ -19,7 +19,7 @@ export default function BulkDialog({ boot, sb, locale, index, onDone, onClose }:
   };
   return (
     <Modal open onClose={onClose} title={ar ? 'تعديل جماعي' : 'Bulk changes'}>
-      <label className="label">{pt('category', locale)}<select className="input" value={section} onChange={e => setSection(e.target.value)}><option value="">{pt('all', locale)} ({index.size})</option>{sections.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+      <label className="label">{pt('category', locale)}<select className="input" value={section} onChange={e => setSection(e.target.value)}><option value="">{pt('all', locale)} ({index.size})</option>{sections.map(s => <option key={s} value={s}>{(locale === 'ar' ? index.categories.get(s)?.name?.ar : index.categories.get(s)?.name?.en) || s}</option>)}</select></label>
       <div className="card" style={{ marginTop: 10 }}>
         <strong>{ar ? 'تغيير الأسعار بالنسبة المئوية' : 'Change prices by %'}</strong>
         <div className="row" style={{ gap: 8, marginTop: 6 }}><input className="input" dir="ltr" inputMode="decimal" placeholder="+10 / -5" value={pct} onChange={e => setPct(e.target.value)} /><button className="btn primary" disabled={busy || !Number(pct)} onClick={() => { if (confirm(`${Number(pct) > 0 ? '+' : ''}${pct}% → ${count} ${ar ? 'صنف' : 'items'}?`)) void call('pos_bulk_price', { p_shop: boot.shop.id, p_section: section || null, p_pct: Number(pct), p_lbp_step: boot.shop.lbp_rounding_step ?? 1000 }); }}>{pt('ok', locale)}</button></div>

@@ -76,3 +76,9 @@ export const getShopFeeRange = unstable_cache(async (shopId: string): Promise<{ 
     .filter(r => r.zone?.is_active !== false).map(r => Number(r.fee_usd ?? r.zone?.fee_usd ?? 0)).filter(n => Number.isFinite(n));
   return fees.length ? { min: Math.min(...fees), max: Math.max(...fees) } : null;
 }, ['shop-fee-range'], { revalidate: 300 });
+
+/** The shared item categories (87): key → names and order. Empty when the table is not there yet. */
+export const getItemCategories = unstable_cache(async (tenantId: string): Promise<{ key: string; name: { ar?: string; en?: string }; sort_order: number }[]> => {
+  const { data, error } = await anon().from('item_categories').select('key,name,sort_order').eq('tenant_id', tenantId).order('sort_order').order('key');
+  return error ? [] : ((data as { key: string; name: { ar?: string; en?: string }; sort_order: number }[] | null) ?? []);
+}, ['item-categories'], { revalidate: 60, tags: ['item-categories'] });

@@ -562,3 +562,12 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 
 /* 86: a customer asks to cancel */
 .cancel-req { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+
+/* item category picker (shared list, searchable, add when missing) */
+.cat-picker { position: relative; }
+.cat-picker-btn { display: flex; gap: 8px; align-items: center; justify-content: space-between; width: 100%; text-align: start; cursor: pointer; background: #fff; }
+.cat-picker-btn > span:first-child { flex: 1; }
+.cat-picker-pop { position: absolute; z-index: 30; inset-inline: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.15); padding: 8px; }
+.cat-picker-list { max-height: 240px; overflow: auto; margin: 6px 0; }
+.cat-picker-row { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: none; font: inherit; padding: 9px 8px; border-radius: 8px; cursor: pointer; text-align: start; }
+.cat-picker-row:hover, .cat-picker-row.active { background: var(--brand-soft, #e6f2f5); }

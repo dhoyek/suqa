@@ -1,4 +1,5 @@
 'use client';
+import CategoryPicker from './CategoryPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff, type Supplier } from '@suqa/pos-core';
 import { pt, dayName, DAY_ORDER, type L } from '../i18n';
@@ -83,7 +84,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
         <div className="item-form">
           <label className="label">{pt('nameAr', locale)}<input className="input" value={ar} onChange={e => setAr(e.target.value)} autoFocus /></label>
           <label className="label">{pt('nameEn', locale)}<input className="input" dir="ltr" value={en} onChange={e => setEn(e.target.value)} /></label>
-          <label className="label">{pt('category', locale)}<input className="input" list="pos-sections" value={cat} onChange={e => setCat(e.target.value)} placeholder={pt('noCategory', locale)} /><datalist id="pos-sections">{cats.map(c => <option key={c.id} value={c.id} />)}</datalist></label>
+          <div className="label">{pt('category', locale)}<CategoryPicker index={index} shopId={boot.shop.id} tenantId={boot.shop.tenant_id} locale={locale} value={cat} onChange={setCat} online={typeof navigator === 'undefined' || navigator.onLine} /></div>
           <label className="label">{pt('price', locale)}
             <div className="row" style={{ gap: 8 }}>
               <div className="seg"><button type="button" className={cur === 'usd' ? 'active' : ''} onClick={() => setCur('usd')}>$</button><button type="button" className={cur === 'lbp' ? 'active' : ''} onClick={() => setCur('lbp')}>ل.ل.</button></div>

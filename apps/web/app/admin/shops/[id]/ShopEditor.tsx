@@ -8,7 +8,6 @@ import ImageUpload from '@/components/ImageUpload';
 import CategoryPick from '@/components/CategoryPick';
 import { ui } from '@/lib/ui-text';
 import RestorePanel from './RestorePanel';
-import SectionNames from './SectionNames';
 import ShareButton from '@/components/ShareButton';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
 
@@ -250,7 +249,8 @@ export default function ShopEditor(props: {
           </div>
         </section>
       )}
-      {shop && <SectionNames shopId={shop.id} locale={props.locale} initial={(shop as unknown as { section_names?: Record<string, { ar?: string; en?: string }> | null }).section_names ?? null} />}
+      {/* per-shop section names (74) are replaced by the shared item categories (87): Admin → Categories */}
+      {shop && <div className="muted" style={{ fontSize: 13 }}>🏷 {props.locale === 'ar' ? 'أسماء أقسام الأصناف صارت مشتركة بين كل المتاجر: ' : 'Item category names are now shared by all shops: '}<a href="/admin/categories">{props.locale === 'ar' ? 'الإدارة ← الفئات' : 'Admin → Categories'}</a></div>}
       {shop && <RestorePanel shopId={shop.id} locale={props.locale} />}
     </div>
   );

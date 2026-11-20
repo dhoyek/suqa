@@ -36,6 +36,8 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
   const [preset, setPreset] = useState<Preset>('today');
   const [range, setRange] = useState<[string, string]>(() => presetRange('today'));
   const [tab, setTab] = useState<Tab>('overview');
+  // a category's name from the shared list (87), in the till's language
+  const secLabel = (k: string | null | undefined) => (k ? text(index.categories.get(k)?.name ?? index.shared.find(c => c.id === k)?.name ?? { ar: k, en: k }, locale) : '—');
   // tap a record: a day or a shift opens its sales, a sale opens its items
   const [open, setOpen] = useState<null | { k: 'day'; day: string } | { k: 'shift'; id: string; title: string } | { k: 'sale'; id: string }>(null);
   const [rep, setRep] = useState<Report | null>(null);
@@ -89,9 +91,9 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
     s[pt('byChannel', locale)] = Object.entries(rep.by_channel).map(([c, v]) => ({ [pt('channelLabel', locale)]: pt(c as 'walkin', locale), [pt('salesCount', locale)]: v.count, [pt('sales', locale)]: usd(v.cents) }));
     s[pt('byTender', locale)] = Object.entries(rep.by_tender).map(([k, v]) => ({ [pt('tender', locale)]: pt(k as 'cash_usd', locale), [pt('salesCount', locale)]: v.count, USD: usd(v.usd), LBP: v.lbp }));
     s[pt('byItem', locale)] = rep.by_item.map(i => ({ [pt('items', locale)]: text(i.name, locale), [pt('qtySold', locale)]: i.qty, [pt('sales', locale)]: usd(i.cents), [pt('cost', locale)]: usd(i.cost_cents), [pt('grossMargin', locale)]: usd(i.cents - i.cost_cents) }));
-    s[pt('bySection', locale)] = rep.by_section.map(i => ({ [pt('section', locale)]: i.section || '—', [pt('qtySold', locale)]: i.qty, [pt('sales', locale)]: usd(i.cents) }));
+    s[pt('bySection', locale)] = rep.by_section.map(i => ({ [pt('section', locale)]: secLabel(i.section), [pt('qtySold', locale)]: i.qty, [pt('sales', locale)]: usd(i.cents) }));
     s[pt('slowMovers', locale)] = rep.slow.map(i => ({ [pt('items', locale)]: text(i.name, locale), [pt('onHand', locale)]: i.on_hand, [pt('cost', locale)]: usd(num(i.cost_cents)) }));
-    s[pt('stockValue', locale)] = [...rep.stock.by_section.map(x => ({ [pt('section', locale)]: x.section || '—', [pt('skus', locale)]: x.skus, [pt('units', locale)]: x.units, [pt('atCost', locale)]: usd(x.cost_cents), [pt('atRetail', locale)]: usd(x.retail_cents), [pt('expectedProfit', locale)]: usd(x.retail_cents - x.cost_cents) })),
+    s[pt('stockValue', locale)] = [...rep.stock.by_section.map(x => ({ [pt('section', locale)]: secLabel(x.section), [pt('skus', locale)]: x.skus, [pt('units', locale)]: x.units, [pt('atCost', locale)]: usd(x.cost_cents), [pt('atRetail', locale)]: usd(x.retail_cents), [pt('expectedProfit', locale)]: usd(x.retail_cents - x.cost_cents) })),
       { [pt('section', locale)]: pt('total', locale), [pt('skus', locale)]: rep.stock.skus, [pt('units', locale)]: rep.stock.units, [pt('atCost', locale)]: usd(rep.stock.cost_cents), [pt('atRetail', locale)]: usd(rep.stock.retail_cents), [pt('expectedProfit', locale)]: usd(rep.stock.retail_cents - rep.stock.cost_cents) }];
     s[pt('unpaidList', locale)] = rep.unpaid.map(u => ({ [pt('when', locale)]: u.at, [pt('orderNo', locale)]: u.number ?? '', [pt('customerName', locale)]: u.name ?? '', [pt('customerPhone', locale)]: u.phone ?? '', [pt('amount', locale)]: u.currency === 'lbp' ? u.amount : usd(u.amount), [pt('currency', locale)]: u.currency }));
     s[pt('shiftsList', locale)] = rep.shifts.map(x => ({ [pt('openedAt', locale)]: x.opened_at, [pt('closedAt', locale)]: x.closed_at ?? '', ['USD ' + pt('expected', locale)]: usd(num(x.expected_usd_cents)), ['USD ' + pt('counted', locale)]: usd(num(x.counted_usd_cents)), ['USD ' + pt('diff', locale)]: usd(num(x.diff_usd_cents)), ['LBP ' + pt('expected', locale)]: num(x.expected_lbp), ['LBP ' + pt('counted', locale)]: num(x.counted_lbp), ['LBP ' + pt('diff', locale)]: num(x.diff_lbp) }));
@@ -176,7 +178,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               </tbody></table>}
               {tab === 'sections' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('section', locale)}</th><th>{pt('qtySold', locale)}</th><th>{pt('sales', locale)}</th></tr>
-                {rep.by_section.map(i => <tr key={i.section}><td>{i.section || '—'}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td></tr>)}
+                {rep.by_section.map(i => <tr key={i.section}><td>{secLabel(i.section)}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td></tr>)}
               </tbody></table>}
               {tab === 'slow' && (rep.slow.length ? <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('noSalesInPeriod', locale)}</th><th>{pt('onHand', locale)}</th><th>{pt('atCost', locale)}</th></tr>
@@ -194,7 +196,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 <table className="table stack-sm" style={{ marginTop: 10 }}>
                   <thead><tr><th style={{ textAlign: 'start' }}>{pt('section', locale)}</th><th className="num">{pt('skus', locale)}</th><th className="num">{pt('units', locale)}</th><th className="num">{pt('atCost', locale)}</th><th className="num">{pt('atRetail', locale)}</th><th className="num">{pt('expectedProfit', locale)}</th></tr></thead>
                   <tbody>
-                    {rep.stock.by_section.map(s => <tr key={s.section || '_'}><td>{s.section || '—'}{s.no_cost > 0 && <span className="muted" title={pt('stockNoCost', locale)}> ⚠{s.no_cost}</span>}</td><td className="num">{s.skus}</td><td className="num">{s.units}</td><td className="num">{N(s.cost_cents)}</td><td className="num">{N(s.retail_cents)}</td><td className="num">{N(s.retail_cents - s.cost_cents)}</td></tr>)}
+                    {rep.stock.by_section.map(s => <tr key={s.section || '_'}><td>{secLabel(s.section)}{s.no_cost > 0 && <span className="muted" title={pt('stockNoCost', locale)}> ⚠{s.no_cost}</span>}</td><td className="num">{s.skus}</td><td className="num">{s.units}</td><td className="num">{N(s.cost_cents)}</td><td className="num">{N(s.retail_cents)}</td><td className="num">{N(s.retail_cents - s.cost_cents)}</td></tr>)}
                     <tr style={{ fontWeight: 700, borderTop: '2px solid #111' }}><td>{pt('total', locale)}</td><td className="num">{rep.stock.skus}</td><td className="num">{rep.stock.units}</td><td className="num">{N(rep.stock.cost_cents)}</td><td className="num">{N(rep.stock.retail_cents)}</td><td className="num">{N(rep.stock.retail_cents - rep.stock.cost_cents)}</td></tr>
                   </tbody>
                 </table>

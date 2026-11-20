@@ -1,7 +1,7 @@
 import { getLocale } from '@/lib/locale';
 import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
-import { getShopWithProducts, getShopFeeRange, getShopPreview } from '@/lib/public-data';
+import { getShopWithProducts, getShopFeeRange, getShopPreview, getItemCategories } from '@/lib/public-data';
 import { supabaseServer } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { ui } from '@/lib/ui-text';
@@ -26,7 +26,12 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
     if (user && admin) { res = await getShopPreview(admin as never, tenant.id, slug, tenant.fx_lbp_rate, user.id); preview = !!res; }
   }
   if (!res) notFound();
-  const { shop: s, products } = res;
+  const { shop: s } = res;
+  // item categories are shared by all shops (87): their names in both languages, and their order on the page
+  const icats = await getItemCategories(tenant.id);
+  const catOrder = new Map(icats.map((c, i) => [c.key, i]));
+  const products = icats.length ? [...res.products].sort((a, b) => (catOrder.get(a.section ?? '') ?? 1e6) - (catOrder.get(b.section ?? '') ?? 1e6)) : res.products;   // stable: the order inside a category is kept
+  const sectionNames = { ...((s as unknown as { section_names?: Record<string, { ar?: string; en?: string }> | null }).section_names ?? {}), ...Object.fromEntries(icats.map(c => [c.key, c.name])) };
   const L = await getLocale(tenant);
   const open = isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone);
   const reopen = open ? null : reopenLabel(s.opening_hours, s.is_open_override, tenant.timezone, L);
@@ -70,7 +75,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
           </div>
         )}
       </header>
-      <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone, pickup_enabled: s.pickup_enabled !== false, section_names: (s as unknown as { section_names?: Record<string, { ar?: string; en?: string }> | null }).section_names ?? null }}
+      <ShopMenu shop={{ id: s.id, slug: s.slug, name: s.name, min_order_usd: Number(s.min_order_usd), whatsapp: s.whatsapp ?? s.phone, pickup_enabled: s.pickup_enabled !== false, section_names: sectionNames }}
         products={products} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
         labels={{ add: ui('add', L), soldOut: ui('soldOut', L), replaceCart: ui('replaceCart', L), cart: ui('cart', L), checkout: ui('checkout', L), items: ui('items', L),
           askOnWhatsapp: ui('askOnWhatsapp', L), waHello: ui('waHello', L), waAskItem: ui('waAskItem', L), waFrom: ui('waFrom', L), searchItems: ui('searchItems', L), noMatches: ui('noMatches', L), all: ui('all', L), categories: ui('categories', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), showMore: ui('showMore', L), ok: ui('okBtn', L) }} />

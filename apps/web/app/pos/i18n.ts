@@ -370,6 +370,10 @@ const T = {
   crAsked: { ar: 'الزبون يطلب إلغاء هذا الطلب', en: 'The customer asks to cancel this order' }, crAccept: { ar: 'قبول الإلغاء', en: 'Accept cancel' }, crRefuse: { ar: 'رفض', en: 'Refuse' },
   crAcceptQ: { ar: 'إلغاء الطلب كما طلب الزبون؟', en: 'Cancel the order as the customer asked?' }, crRefuseQ: { ar: 'رفض الإلغاء؟ يبقى الطلب كما هو ويرى الزبون الرفض.', en: 'Refuse? The order goes on and the customer sees the refusal.' },
   crHasPayments: { ar: 'هناك دفعة مسجّلة على هذا الطلب — اعمل مرتجعاً بدلاً من الإلغاء', en: 'A payment is recorded on this order — make a return instead' },
+  // shared item categories (87)
+  catSearch: { ar: 'ابحث عن فئة…', en: 'Search a category…' }, catNone: { ar: 'لا فئة بهذا الاسم', en: 'No category with this name' }, catAdd: { ar: 'إضافة فئة', en: 'Add category' },
+  catAddOffline: { ar: 'إضافة فئة جديدة تحتاج اتصالاً بالإنترنت', en: 'Adding a new category needs a connection' },
+  catAddNote: { ar: 'الفئة الجديدة تصبح متاحة لكل المتاجر. اكتب الاسمين إن أمكن.', en: 'The new category becomes available to every shop. Give both names if you can.' },
   // operations log (Reports → سجل العمليات)
   opsTab: { ar: 'سجل العمليات', en: 'Operations log' }, opsMoney: { ar: 'العمليات المالية', en: 'Money operations' }, opsAll: { ar: 'الكل', en: 'All' },
   opsEveryone: { ar: 'كل الموظفين', en: 'All staff' }, opsAllTypes: { ar: 'كل الأنواع', en: 'All types' }, opsFailed: { ar: 'مرفوضة', en: 'Rejected' },

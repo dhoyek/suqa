@@ -42,11 +42,21 @@ export class CatalogIndex {
   }
   upsertProduct(p: Product): void { if (p.is_active) this.byId.set(p.id, p); else this.byId.delete(p.id); this.dirty = true; this.rebuildSections(); }
   /** Products group by their free-text `section` (the storefront's menu groups); the POS shows them as category chips. */
+  /** The association's shared item categories (87): names in both languages and their order. Every category of the list is
+   *  kept here for the item editor's picker; `categories` (the chips) stays the ones this shop's items actually use. */
+  shared: Category[] = [];
+  setShared(list: { key: string; name: Localized; sort_order: number }[]): void {
+    this.shared = list.map(c => ({ id: c.key, tenant_id: '', name: c.name, sort_order: c.sort_order }));
+    this.rebuildSections(); this.dirty = true;
+  }
   private rebuildSections(): void {
     this.categories.clear();
+    const known = new Map(this.shared.map(c => [c.id, c]));
     const order = new Map<string, number>();
     for (const p of this.byId.values()) { const sct = (p.section ?? '').trim(); if (!sct) continue; if (!order.has(sct)) order.set(sct, p.sort_order ?? order.size); }
-    let i = 0; for (const [sct] of [...order.entries()].sort((a, b) => a[1] - b[1])) this.categories.set(sct, { id: sct, tenant_id: '', name: { ar: sct, en: sct }, sort_order: i++ });
+    // in the shared list's order (its names too); a section that is not in the list keeps its place after them, under its own text
+    const rank = (sct: string, own: number) => (known.has(sct) ? known.get(sct)!.sort_order : 1e6 + own);
+    let i = 0; for (const [sct] of [...order.entries()].sort((a, b) => rank(a[0], a[1]) - rank(b[0], b[1]))) this.categories.set(sct, { id: sct, tenant_id: '', name: known.get(sct)?.name ?? { ar: sct, en: sct }, sort_order: i++ });
   }
   removeProduct(id: string): void { this.byId.delete(id); for (const bc of this.barcodesOf.get(id) ?? []) this.byBarcode.delete(bc); this.barcodesOf.delete(id); this.dirty = true; }
   addBarcode(b: Barcode): void {

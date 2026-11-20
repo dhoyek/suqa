@@ -357,6 +357,7 @@ const T = {
   draftInvoice: { ar: 'فاتورة مبدئية', en: 'Draft invoice' }, notPaidYet: { ar: 'غير مدفوعة — للمراجعة قبل الدفع', en: 'Not paid — for review before payment' },
   invoice: { ar: 'فاتورة', en: 'Invoice' }, preview: { ar: 'معاينة', en: 'Preview' }, backToCart: { ar: 'رجوع للسلة', en: 'Back to cart' },
   waFromPhone: { ar: 'إرسال من واتساب هذا الجهاز', en: 'Send from this device\'s WhatsApp' }, sendInvoiceWa: { ar: 'إرسال الفاتورة على واتساب', en: 'Send invoice on WhatsApp' },
+  saleDetails: { ar: 'تفاصيل البيع', en: 'Sale details' }, payments: { ar: 'الدفعات', en: 'Payments' },
   // operations log (Reports → سجل العمليات)
   opsTab: { ar: 'سجل العمليات', en: 'Operations log' }, opsMoney: { ar: 'العمليات المالية', en: 'Money operations' }, opsAll: { ar: 'الكل', en: 'All' },
   opsEveryone: { ar: 'كل الموظفين', en: 'All staff' }, opsAllTypes: { ar: 'كل الأنواع', en: 'All types' }, opsFailed: { ar: 'مرفوضة', en: 'Rejected' },

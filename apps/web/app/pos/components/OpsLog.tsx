@@ -26,10 +26,10 @@ const REASONS = ['test', 'mistake', 'other'] as const;
  * today's drawer), a purchase (void) and a debt collection (undo). Each cancel is itself a new logged operation, linked to the
  * original, and is refused once done — nothing is deleted and nothing counts twice. Other operations are shown, not cancelled here yet.
  */
-export default function OpsLog({ boot, sb, locale, staff, from, to }: { boot: Booted; sb: SupabaseClient; locale: L; staff: Staff; from: string; to: string }) {
+export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { boot: Booted; sb: SupabaseClient; locale: L; staff: Staff; from: string; to: string; onSale?: (orderId: string) => void }) {
   const [rows, setRows] = useState<Row[] | null>(null); const [err, setErr] = useState<string | null>(null); const [tick, setTick] = useState(0);
   const [members, setMembers] = useState<Staff[]>([]); const [who, setWho] = useState(''); const [kind, setKind] = useState<'all' | 'money'>('money'); const [type, setType] = useState('');
-  const [ask, setAsk] = useState<Op | null>(null); const [ret, setRet] = useState<{ order: Order; lines: OrderLine[]; reason: string } | null>(null); const [msg, setMsg] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Op | null>(null); const [ret, setRet] = useState<{ order: Order; lines: OrderLine[]; reason: string } | null>(null); const [msg, setMsg] = useState<string | null>(null); const [view, setView] = useState<Op | null>(null);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
   useEffect(() => {
     let on = true; setRows(null); setErr(null);
@@ -133,17 +133,21 @@ export default function OpsLog({ boot, sb, locale, staff, from, to }: { boot: Bo
       </div>
       {msg && <div className="card" style={{ padding: 10 }}>{msg}</div>}
       {!shown.length ? <p className="muted">—</p> : <table className="table ops-log"><tbody>
-        {shown.map(o => <tr key={o.id} style={o.undone || o.failed ? { opacity: .6 } : undefined}>
+        {shown.map(o => <tr key={o.id} style={{ cursor: 'pointer', ...(o.undone || o.failed ? { opacity: .6 } : {}) }} onClick={() => {
+          // a sale, a payment or a return opens the sale with its items; any other operation opens what was recorded
+          const a = o.after ?? {}; const orderId = o.action === 'sale.commit' ? (o.ref_id ?? a.id) : o.action === 'order.pay' ? a.id : o.action === 'return.commit' ? a.order_id : null;
+          if (orderId && onSale) onSale(String(orderId)); else setView(o); }}>
           <td style={{ whiteSpace: 'nowrap' }} className="muted">{fmtTime(o.at, locale)}<div style={{ fontSize: 12 }}>{nameOf(o.user_id)}</div></td>
           <td><strong style={o.undone ? { textDecoration: 'line-through' } : undefined}>{label(o.action)}</strong>{o.failed && <span className="pill bad" style={{ marginInlineStart: 6 }}>{pt('opsFailed', locale)}</span>}
             {o.detail && <div className="muted" style={{ fontSize: 12 }}>{o.detail}</div>}
             {o.undone && <div className="bad" style={{ fontSize: 12 }}>↩ {pt('opsUndone', locale)}: {o.undone}</div>}
             {o.why && <div className="muted" style={{ fontSize: 11 }}>ⓘ {o.why}</div>}</td>
           <td className="num" style={{ whiteSpace: 'nowrap' }}>{o.amount}</td>
-          <td>{o.canUndo && <button className="btn danger" style={{ minHeight: 0, padding: '4px 10px' }} onClick={() => setAsk(o)}>✕ {pt('opsCancel', locale)}</button>}</td>
+          <td onClick={e => e.stopPropagation()}>{o.canUndo && <button className="btn danger" style={{ minHeight: 0, padding: '4px 10px' }} onClick={() => setAsk(o)}>✕ {pt('opsCancel', locale)}</button>}</td>
         </tr>)}
       </tbody></table>}
       <p className="muted" style={{ fontSize: 12 }}>{pt('opsNote', locale)}</p>
+      {view && <OpDetail boot={boot} locale={locale} op={view} label={label(view.action)} who={nameOf(view.user_id)} onClose={() => setView(null)} />}
       {ask && <ReasonDialog locale={locale} op={ask} label={label(ask.action)} onOk={r => void cancel(ask, r)} onClose={() => setAsk(null)} />}
       {ret && <ReturnDialog boot={boot} locale={locale} order={ret.order} lines={ret.lines} staff={staff} full presetReason={ret.reason}
         onDone={() => { setRet(null); boot.engine.poke(); setMsg(pt('opsCancelled', locale)); setTimeout(() => setTick(t => t + 1), 2500); }} onClose={() => setRet(null)} />}
@@ -161,6 +165,30 @@ function ReasonDialog({ locale, op, label, onOk, onClose }: { locale: L; op: Op;
       <p className="muted" style={{ fontSize: 13 }}>{pt(op.canUndo === 'sale' ? 'opsSaleHow' : op.canUndo === 'purchase' ? 'opsPurchaseHow' : 'opsDebtHow', locale)}</p>
       <div className="seg" style={{ marginBottom: 8 }}>{REASONS.map(r => <button key={r} className={k === r ? 'active' : ''} onClick={() => setK(r)}>{pt(r === 'test' ? 'opsReasonTest' : r === 'mistake' ? 'opsReasonMistake' : 'opsReasonOther', locale)}</button>)}</div>
       <input className="input" placeholder={pt('opsReasonNote', locale)} value={note} onChange={e => setNote(e.target.value)} />
+    </Modal>
+  );
+}
+
+/** Any operation other than a sale: what the till recorded — its lines (purchase, return, stock) with item names, and its fields. */
+function OpDetail({ boot, locale, op, label, who, onClose }: { boot: Booted; locale: L; op: Op; label: string; who: string; onClose: () => void }) {
+  const a = op.after ?? {}; const lines = Array.isArray(a.lines) ? (a.lines as Record<string, unknown>[]) : [];
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => { const ids = lines.map(l => String(l.product_id ?? '')).filter(Boolean); if (!ids.length) return;
+    boot.db.products.bulkGet(ids).then(ps => setNames(Object.fromEntries(ps.filter(Boolean).map(p => [p!.id, (locale === 'ar' ? p!.name.ar || p!.name.en : p!.name.en || p!.name.ar) ?? ''])))); }, [boot, op.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const skip = new Set(['lines', 'result', 'id', 'shop_id', 'user_id', 'device_id', 'shift_id', 'allocations', 'payments', 'stock_moves', 'cash_order_ids', 'order_ids', 'fields']);
+  const fields = Object.entries(a).filter(([k, v]) => !skip.has(k) && v !== null && v !== '' && typeof v !== 'object');
+  return (
+    <Modal open onClose={onClose} wide title={<>{label} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {fmtTime(op.at, locale)} · {who}</span></>}
+      footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
+      {op.amount && <p style={{ marginTop: 0 }}><strong className="num">{op.amount}</strong> <span className="muted">{op.detail}</span></p>}
+      {!!lines.length && <table className="table"><tbody>
+        <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th className="num">{pt('total', locale)}</th></tr>
+        {lines.map((l, i) => { const nm = (l.name as { ar?: string; en?: string } | undefined); const name = nm ? (locale === 'ar' ? nm.ar || nm.en : nm.en || nm.ar) : names[String(l.product_id ?? '')] || '—';
+          const cents = num(l.line_total_cents ?? l.amount_cents); return <tr key={i}><td>{name}</td><td style={{ textAlign: 'center' }}>{num(l.qty ?? l.quantity)}</td><td className="num">{cents ? fmtUsd(cents) : ''}</td></tr>; })}
+      </tbody></table>}
+      {!!fields.length && <table className="table" style={{ marginTop: 8 }}><tbody>
+        {fields.map(([k, v]) => <tr key={k}><td className="muted">{k}</td><td style={{ overflowWrap: 'anywhere' }}>{String(v)}</td></tr>)}
+      </tbody></table>}
     </Modal>
   );
 }

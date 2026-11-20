@@ -5,6 +5,7 @@ import { currentShift, dayKey, fmtLbp, fmtUsd, localReport, localStock, num, shi
 import { pt, posErr, type L } from '../i18n';
 import ApprovalsReport from '../components/ApprovalsReport';
 import OpsLog from '../components/OpsLog';
+import { SaleDetail, SalesList } from '../components/SaleDetail';
 import type { Booted } from '../lib/boot';
 import { can, roleOf } from '../lib/perm';
 import type { Staff } from '@suqa/pos-core';
@@ -35,6 +36,8 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
   const [preset, setPreset] = useState<Preset>('today');
   const [range, setRange] = useState<[string, string]>(() => presetRange('today'));
   const [tab, setTab] = useState<Tab>('overview');
+  // tap a record: a day or a shift opens its sales, a sale opens its items
+  const [open, setOpen] = useState<null | { k: 'day'; day: string } | { k: 'shift'; id: string; title: string } | { k: 'sale'; id: string }>(null);
   const [rep, setRep] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -158,7 +161,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               {tab === 'overview' && <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
                 <table className="table" style={{ flex: 2, minWidth: 260 }}><tbody>
                   <tr><th style={{ textAlign: 'start' }}>{pt('byDay', locale)}</th><th>{pt('salesCount', locale)}</th><th>{pt('sales', locale)}</th></tr>
-                  {rep.by_day.map(d => <tr key={d.day}><td dir="ltr">{d.day}</td><td className="muted" style={{ textAlign: 'center' }}>{d.count}</td><td className="num">{N(d.cents)}</td></tr>)}
+                  {rep.by_day.map(d => <tr key={d.day} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k: 'day', day: d.day })}><td dir="ltr">{d.day}</td><td className="muted" style={{ textAlign: 'center' }}>{d.count}</td><td className="num">{N(d.cents)}</td></tr>)}
                 </tbody></table>
                 <table className="table" style={{ flex: 1, minWidth: 220 }}><tbody>
                   <tr><th colSpan={3} style={{ textAlign: 'start' }}>{pt('byChannel', locale)}</th></tr>
@@ -199,14 +202,17 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 <small className="muted" style={{ display: 'block', marginTop: 6 }}>{pt('stockValueNote', locale)}</small>
               </>}
               {tab === 'unpaid' && <table className="table"><tbody>
-                {rep.unpaid.map((u, n) => <tr key={n}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
+                {rep.unpaid.map((u, n) => <tr key={n} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k: 'sale', id: u.order_id })}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}
               </tbody></table>}
-              {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} />}
+              {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} onSale={id => setOpen({ k: 'sale', id })} />}
+              {open?.k === 'day' && <SalesList boot={boot} locale={locale} title={open.day} from={open.day} onClose={() => setOpen(null)} />}
+              {open?.k === 'shift' && <SalesList boot={boot} locale={locale} title={open.title} shiftId={open.id} onClose={() => setOpen(null)} />}
+              {open?.k === 'sale' && <SaleDetail boot={boot} locale={locale} orderId={open.id} onClose={() => setOpen(null)} />}
               {tab === 'approvals' && <ApprovalsReport boot={boot} sb={sb} locale={locale} index={index} from={range[0]} to={range[1]} />}
               {tab === 'shifts' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('openedAt', locale)}</th><th>{pt('closedAt', locale)}</th><th>{pt('expected', locale)}</th><th>{pt('counted', locale)}</th><th>{pt('diff', locale)}</th></tr>
-                {rep.shifts.map(x => <tr key={x.id}><td className="muted">{fmtTime(x.opened_at, locale)}</td><td className="muted">{x.closed_at ? fmtTime(x.closed_at, locale) : pt('open', locale)}</td>
+                {rep.shifts.map(x => <tr key={x.id} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k: 'shift', id: x.id, title: `${pt('shiftsList', locale)} · ${fmtTime(x.opened_at, locale)}` })}><td className="muted">{fmtTime(x.opened_at, locale)}</td><td className="muted">{x.closed_at ? fmtTime(x.closed_at, locale) : pt('open', locale)}</td>
                   <td className="num">{N(num(x.expected_usd_cents))}<br /><small>{fmtLbp(num(x.expected_lbp), locale)}</small></td><td className="num">{x.counted_usd_cents == null ? '—' : N(x.counted_usd_cents)}<br /><small>{x.counted_lbp == null ? '' : fmtLbp(x.counted_lbp, locale)}</small></td>
                   <td className={`num ${num(x.diff_usd_cents) || num(x.diff_lbp) ? 'bad' : ''}`}>{x.diff_usd_cents == null ? '—' : N(x.diff_usd_cents)}<br /><small>{x.diff_lbp == null ? '' : fmtLbp(x.diff_lbp, locale)}</small></td></tr>)}
               </tbody></table>}

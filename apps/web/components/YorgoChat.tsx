@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ConfirmProvider';
 type L = 'ar' | 'en';
 type Item = { product_id: string; name: Record<string, string>; unit: string | null; price_usd: number; days: number[] | null; shop: ShopRef };
 type Line = Item & { key: string; quantity: number; note?: string };
-type Choice = { key: string; phrase: string; quantity: number; options: Item[] };
+type Choice = { key: string; phrase: string; quantity: number; options: Item[]; picked?: number };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
 type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
 type DraftIn = { kind?: string; add?: boolean; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[] }[]; not_found?: string[] };
@@ -27,7 +27,7 @@ const T = {
   signIn: { ar: 'سجّل الدخول لتتحدث مع يورغو.', en: 'Sign in to chat with Yorgo.' }, signInBtn: { ar: 'تسجيل الدخول', en: 'Sign in' },
   draft: { ar: 'سلة مقترحة', en: 'Suggested basket' }, toCart: { ar: 'أضف إلى السلة', en: 'Add to cart' }, discard: { ar: 'تجاهل', en: 'Discard' },
   added: { ar: 'أُضيفت إلى السلة', en: 'Added to cart' }, discarded: { ar: 'تم التجاهل', en: 'Discarded' }, viewCart: { ar: 'افتح السلة', en: 'Open cart' },
-  pick: { ar: 'اختر', en: 'pick one' }, skip: { ar: 'تخطَّ', en: 'Skip' }, pickFirst: { ar: 'ما عليه ❓ لا يُضاف قبل أن تختار.', en: 'Items marked ❓ are not added until you pick.' },
+  pick: { ar: 'اختر واحداً أو أكثر', en: 'pick one or more' }, skip: { ar: 'تخطَّ', en: 'Skip' }, done: { ar: 'تم', en: 'Done' }, pickFirst: { ar: 'ما عليه ❓ لا يُضاف قبل أن تختار.', en: 'Items marked ❓ are not added until you pick.' },
   notFound: { ar: 'غير موجود', en: 'Not found' },
   replace: { ar: 'سلتك تحتوي أصنافاً من متجر آخر. استبدالها؟', en: 'Your cart has items from another shop. Replace them?' },
   oneShop: { ar: 'السلة تقبل متجراً واحداً في كل مرة: أُضيفت أصناف', en: 'The cart takes one shop at a time: added the items from' },
@@ -93,6 +93,13 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
     setBusy(false);
   };
 
+  // a pick joins the basket and the OTHER suggestions stay, so a second and a third can be picked from the same group
+  // (several drinks, several kinds of chips); the group goes when it is empty or closed with "done" / "skip"
+  const pickOption = (d: Draft, c: Choice, o: Item): Draft => {
+    const i = d.lines.findIndex(x => x.product_id === o.product_id && !x.note);
+    const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { ...o, key: `${c.key}-${o.product_id}`, quantity: c.quantity }];
+    return { ...d, lines, choices: d.choices.map(x => (x.key === c.key ? { ...x, picked: (x.picked ?? 0) + 1, options: x.options.filter(y => y.product_id !== o.product_id) } : x)).filter(x => x.options.length) };
+  };
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
   const accept = async (m: Msg) => {
     if (!m.draft?.lines.length) return;
@@ -155,8 +162,8 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
                   <div key={c.key} className="yorgo-choice">
                     <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {t('pick')}</span></div>
                     <div className="yorgo-options">
-                      {c.options.map(o => <button key={o.product_id} className="btn" onClick={() => { learn(o, c.phrase); patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { ...o, key: c.key, quantity: c.quantity }] })); }}>{name(o.name)} <small className="muted">{money(o.price_usd)} · {name(o.shop.name)}</small></button>)}
-                      <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>✕ {t('skip')}</button>
+                      {c.options.map(o => <button key={o.product_id} className="btn" onClick={() => { learn(o, c.phrase); patch(m.id, d => pickOption(d, c, o)); }}>{name(o.name)} <small className="muted">{money(o.price_usd)} · {name(o.shop.name)}</small></button>)}
+                      <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>{c.picked ? `✓ ${t('done')}` : `✕ ${t('skip')}`}</button>
                     </div>
                   </div>
                 ))}

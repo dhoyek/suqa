@@ -10,7 +10,7 @@ import Modal from './Modal';
 export type YorgoCartLine = { product: Product; quantity: number; note?: string };
 type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[] }[]; not_found?: string[] };
 type Line = { key: string; product: Product; quantity: number; note?: string };
-type Choice = { key: string; phrase: string; quantity: number; options: Product[] };
+type Choice = { key: string; phrase: string; quantity: number; options: Product[]; picked?: number };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
 type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
 type Sb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>; from: (t: string) => any };   // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -86,6 +86,13 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     setBusy(false);
   };
 
+  // a pick joins the draft and the OTHER suggestions stay, so a second and a third can be picked from the same group;
+  // the group goes when it is empty or closed
+  const pickOption = (d: Draft, c: Choice, p: Product): Draft => {
+    const i = d.lines.findIndex(x => x.product.id === p.id && !x.note);
+    const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { key: `${c.key}-${p.id}`, product: p, quantity: c.quantity }];
+    return { ...d, lines, choices: d.choices.map(x => (x.key === c.key ? { ...x, picked: (x.picked ?? 0) + 1, options: x.options.filter(y => y.id !== p.id) } : x)).filter(x => x.options.length) };
+  };
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
   const step = (p: Product) => (p.decimal_qty ? 0.5 : 1);
   const accept = (m: Msg, asOrder = false) => {
@@ -164,8 +171,8 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
               <div key={c.key} className="yorgo-choice">
                 <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {pt('yorgoPick', locale)}</span></div>
                 <div className="yorgo-options">
-                  {c.options.map(p => <button key={p.id} className="btn" onClick={() => { learn(p, c.phrase); patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key), lines: [...d.lines, { key: c.key, product: p, quantity: c.quantity }] })); }}>{text(p.name, locale)} <small className="muted num">{price(p, locale)}</small></button>)}
-                  <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>✕ {pt('yorgoSkip', locale)}</button>
+                  {c.options.map(p => <button key={p.id} className="btn" onClick={() => { learn(p, c.phrase); patch(m.id, d => pickOption(d, c, p)); }}>{text(p.name, locale)} <small className="muted num">{price(p, locale)}</small></button>)}
+                  <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>{c.picked ? `✓ ${pt('ok', locale)}` : `✕ ${pt('yorgoSkip', locale)}`}</button>
                 </div>
               </div>
             ))}

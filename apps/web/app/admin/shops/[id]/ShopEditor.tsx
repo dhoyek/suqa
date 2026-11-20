@@ -9,6 +9,7 @@ import CategoryPick from '@/components/CategoryPick';
 import { ui } from '@/lib/ui-text';
 import RestorePanel from './RestorePanel';
 import SectionNames from './SectionNames';
+import ShareButton from '@/components/ShareButton';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
 
 type Member = { user_id: string; full_name: string | null; email: string; role: 'owner' | 'staff' };
@@ -128,9 +129,22 @@ export default function ShopEditor(props: {
     <div><label className="label">{label}</label><input className="input" dir={dir} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} /></div>
   );
 
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
   return (
     <div className="stack">
       <h1 style={{ margin: 0, fontSize: 20 }}>{shop ? (f.name_ar || f.name_en) : labels.newShop}</h1>
+      {/* share the store: the saved link (a slug being edited is not live until saved) */}
+      {shop?.slug && (() => { const ar = props.locale === 'ar'; const name = ar ? (shop.name.ar || shop.name.en) : (shop.name.en || shop.name.ar); const text = ar ? `اطلب من ${name} أونلاين` : `Order from ${name} online`; return (
+        <section className="card stack" style={{ gap: 8 }}>
+          <strong>{ar ? 'مشاركة المتجر' : 'Share the store'}</strong>
+          <code dir="ltr" style={{ fontSize: 13, overflowWrap: 'anywhere' }}>{origin}/s/{shop.slug}</code>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <ShareButton whatsapp className="btn primary" path={`/s/${shop.slug}`} locale={ar ? 'ar' : 'en'} label={ar ? 'إرسال عبر واتساب' : 'Send on WhatsApp'} text={text} />
+            <ShareButton copy path={`/s/${shop.slug}`} locale={ar ? 'ar' : 'en'} label={ar ? 'مشاركة' : 'Share'} text={text} />
+            <a className="btn ghost" href={`/s/${shop.slug}`} target="_blank" rel="noreferrer">↗ {ar ? 'فتح المتجر' : 'Open store'}</a>
+          </div>
+        </section>); })()}
       <section className="card stack">
         <div className="row" style={{ alignItems: 'stretch' }}>
           <div style={{ flex: 1 }}>{field('name_ar', labels.nameAr, 'rtl')}</div>

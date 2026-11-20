@@ -12,8 +12,10 @@ begin
   assert (select section from suqa.products where name->>'en' = 'PEPSI 2L' and shop_id = sh) = 'Soft Drinks';
   assert (select section from suqa.products where name->>'en' = 'ORIGINAL 240ML' and shop_id = sh) = 'Juices';
   assert (select section from suqa.products where name->>'en' = 'MR JUICY 1L' and shop_id = sh) = 'Juices';
-  assert (select section from suqa.products where name->>'en' = 'Soap bar' and shop_id = sh) = 'Personal Care';
-  assert (select section from suqa.products where name->>'en' = 'Zaatar' and shop_id = sh) = 'Manakish & Pastries';
+  assert (select section from suqa.products where name->>'en' = 'Soap bar' and shop_id = sh) = 'Soap & Hand Wash';
+  assert (select section from suqa.products where name->>'en' = 'Zaatar' and shop_id = sh) = 'Manakish';
+  assert (select old_section from suqa.item_category_moves m join suqa.products p on p.id = m.product_id where p.name->>'en' = 'Soap bar' and p.shop_id = sh) = 'SOAP', 'the old section is kept for undo (and survives a second run)';
+  assert not exists (select 1 from suqa.item_category_moves where old_section = new_section), 'a move that moved nothing';
   assert (select name->>'ar' from suqa.item_categories where tenant_id = t and key = 'My Own Section') = 'قسمي', 'unknown section kept with the shop''s name';
   assert not exists (select 1 from suqa.products p where coalesce(trim(p.section), '') <> '' and not exists (select 1 from suqa.item_categories c where c.tenant_id = p.tenant_id and c.key = p.section)), 'an item is outside the list';
   n := (select count(*) from suqa.item_categories where tenant_id = t);

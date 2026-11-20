@@ -9,14 +9,20 @@
 --   * suqa.item_category_add(shop, en, ar) — a shop's owner / stock keeper (or an admin) adds a category that is missing
 --     (a clothes shop tomorrow: "Men's Clothing"). It joins the shared list at once, for every shop. The same name again
 --     (either language, any spelling of case / accents) returns the existing one, never a double.
---   * 52 categories seeded, and every item moved from its old section to its shared category (the table below).
---     "SYRO JUS/SOFTDR" is split by the item's name: juices → "Juices", the rest → "Soft Drinks".
+--   * ONE FLAT, DETAILED list (100 categories): a shop's section keeps its own level of detail — "Shampoo & Conditioner",
+--     "Deodorants", "Toothpaste", "Ketchup"… stay separate, because search and Yorgo read the category name. Only the same
+--     thing written differently is merged ("سلطات" / "Salads", "Argile" / "Nargile", "صحن" / "Plates", "بيتزا" / "Pizza").
+--     Mixed sections are split by the item's own name: "SYRO JUS/SOFTDR" → Juices / Instant Drinks / Soft Drinks.
+--     Dekanet Jadde's "AIR REFRESHNING" (115 mixed items: olives, chips, candy, vape…) → "Other", for the shop to sort.
+--     A few items plainly in the wrong section are put right (a conditioner under cheese, a mayonnaise under mustard…).
 --     A section this script does not know stays as it is and is added to the list under its own name (nothing is lost).
+--   * suqa.item_category_moves — every item this script moves, with its OLD section, so a move can be undone:
+--       update suqa.products p set section = m.old_section from suqa.item_category_moves m where m.product_id = p.id and p.shop_id = '<shop>';
 --   products.section stays the column that holds the category (its key), so the tills, the reports, the search and Yorgo keep
 --   working unchanged; shops.section_names (74) is no longer read once a category is in the shared list.
 --
--- Table changes: NEW table suqa.item_categories. Data: products.section rewritten for the mapped sections (the tills receive
--- the change on their next sync). Idempotent: running it again changes nothing.
+-- Table changes: NEW tables suqa.item_categories, suqa.item_category_moves. Data: products.section rewritten for the mapped
+-- sections (the tills receive the change on their next sync). Idempotent: running it again changes nothing.
 
 create table if not exists suqa.item_categories (
   id          uuid primary key default gen_random_uuid(),
@@ -76,157 +82,219 @@ select t.id, v.key, jsonb_build_object('en', v.key, 'ar', v.ar), v.ord
 from suqa.tenants t cross join (values
     (10, 'Fruits & Vegetables', 'خضار وفواكه'),
     (20, 'Bread & Bakery', 'خبز ومخبوزات'),
-    (30, 'Dairy & Eggs', 'ألبان وأجبان وبيض'),
-    (40, 'Meat & Cold Cuts', 'لحوم ومرتديلا'),
-    (50, 'Grains, Pulses & Spices', 'حبوب وبقول وبهارات'),
-    (60, 'Pasta & Soups', 'معكرونة وشوربات'),
-    (70, 'Canned Food', 'معلبات'),
-    (80, 'Oils & Butter', 'زيوت وسمنة'),
-    (90, 'Sauces & Pickles', 'صلصات ومخللات'),
-    (100, 'Breakfast & Spreads', 'فطور ومربيات'),
-    (110, 'Chips & Nuts', 'تشيبس ومكسرات'),
-    (120, 'Chocolate, Biscuits & Candy', 'شوكولا وبسكويت وسكاكر'),
-    (130, 'Desserts & Sweets', 'حلويات'),
-    (140, 'Ice Cream', 'بوظة'),
-    (150, 'Coffee & Tea', 'قهوة وشاي'),
-    (160, 'Water', 'مياه'),
-    (170, 'Juices', 'عصائر'),
-    (180, 'Soft Drinks', 'مشروبات غازية'),
-    (190, 'Drinks', 'مشروبات'),
-    (200, 'Alcoholic Drinks', 'مشروبات كحولية'),
-    (210, 'Tobacco, Argile & Charcoal', 'دخان وأراكيل وفحم'),
-    (220, 'Health & Pharmacy', 'صحة وصيدلية'),
-    (230, 'Baby', 'أطفال'),
-    (240, 'Cleaning & Detergents', 'منظفات ومعقمات'),
-    (250, 'Tissues, Wipes & Pads', 'محارم ومناديل وفوط'),
-    (260, 'Air Fresheners & Insect Control', 'معطرات ومبيدات حشرات'),
-    (270, 'Household & Disposables', 'أدوات منزلية وبلاستيك'),
-    (280, 'Personal Care', 'عناية شخصية'),
-    (290, 'Batteries & Electrical', 'بطاريات وكهربائيات'),
-    (300, 'Phones & Accessories', 'هواتف وإكسسوارات'),
-    (310, 'Starters & Salads', 'مقبلات وسلطات'),
-    (320, 'Manakish & Pastries', 'مناقيش ومعجنات'),
-    (330, 'Pizza', 'بيتزا'),
-    (340, 'Sandwiches & Snacks', 'سندويشات وسناك'),
-    (350, 'Plates & Meals', 'أطباق ووجبات'),
-    (360, 'Ready to Fry', 'جاهز للقلي'),
-    (370, 'Sushi Cakes', 'كيك سوشي'),
-    (380, 'Sashimi', 'ساشيمي'),
-    (390, 'Salmon Sets', 'سيتات سلمون'),
-    (400, 'Crab Sets', 'سيتات كراب'),
-    (410, 'Mix Sets', 'سيتات مشكّلة'),
-    (420, 'Seeds', 'بذور'),
-    (430, 'Fertilizers, Pesticides & Soil', 'أسمدة، مبيدات وتراب'),
-    (440, 'Irrigation', 'ريّ'),
-    (450, 'Machines', 'مكنات'),
-    (460, 'Tools & Spare Parts', 'عدّة وقطع غيار'),
-    (470, 'Tanks, Containers & Shade Nets', 'خزانات، أوعية وشبك'),
-    (480, 'Beekeeping', 'عدّة نحل'),
-    (490, 'Pest Control (Public Health)', 'صحة عامة'),
-    (500, 'Oils & Lubricants', 'زيوت وشحوم'),
-    (510, 'Olive Harvest & Sacks', 'مدّات زيتون وأكياس'),
-    (520, 'Other', 'متفرقات')
+    (30, 'Toast & Crackers', 'توست وكراكرز'),
+    (40, 'Dairy & Eggs', 'ألبان وأجبان وبيض'),
+    (50, 'Packaged Cheese', 'أجبان معلّبة'),
+    (60, 'Cheese & Cold Cuts', 'أجبان ومرتديلا'),
+    (70, 'Beef', 'لحم بقر'),
+    (80, 'Lamb', 'لحم غنم'),
+    (90, 'Poultry', 'دجاج'),
+    (100, 'Grains, Pulses & Spices', 'حبوب وبقول وبهارات'),
+    (110, 'Pantry (Mouneh)', 'مونة'),
+    (120, 'Pasta', 'معكرونة'),
+    (130, 'Soups & Noodles', 'شوربات ونودلز'),
+    (140, 'Canned Food', 'معلبات'),
+    (150, 'Cooking Oils & Butter', 'زيوت وسمنة وزبدة'),
+    (160, 'Olive Oil', 'زيت زيتون'),
+    (170, 'Sauces', 'صلصات'),
+    (180, 'Ketchup', 'كاتشب'),
+    (190, 'Mayonnaise', 'مايونيز'),
+    (200, 'Mustard', 'خردل'),
+    (210, 'Vinegar & Pickles', 'خل ومخللات'),
+    (220, 'Milk & Cereals', 'حليب وحبوب فطور'),
+    (230, 'Tahini & Halawa', 'طحينة وحلاوة'),
+    (240, 'Diet Products', 'منتجات حمية'),
+    (250, 'Chips & Nuts', 'تشيبس ومكسرات'),
+    (260, 'Nuts', 'مكسرات'),
+    (270, 'Chocolate, Biscuits & Candy', 'شوكولا وبسكويت وسكاكر'),
+    (280, 'Cakes, Desserts & Baking', 'كيك وحلويات ولوازم الحلو'),
+    (290, 'Arabic Sweets', 'حلويات عربية'),
+    (300, 'Ice Cream', 'بوظة'),
+    (310, 'Coffee', 'قهوة'),
+    (320, 'Tea & Herbal Teas', 'شاي وزهورات'),
+    (330, 'Water', 'مياه'),
+    (340, 'Juices', 'عصائر'),
+    (350, 'Soft Drinks', 'مشروبات غازية'),
+    (360, 'Instant Drinks', 'شراب بودرة'),
+    (370, 'Drinks', 'مشروبات'),
+    (380, 'Alcoholic Drinks', 'مشروبات كحولية'),
+    (390, 'Tobacco', 'دخان'),
+    (400, 'Lighters, Gas & Charcoal', 'ولاعات وغاز وفحم'),
+    (410, 'Argile', 'أراكيل'),
+    (420, 'Argile Tobacco (Maassel)', 'معسّل'),
+    (430, 'Argile Charcoal', 'فحم أراكيل'),
+    (440, 'Vitamins', 'فيتامينات'),
+    (450, 'Pain Relief', 'مسكّنات'),
+    (460, 'Baby Care', 'مستلزمات أطفال'),
+    (470, 'Hygiene & Sanitizers', 'تعقيم ونظافة'),
+    (480, 'Skin Care', 'عناية بالبشرة'),
+    (490, 'Detergents & Disinfectants', 'منظفات ومعقمات'),
+    (500, 'Tissues, Wipes & Pads', 'محارم ومناديل مبللة وفوط'),
+    (510, 'Air Fresheners', 'معطرات جو'),
+    (520, 'Insect Control', 'مبيدات حشرات'),
+    (530, 'Household', 'أدوات منزلية'),
+    (540, 'Disposable Plates & Cups', 'صحون وأكواب بلاستيك'),
+    (550, 'Candles', 'شموع'),
+    (560, 'Shampoo & Conditioner', 'شامبو وبلسم'),
+    (570, 'Deodorants', 'مزيلات عرق'),
+    (580, 'Shaving', 'حلاقة'),
+    (590, 'Soap & Hand Wash', 'صابون وغسول يدين'),
+    (600, 'Toothpaste', 'معجون أسنان'),
+    (610, 'Toothbrushes', 'فراشي أسنان'),
+    (620, 'Cosmetics & Body Care', 'مستحضرات تجميل وعناية'),
+    (630, 'Hair Colour', 'صبغات شعر'),
+    (640, 'Batteries', 'بطاريات'),
+    (650, 'Electrical', 'كهربائيات'),
+    (660, 'Phones & Accessories', 'هواتف وإكسسوارات'),
+    (670, 'Salads', 'سلطات'),
+    (680, 'Starters', 'مقبلات'),
+    (690, 'Sides', 'أطباق جانبية'),
+    (700, 'Manakish', 'مناقيش'),
+    (710, 'Zaatar Manakish', 'مناقيش زعتر'),
+    (720, 'Cheese & Meat Manakish', 'مناقيش جبنة ولحمة'),
+    (730, 'Dough Pies & Pizza', 'معجنات وبيتزا'),
+    (740, 'Pastries (Mouajjanat)', 'معجنات'),
+    (750, 'Dough', 'عجين'),
+    (760, 'Kaak', 'كعك'),
+    (770, 'Pizza', 'بيتزا'),
+    (780, 'Sandwiches', 'سندويشات'),
+    (790, 'Subs', 'ساب'),
+    (800, 'Snack', 'سناك'),
+    (810, 'Burritos', 'بوريتو'),
+    (820, 'Plates', 'صحون'),
+    (830, 'Home Cooking', 'أكل بيتي'),
+    (840, 'Ready to Fry', 'جاهز للقلي'),
+    (850, 'Sushi Cakes', 'كيك سوشي'),
+    (860, 'Sashimi', 'ساشيمي'),
+    (870, 'Salmon Sets', 'سيتات سلمون'),
+    (880, 'Crab Sets', 'سيتات كراب'),
+    (890, 'Mix Sets', 'سيتات مشكّلة'),
+    (900, 'Seeds', 'بذور'),
+    (910, 'Fertilizers, Pesticides & Soil', 'أسمدة ومبيدات وتراب'),
+    (920, 'Irrigation', 'ريّ'),
+    (930, 'Machines', 'مكنات'),
+    (940, 'Tools & Spare Parts', 'عدّة وقطع غيار'),
+    (950, 'Tanks, Containers & Shade Nets', 'خزانات وأوعية وشبك'),
+    (960, 'Beekeeping', 'عدّة نحل'),
+    (970, 'Pest Control (Public Health)', 'مكافحة حشرات وقوارض'),
+    (980, 'Oils & Lubricants', 'زيوت وشحوم'),
+    (990, 'Olive Harvest & Sacks', 'مدّات زيتون وأكياس'),
+    (1000, 'Other', 'متفرقات')
 ) as v(ord, key, ar)
 on conflict (tenant_id, key) do nothing;
 
--- ---------- every item onto the shared list ----------
--- juices out of the mixed soft-drinks section, by the item's own name
-update suqa.products p set section = 'Juices'
- where p.section = 'SYRO JUS/SOFTDR'
-   and (suqa.norm_text(coalesce(p.name->>'ar', '') || ' ' || coalesce(p.name->>'en', '')) ~ '(^| )(juice|juices|juicy|jus|nectar|عصير|عصاير|نكتار)( |$)');
+-- ---------- where every item came from (for undo) ----------
+create table if not exists suqa.item_category_moves (
+  product_id   uuid primary key references suqa.products(id) on delete cascade,
+  tenant_id    uuid not null references suqa.tenants(id) on delete cascade,
+  shop_id      uuid not null references suqa.shops(id) on delete cascade,
+  old_section  text not null,
+  new_section  text not null,
+  moved_at     timestamptz not null default now()
+);
+create index if not exists item_category_moves_shop_idx on suqa.item_category_moves (shop_id);
+alter table suqa.item_category_moves enable row level security;   -- no policies: kept for undo, read by the service role only
+revoke all on suqa.item_category_moves from public, anon, authenticated;
 
-update suqa.products p set section = m.new
-from (values
+-- ---------- every item onto the shared list ----------
+-- the new category of each item: by its own name where a section was mixed or the item was plainly misplaced, else by its section
+drop table if exists pg_temp.cat_moves;
+create temp table cat_moves as
+select p.id, p.tenant_id, p.shop_id, p.section as old,
+       case
+         when p.section = 'SYRO JUS/SOFTDR' and x.n ~ 'master'                                                  then 'Chips & Nuts'
+         when p.section = 'SYRO JUS/SOFTDR' and x.n ~ '(darina|inst\.)'                                         then 'Instant Drinks'
+         when p.section = 'SYRO JUS/SOFTDR' and x.n ~ '(juice|juicy|jus|juis|nectar|original|x-tra|عصير|نكتار)' then 'Juices'
+         when p.section = 'FROMAGE/CHARCUT' and x.n ~ '(^| )cond'                                               then 'Shampoo & Conditioner'
+         when p.section = 'CREME COLORANT'  and x.n ~ '(^| )sh\.'                                               then 'Shampoo & Conditioner'
+         when p.section = 'MUSTARD'         and x.n ~ 'mayonnaise'                                              then 'Mayonnaise'
+         when p.section = 'OLIVE OIL'       and x.n ~ 'sunflower'                                               then 'Cooking Oils & Butter'
+         else m.new
+       end as new
+from suqa.products p
+cross join lateral (select lower(coalesce(p.name->>'en', '') || ' ' || coalesce(p.name->>'ar', '')) as n) x
+left join (values
     ('Produce', 'Fruits & Vegetables'),
     ('Bakery', 'Bread & Bakery'),
-    ('TOAST/CRAC/BKRL', 'Bread & Bakery'),
-    ('Kaak', 'Bread & Bakery'),
+    ('TOAST/CRAC/BKRL', 'Toast & Crackers'),
     ('Dairy', 'Dairy & Eggs'),
-    ('FROMAGE/SELFSERV.', 'Dairy & Eggs'),
-    ('FROMAGE/CHARCUT', 'Meat & Cold Cuts'),
-    ('Beef', 'Meat & Cold Cuts'),
-    ('Lamb', 'Meat & Cold Cuts'),
-    ('Poultry', 'Meat & Cold Cuts'),
+    ('FROMAGE/SELFSERV.', 'Packaged Cheese'),
+    ('FROMAGE/CHARCUT', 'Cheese & Cold Cuts'),
     ('HBOUB/TAMR SPIC', 'Grains, Pulses & Spices'),
-    ('Pantry', 'Grains, Pulses & Spices'),
-    ('PASTA', 'Pasta & Soups'),
-    ('SOUPE', 'Pasta & Soups'),
+    ('Pantry', 'Pantry (Mouneh)'),
+    ('PASTA', 'Pasta'),
+    ('SOUPE', 'Soups & Noodles'),
     ('CONSERVE', 'Canned Food'),
-    ('BUTTER/OIL', 'Oils & Butter'),
-    ('OLIVE OIL', 'Oils & Butter'),
-    ('SAUCE', 'Sauces & Pickles'),
-    ('KETCHUP', 'Sauces & Pickles'),
-    ('MAYONNAISE', 'Sauces & Pickles'),
-    ('MUSTARD', 'Sauces & Pickles'),
-    ('VINAIGRE/PICKEL', 'Sauces & Pickles'),
-    ('LAIT/BLED/CEREA', 'Breakfast & Spreads'),
-    ('TAHINEH/HALAWA', 'Breakfast & Spreads'),
+    ('BUTTER/OIL', 'Cooking Oils & Butter'),
+    ('OLIVE OIL', 'Olive Oil'),
+    ('SAUCE', 'Sauces'),
+    ('KETCHUP', 'Ketchup'),
+    ('MAYONNAISE', 'Mayonnaise'),
+    ('MUSTARD', 'Mustard'),
+    ('VINAIGRE/PICKEL', 'Vinegar & Pickles'),
+    ('LAIT/BLED/CEREA', 'Milk & Cereals'),
+    ('TAHINEH/HALAWA', 'Tahini & Halawa'),
+    ('DIETHETIQUE', 'Diet Products'),
     ('PISTACHERIE', 'Chips & Nuts'),
-    ('NUTS&CANDIES/KG', 'Chips & Nuts'),
+    ('NUTS&CANDIES/KG', 'Nuts'),
     ('CHOBISC/GUM/BON', 'Chocolate, Biscuits & Candy'),
     ('Chocolates', 'Chocolate, Biscuits & Candy'),
-    ('SWEET/CAKE/GELO', 'Desserts & Sweets'),
-    ('Sweets', 'Desserts & Sweets'),
+    ('SWEET/CAKE/GELO', 'Cakes, Desserts & Baking'),
+    ('Sweets', 'Arabic Sweets'),
     ('ICE CREAM', 'Ice Cream'),
-    ('COFFEE', 'Coffee & Tea'),
-    ('TEA/ZHOURAT', 'Coffee & Tea'),
+    ('COFFEE', 'Coffee'),
+    ('TEA/ZHOURAT', 'Tea & Herbal Teas'),
     ('WATER', 'Water'),
     ('SYRO JUS/SOFTDR', 'Soft Drinks'),
     ('مشروبات', 'Drinks'),
     ('ALCOOL', 'Alcoholic Drinks'),
-    ('TABAC', 'Tobacco, Argile & Charcoal'),
-    ('ALLUMET/GAZ/FHM', 'Tobacco, Argile & Charcoal'),
-    ('ALLUMETTE', 'Tobacco, Argile & Charcoal'),
-    ('Argile', 'Tobacco, Argile & Charcoal'),
-    ('Fahem', 'Tobacco, Argile & Charcoal'),
-    ('Ma3asel', 'Tobacco, Argile & Charcoal'),
-    ('Nargile', 'Tobacco, Argile & Charcoal'),
-    ('DIETHETIQUE', 'Health & Pharmacy'),
-    ('Vitamins', 'Health & Pharmacy'),
-    ('Pain relief', 'Health & Pharmacy'),
-    ('ALL TYPES', 'Other'),
-    ('Others', 'Other'),
-    ('DETERG/ANTISEPT', 'Cleaning & Detergents'),
+    ('TABAC', 'Tobacco'),
+    ('ALLUMET/GAZ/FHM', 'Lighters, Gas & Charcoal'),
+    ('ALLUMETTE', 'Lighters, Gas & Charcoal'),
+    ('Nargile', 'Argile'),
+    ('Ma3asel', 'Argile Tobacco (Maassel)'),
+    ('Fahem', 'Argile Charcoal'),
+    ('Pain relief', 'Pain Relief'),
+    ('Baby', 'Baby Care'),
+    ('Hygiene', 'Hygiene & Sanitizers'),
+    ('Skin care', 'Skin Care'),
+    ('DETERG/ANTISEPT', 'Detergents & Disinfectants'),
     ('WIPES/PADS/CLIN', 'Tissues, Wipes & Pads'),
-    ('AIR REFRESHNING', 'Air Fresheners & Insect Control'),
-    ('ANTI-INSECT', 'Air Fresheners & Insect Control'),
-    ('HOUSEHOLD', 'Household & Disposables'),
-    ('PLASTIC', 'Household & Disposables'),
-    ('CANDLE', 'Household & Disposables'),
-    ('SHAMPO/CONDITOI', 'Personal Care'),
-    ('DEODORANT', 'Personal Care'),
-    ('SHAVING', 'Personal Care'),
-    ('SOAP', 'Personal Care'),
-    ('DENTIFRICE', 'Personal Care'),
-    ('TOOTH BRUSH', 'Personal Care'),
-    ('COSMETICS', 'Personal Care'),
-    ('CREME COLORANT', 'Personal Care'),
-    ('Hygiene', 'Personal Care'),
-    ('Skin care', 'Personal Care'),
-    ('BATERY/FILM CAM', 'Batteries & Electrical'),
-    ('ELECTRICITY', 'Batteries & Electrical'),
-    ('سلطات', 'Starters & Salads'),
-    ('Salads', 'Starters & Salads'),
-    ('Starters', 'Starters & Salads'),
-    ('Sides', 'Starters & Salads'),
-    ('فرن', 'Manakish & Pastries'),
-    ('Zaatar Manakish', 'Manakish & Pastries'),
-    ('Cheese & Meat Manakish', 'Manakish & Pastries'),
-    ('Dough Pies & Pizza', 'Manakish & Pastries'),
-    ('Mo3ajjanat', 'Manakish & Pastries'),
-    ('Ajine', 'Manakish & Pastries'),
-    ('Manakish', 'Manakish & Pastries'),
+    ('ANTI-INSECT', 'Insect Control'),
+    ('HOUSEHOLD', 'Household'),
+    ('PLASTIC', 'Disposable Plates & Cups'),
+    ('CANDLE', 'Candles'),
+    ('SHAMPO/CONDITOI', 'Shampoo & Conditioner'),
+    ('DEODORANT', 'Deodorants'),
+    ('SHAVING', 'Shaving'),
+    ('SOAP', 'Soap & Hand Wash'),
+    ('DENTIFRICE', 'Toothpaste'),
+    ('TOOTH BRUSH', 'Toothbrushes'),
+    ('COSMETICS', 'Cosmetics & Body Care'),
+    ('CREME COLORANT', 'Hair Colour'),
+    ('BATERY/FILM CAM', 'Batteries'),
+    ('ELECTRICITY', 'Electrical'),
+    ('سلطات', 'Salads'),
+    ('فرن', 'Manakish'),
+    ('Mo3ajjanat', 'Pastries (Mouajjanat)'),
+    ('Ajine', 'Dough'),
     ('بيتزا', 'Pizza'),
-    ('ساب', 'Sandwiches & Snacks'),
-    ('سناك', 'Sandwiches & Snacks'),
-    ('Sandwiches', 'Sandwiches & Snacks'),
-    ('Burritos', 'Sandwiches & Snacks'),
-    ('صحن', 'Plates & Meals'),
-    ('Plates', 'Plates & Meals'),
-    ('Akel', 'Plates & Meals'),
-    ('Lil 2ale', 'Ready to Fry')
-) as m(old, new)
-where p.section = m.old;
+    ('ساب', 'Subs'),
+    ('سناك', 'Snack'),
+    ('صحن', 'Plates'),
+    ('Akel', 'Home Cooking'),
+    ('Lil 2ale', 'Ready to Fry'),
+    ('AIR REFRESHNING', 'Other'),
+    ('ALL TYPES', 'Other'),
+    ('Others', 'Other')
+) as m(old, new) on m.old = p.section;
+
+insert into suqa.item_category_moves (product_id, tenant_id, shop_id, old_section, new_section)
+select id, tenant_id, shop_id, old, new from cat_moves where new is not null and new <> old
+on conflict (product_id) do nothing;                                -- run again: the first (original) section is the one kept
+
+update suqa.products p set section = c.new from cat_moves c where c.id = p.id and c.new is not null and c.new <> c.old;
+drop table cat_moves;
 
 -- a section this script does not know: kept, and listed under its own name (the shop's own translation when it gave one)
 insert into suqa.item_categories (tenant_id, key, name, sort_order, created_shop)
@@ -241,6 +309,7 @@ on conflict (tenant_id, key) do nothing;
 
 select 'item categories installed' as result,
        (select count(*) from suqa.item_categories) as categories,
+       (select count(*) from suqa.item_category_moves) as items_moved,
        (select count(distinct section) from suqa.products where is_active) as sections_in_use,
        (select count(*) from suqa.products p where p.is_active and coalesce(trim(p.section), '') <> ''
           and not exists (select 1 from suqa.item_categories c where c.tenant_id = p.tenant_id and c.key = p.section)) as items_outside_the_list;

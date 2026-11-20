@@ -38,7 +38,7 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
         <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th className="num">{pt('price', locale)}</th><th className="num">{pt('total', locale)}</th></tr>
         {lines.map(l => <tr key={l.id}>
           <td>{text(l.name, locale)}{l.notes && <div className="muted" style={{ fontSize: 12 }}>📝 {l.notes}</div>}</td>
-          <td style={{ textAlign: 'center' }}>{num(l.quantity)}{l.unit ? ` ${l.unit}` : ''}</td>
+          <td style={{ textAlign: 'center' }} dir="ltr">{num(l.quantity)}{l.unit ? (/^\d/.test(l.unit) ? ` × ${l.unit}` : ` ${l.unit}`) : ''}</td>
           <td className="num">{l.price_currency === 'lbp' ? fmtLbp(num(l.unit_price_lbp), locale) : fmtUsd(num(l.unit_price_cents))}{num(l.discount_cents) ? <div className="muted" style={{ fontSize: 12 }}>−{fmtUsd(num(l.discount_cents))}</div> : null}</td>
           <td className="num">{fmtUsd(num(l.line_total_cents))}</td>
         </tr>)}
@@ -48,7 +48,7 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
       </tbody></table>
       {!!pays.length && <table className="table" style={{ marginTop: 8 }}><tbody>
         <tr><th colSpan={3} style={{ textAlign: 'start' }}>{pt('payments', locale)}</th></tr>
-        {pays.map(p => <tr key={p.id}><td className="muted">{fmtTime(p.at, locale)}</td><td>{pt(p.tender, locale)}{p.unpaid_name ? ` · ${p.unpaid_name}` : ''}{p.note ? <span className="muted"> · {p.note}</span> : null}</td><td className="num">{p.currency === 'lbp' ? fmtLbp(num(p.amount), locale) : fmtUsd(num(p.amount))}</td></tr>)}
+        {pays.map(p => { const refund = num(p.amount) < 0 || /^refund /.test(p.note ?? ''); const amt = Math.abs(num(p.amount)); return <tr key={p.id} className={refund ? 'bad' : undefined}><td className="muted">{fmtTime(p.at, locale)}</td><td>{refund ? `↩ ${pt('refund', locale)} · ` : ''}{pt(p.tender, locale)}{p.unpaid_name ? ` · ${p.unpaid_name}` : ''}{p.note && !refund ? <span className="muted"> · {p.note}</span> : null}</td><td className="num">{refund ? '−' : ''}{p.currency === 'lbp' ? fmtLbp(amt, locale) : fmtUsd(amt)}</td></tr>; })}
       </tbody></table>}
     </Modal>
   );

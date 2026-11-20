@@ -175,8 +175,12 @@ function OpDetail({ boot, locale, op, label, who, onClose }: { boot: Booted; loc
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => { const ids = lines.map(l => String(l.product_id ?? '')).filter(Boolean); if (!ids.length) return;
     boot.db.products.bulkGet(ids).then(ps => setNames(Object.fromEntries(ps.filter(Boolean).map(p => [p!.id, (locale === 'ar' ? p!.name.ar || p!.name.en : p!.name.en || p!.name.ar) ?? ''])))); }, [boot, op.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const skip = new Set(['lines', 'result', 'id', 'shop_id', 'user_id', 'device_id', 'shift_id', 'allocations', 'payments', 'stock_moves', 'cash_order_ids', 'order_ids', 'fields']);
-  const fields = Object.entries(a).filter(([k, v]) => !skip.has(k) && v !== null && v !== '' && typeof v !== 'object');
+  // only the words a person reads (amounts are already in the line above, in $ / L.L.)
+  const FIELD: Record<string, [string, string]> = { reason: ['السبب', 'Reason'], note: ['ملاحظة', 'Note'], name: ['الاسم', 'Name'], phone: ['الهاتف', 'Phone'], customer_name: ['الزبون', 'Customer'],
+    customer_phone: ['هاتف الزبون', 'Customer phone'], invoice_no: ['رقم الفاتورة', 'Invoice no.'], kind: ['النوع', 'Kind'], status: ['الحالة', 'Status'], tender: ['طريقة الدفع', 'Paid by'], number: ['الرقم', 'Number'] };
+  const KIND: Record<string, [string, string]> = { in: ['إدخال', 'In'], out: ['إخراج', 'Out'], receive: ['استلام', 'Received'], adjust: ['تعديل', 'Adjustment'], damage: ['تالف', 'Damaged'], count: ['جرد', 'Count'] };
+  const show = (k: string, v: unknown) => k === 'kind' && KIND[String(v)] ? KIND[String(v)][locale === 'ar' ? 0 : 1] : k === 'tender' ? pt(String(v) as Key, locale) : String(v);
+  const fields = Object.entries(a).filter(([k, v]) => FIELD[k] && v !== null && v !== '' && typeof v !== 'object');
   return (
     <Modal open onClose={onClose} wide title={<>{label} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {fmtTime(op.at, locale)} · {who}</span></>}
       footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
@@ -187,7 +191,7 @@ function OpDetail({ boot, locale, op, label, who, onClose }: { boot: Booted; loc
           const cents = num(l.line_total_cents ?? l.amount_cents); return <tr key={i}><td>{name}</td><td style={{ textAlign: 'center' }}>{num(l.qty ?? l.quantity)}</td><td className="num">{cents ? fmtUsd(cents) : ''}</td></tr>; })}
       </tbody></table>}
       {!!fields.length && <table className="table" style={{ marginTop: 8 }}><tbody>
-        {fields.map(([k, v]) => <tr key={k}><td className="muted">{k}</td><td style={{ overflowWrap: 'anywhere' }}>{String(v)}</td></tr>)}
+        {fields.map(([k, v]) => <tr key={k}><td className="muted">{FIELD[k][locale === 'ar' ? 0 : 1]}</td><td style={{ overflowWrap: 'anywhere' }}>{show(k, v)}</td></tr>)}
       </tbody></table>}
     </Modal>
   );

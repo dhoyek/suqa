@@ -1,25 +1,458 @@
 {
-  "about": "Yorgo test set (shopper chat, dev catalog). Each case is one conversation; each step is one customer message with what a good answer looks like. Run with docs/yorgo/eval-runner.js before and after every change to the prompt, the tools or the model. Messages are modelled on real customer chats (prod, Nov 2026).",
-  "cases": [
-    { "id": "list-arabizi", "steps": [
-      { "say": "badde 2 pepsi w kis chips w rabtet khebez", "expect": { "lang": "ar", "draft": true, "question": false } } ] },
-    { "id": "ask-then-order-then-add", "steps": [
-      { "say": "fi 3endkon man2ouche za3tar?", "expect": { "lang": "ar" } },
-      { "say": "eh badde we7de min 3end jneinet baytna", "expect": { "lang": "ar", "draft": true, "question": false, "shop": "jneinet-baytna" } },
-      { "say": "zedle ice tea", "expect": { "lang": "ar", "draft": true, "add": true, "question": false } },
-      { "say": "eh", "expect": { "lang": "ar" } } ] },
-    { "id": "food-not-seeds", "steps": [
-      { "say": "badde za3tar", "expect": { "lang": "ar", "draft": true, "question": false, "not_shop": "abi-hanna-agriculture" } } ] },
-    { "id": "shop-by-owner-name", "steps": [
-      { "say": "badde salmon set min 3end tony", "expect": { "lang": "ar", "draft": true, "shop": "b4-sushi" } } ] },
-    { "id": "kind-browse", "steps": [
-      { "say": "chou fi machroubet?", "expect": { "lang": "ar", "draft": true, "short": true } } ] },
-    { "id": "english-pick-size", "steps": [
-      { "say": "do you have pepsi cans?", "expect": { "lang": "en" } },
-      { "say": "330ml", "expect": { "lang": "en", "draft": true, "question": false } } ] },
-    { "id": "not-found", "steps": [
-      { "say": "badde lawze naye", "expect": { "lang": "ar" } } ] },
-    { "id": "shop-by-name-arabizi", "steps": [
-      { "say": "badde panadol w vitamin c min 3end saydaliyet rita", "expect": { "lang": "ar", "draft": true, "question": false, "shop": "pharmacie-rita" } } ] }
-  ]
+ "about": "Yorgo test set (dev catalog). Each case is one conversation; each step is one message with what a good answer looks like. Cases with \"mode\": \"seller\" run in the POS chat of the dev test shop (Elie Grocery) and need an owner or cashier login; the others are the customer chat. Run with docs/yorgo/eval-runner.js before and after every change to the prompt, the tools or the model. Messages are modelled on real chats (prod, Nov 2026).",
+ "cases": [
+  {
+   "id": "list-arabizi",
+   "steps": [
+    {
+     "say": "badde 2 pepsi w kis chips w rabtet khebez",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "ask-then-order-then-add",
+   "steps": [
+    {
+     "say": "fi 3endkon man2ouche za3tar?",
+     "expect": {
+      "lang": "ar"
+     }
+    },
+    {
+     "say": "eh badde we7de min 3end jneinet baytna",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "shop": "jneinet-baytna"
+     }
+    },
+    {
+     "say": "zedle ice tea",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "add": true,
+      "question": false
+     }
+    },
+    {
+     "say": "eh",
+     "expect": {
+      "lang": "ar"
+     }
+    }
+   ]
+  },
+  {
+   "id": "food-not-seeds",
+   "steps": [
+    {
+     "say": "badde za3tar",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "not_shop": "abi-hanna-agriculture"
+     }
+    }
+   ]
+  },
+  {
+   "id": "shop-by-owner-name",
+   "steps": [
+    {
+     "say": "badde salmon set min 3end tony",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "shop": "b4-sushi"
+     }
+    }
+   ]
+  },
+  {
+   "id": "kind-browse",
+   "steps": [
+    {
+     "say": "chou fi machroubet?",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "short": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "english-pick-size",
+   "steps": [
+    {
+     "say": "do you have pepsi cans?",
+     "expect": {
+      "lang": "en"
+     }
+    },
+    {
+     "say": "330ml",
+     "expect": {
+      "lang": "en",
+      "draft": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "not-found",
+   "steps": [
+    {
+     "say": "badde lawze naye",
+     "expect": {
+      "lang": "ar"
+     }
+    }
+   ]
+  },
+  {
+   "id": "shop-by-name-arabizi",
+   "steps": [
+    {
+     "say": "badde panadol w vitamin c min 3end saydaliyet rita",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "shop": "pharmacie-rita"
+     }
+    }
+   ]
+  },
+  {
+   "id": "add-after-choices",
+   "steps": [
+    {
+     "say": "badde pepsi",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false
+     }
+    },
+    {
+     "say": "zid kamen kis chips w 2 nescafe",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "add": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "replace",
+   "steps": [
+    {
+     "say": "badde 2 kafta min 3end jad",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "shop": "jad-butchery"
+     }
+    },
+    {
+     "say": "la2 badel, badde bas djej kemel",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "add": false,
+      "shop": "jad-butchery"
+     }
+    }
+   ]
+  },
+  {
+   "id": "clear",
+   "steps": [
+    {
+     "say": "badde bira",
+     "expect": {
+      "lang": "ar",
+      "draft": true
+     }
+    },
+    {
+     "say": "shil el salle",
+     "expect": {
+      "lang": "ar",
+      "cleared": true,
+      "draft": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "arabic-script",
+   "steps": [
+    {
+     "say": "بدي خبز وحليب ولبنة",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "english-butcher",
+   "steps": [
+    {
+     "say": "2 beef cubes and a whole chicken from the butcher",
+     "expect": {
+      "lang": "en",
+      "draft": true,
+      "question": false,
+      "shop": "jad-butchery"
+     }
+    }
+   ]
+  },
+  {
+   "id": "price-question",
+   "steps": [
+    {
+     "say": "adde l panadol?",
+     "expect": {
+      "lang": "ar",
+      "draft": false,
+      "short": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "same-shop-3endo",
+   "steps": [
+    {
+     "say": "fi sushi?",
+     "expect": {
+      "lang": "ar"
+     }
+    },
+    {
+     "say": "eh badde crab set min 3endo",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "shop": "b4-sushi"
+     }
+    }
+   ]
+  },
+  {
+   "id": "off-topic",
+   "steps": [
+    {
+     "say": "شو رأيك بالسياسة؟",
+     "expect": {
+      "lang": "ar",
+      "draft": false,
+      "short": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "asked-english",
+   "steps": [
+    {
+     "say": "7ke ma3e bel english",
+     "expect": {
+      "lang": "en"
+     }
+    },
+    {
+     "say": "badde khebez",
+     "expect": {
+      "lang": "en",
+      "draft": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "two-shops",
+   "steps": [
+    {
+     "say": "badde man2ouche jebne w pepsi",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "weights",
+   "steps": [
+    {
+     "say": "badde kilo lahme mafroume w nos kilo sder djej",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "shop": "jad-butchery"
+     }
+    }
+   ]
+  },
+  {
+   "id": "typo",
+   "steps": [
+    {
+     "say": "bdi shwrma djaj",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "shop": "sams-snack"
+     }
+    }
+   ]
+  },
+  {
+   "id": "kind-chocolate",
+   "steps": [
+    {
+     "say": "chou fi chokola?",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "short": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "which-sizes",
+   "steps": [
+    {
+     "say": "ayya 7ajem pepsi fi?",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "short": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "pos-paste-arabic",
+   "mode": "seller",
+   "steps": [
+    {
+     "say": "مرحبا، بدي 2 بيبسي كبير و3 ربطات خبز وعلبة لبنة، توصيل عالبيت الساعة 5",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "short": true
+     }
+    },
+    {
+     "say": "w zid 2 nescafe",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "add": true,
+      "question": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "pos-paste-arabizi",
+   "mode": "seller",
+   "steps": [
+    {
+     "say": "bonjour, 3 pepsi 2L w 2 kis chips master w panadol",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "question": false,
+      "short": true
+     }
+    },
+    {
+     "say": "zboun jdid: 1 marlboro a7mar w 2 kahwe",
+     "expect": {
+      "lang": "ar",
+      "draft": true,
+      "add": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "pos-item-question",
+   "mode": "seller",
+   "steps": [
+    {
+     "say": "fi 3enna zet zaytoun?",
+     "expect": {
+      "lang": "ar",
+      "draft": false
+     }
+    },
+    {
+     "say": "chou fi machroubet?",
+     "expect": {
+      "lang": "ar"
+     }
+    }
+   ]
+  },
+  {
+   "id": "pos-clear",
+   "mode": "seller",
+   "steps": [
+    {
+     "say": "2 tide w colgate",
+     "expect": {
+      "draft": true,
+      "question": false
+     }
+    },
+    {
+     "say": "shil el draft",
+     "expect": {
+      "cleared": true,
+      "draft": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "pos-english",
+   "mode": "seller",
+   "steps": [
+    {
+     "say": "customer wants 2 tide and a colgate, and add a dove soap",
+     "expect": {
+      "lang": "en",
+      "draft": true,
+      "question": false,
+      "short": true
+     }
+    }
+   ]
+  }
+ ]
 }

@@ -56,7 +56,7 @@ const matchItems: Tool = {
 
 // A draft is a proposal, nothing more: it carries item ids and quantities only. Names, prices and stock are filled in by the till from
 // its own catalog, an id the till does not know is dropped there, and nothing is sold until a person confirms it in the cart.
-export type OrderDraft = { lines: { product_id: string; quantity: number; note?: string }[]; choices: { phrase: string; quantity: number; options: string[] }[]; not_found: string[] };
+export type OrderDraft = { lines: { product_id: string; quantity: number; note?: string }[]; choices: { phrase: string; quantity: number; options: string[] }[]; not_found: string[]; add?: boolean };
 const qty = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(999, Math.round(n * 1000) / 1000) : 1; };
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -86,12 +86,13 @@ const draftOrder: Tool = {
       choices: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['phrase', 'options'], properties: {
         phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
       not_found: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
+      add: { type: 'boolean', description: 'true = add these items to the draft already open on screen ("zid", "kamen", "add", "also"). Omit for a new order or to replace the draft.' },
     },
   },
   modes: ['seller'], roles: ['owner', 'cashier'],
   async run(input) {
-    const { draft } = runDraft(input, 4); const { lines, choices, not_found } = draft;
-    return { ok: true, shown_to_staff: true, lines: lines.length, choices: choices.length, not_found: not_found.length, draft };
+    const { lines, choices, not_found } = runDraft(input, 4).draft; const add = input.add === true;
+    return { ok: true, shown_to_staff: true, ...(add ? { added_to_open_draft: true } : {}), lines: lines.length, choices: choices.length, not_found: not_found.length, draft: { lines, choices, not_found, ...(add ? { add: true } : {}) } };
   },
 };
 
@@ -107,7 +108,6 @@ const draftBasket: Tool = {
     + 'a sure match goes in "lines"; when two or more candidates could be meant (size, flavour, or the same item in different shops) put the phrase in "choices" with the candidate ids so the customer taps one; what was not found goes in "not_found". '
     + 'Use only product_id values returned by match_items. This does not order anything.',
   input_schema: { ...draftOrder.input_schema, properties: { ...(draftOrder.input_schema.properties as Record<string, unknown>),
-    add: { type: 'boolean', description: 'true = add these items to the draft already open on their screen (they said "zid", "kamen", "add", "also"). Omit for a new order or to replace the draft.' },
     choices: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['phrase', 'options'], properties: {
       phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, options: { type: 'array', minItems: 2, maxItems: 6, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
   } },

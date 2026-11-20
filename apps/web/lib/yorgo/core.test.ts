@@ -202,6 +202,8 @@ describe('yorgo core', () => {
     const sb = { rpc: async () => ({ data: null, error: null }), from: () => ({ select: () => ({ in: async () => ({ data: rows, error: null }) }) }) };
     const out = await t.run({ add: true, lines: [{ product_id: id(1), quantity: 2 }], choices: [{ phrase: 'pepsi', options: [1, 2, 3, 4, 5, 6].map(id) }] }, { sb, tenantId: 't1', mode: 'shopper', shopId: null, role: null }) as { draft: { add?: boolean; choices: { options: unknown[] }[] }; added_to_open_draft?: boolean };
     expect(out.draft.add).toBe(true); expect(out.added_to_open_draft).toBe(true); expect(out.draft.choices[0].options.length).toBe(6);
+    const so = await toolsFor('seller', 'cashier').find(x => x.name === 'draft_order')!.run({ add: true, lines: [{ product_id: id(1), quantity: 1 }] }, { sb, tenantId: 't1', mode: 'seller', shopId: 's1', role: 'cashier' }) as { draft: { add?: boolean }; added_to_open_draft?: boolean };
+    expect(so.draft.add).toBe(true); expect(so.added_to_open_draft).toBe(true);
     expect(((await t.run({ lines: [{ product_id: id(1), quantity: 1 }] }, { sb, tenantId: 't1', mode: 'shopper', shopId: null, role: null })) as { draft: { add?: boolean } }).draft.add).toBeUndefined();
   });
   it('gives each candidate its category, and counts what no shop has even when the answer is only text', async () => {

@@ -8,7 +8,7 @@ import Modal from './Modal';
 // The assistant never sells: a draft carries item ids and quantities only — names, prices and stock shown here come from the catalog on
 // this device, and the sale itself goes through the cart and the pay dialog like any other. Needs internet; the till works without it.
 export type YorgoCartLine = { product: Product; quantity: number; note?: string };
-type DraftIn = { kind?: string; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[] }[]; not_found?: string[] };
+type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[] }[]; not_found?: string[] };
 type Line = { key: string; product: Product; quantity: number; note?: string };
 type Choice = { key: string; phrase: string; quantity: number; options: Product[] };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
@@ -55,13 +55,27 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
-        const drafts = (r.drafts ?? []).filter(d => d.kind === 'draft_order').map(toDraft).filter((d): d is Draft => !!d);
+        const orders = (r.drafts ?? []).filter(d => d.kind === 'draft_order');
+        // "add" (zid, kamen): the new items join the draft still open on screen — the card moves down, under the answer
+        const stamp = `a${Date.now()}`;
+        const adds = orders.filter(d => d.add).map(toDraft).filter((d): d is Draft => !!d);
+        const drafts = orders.filter(d => !d.add).map(toDraft).filter((d): d is Draft => !!d);
         // a new draft replaces the one still open on screen; clear_draft takes it away
         const cleared = (r.drafts ?? []).some(d => d.kind === 'clear_draft');
         if (cleared || drafts.length) setMsgs(ms => ms.map(x => (x.draft?.state === 'open' ? { ...x, draft: { ...x.draft, state: 'discarded' } } : x)));
         if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
-        if (!r.reply && !drafts.length && !cleared) push({ from: 'note', text: pt('yorgoError', locale) });
+        if (adds.length) setMsgs(ms => {
+          const open = [...ms].reverse().find(x => x.draft?.state === 'open');
+          let d: Draft = open?.draft ?? { lines: [], choices: [], notFound: [], state: 'open' };
+          adds.forEach((a, n) => {
+            const lines = [...d.lines];
+            for (const l of a.lines) { const i = lines.findIndex(x => x.product.id === l.product.id && (x.note ?? '') === (l.note ?? '')); if (i >= 0) lines[i] = { ...lines[i], quantity: lines[i].quantity + l.quantity }; else lines.push({ ...l, key: `${stamp}${n}${l.key}` }); }
+            d = { ...d, lines, choices: [...d.choices, ...a.choices.map(c => ({ ...c, key: `${stamp}${n}${c.key}` }))], notFound: [...new Set([...d.notFound, ...a.notFound])] };
+          });
+          return [...ms.filter(x => x !== open), { id: ++seq.current, from: 'yorgo' as const, text: '', draft: d }];
+        });
+        if (!r.reply && !drafts.length && !adds.length && !cleared) push({ from: 'note', text: pt('yorgoError', locale) });
       } else if (r.status === 'paused') {
         push({ from: 'note', text: pt(r.reason === 'rate' ? 'yorgoRate' : r.reason === 'off' ? 'yorgoOff' : 'yorgoCap', locale) });
       } else {

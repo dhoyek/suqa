@@ -9,17 +9,18 @@ type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: un
 type Query = { select(c: string): Query; eq(c: string, v: unknown): Query; order(c: string, o: { ascending: boolean }): Query; limit(n: number): PromiseLike<{ data: unknown; error: { message: string } | null }> };
 export type Deps = {
   model: ModelClient; cfg: YorgoConfig;
-  admin: { rpc: Rpc };                               // service role: ONLY yorgo_gate and yorgo_record (switches, caps, metering)
+  admin: { rpc: Rpc };                               // service role: ONLY the gate and the record (switches, caps, metering) — and, on WhatsApp, the phone's own history
   sb: { rpc: Rpc; from(t: string): Query };  // (tools may use the same `from` for the public catalog)          // the caller's own client: history and every tool
 };
 export type TurnInput = {
-  tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; userId: string; mode: Mode; channel: 'app' | 'pos' | 'whatsapp';
+  tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; userId: string | null; mode: Mode; channel: 'app' | 'pos' | 'whatsapp';
+  waPhone?: string | null;                              // WhatsApp (95): no account — the conversation, the rate and the cap belong to the phone; the tools read the public catalog
   shopId: string | null; shopName?: string | null; role: Role | null; conversationId: string | null; message: string;
   focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
   shops?: ShopHint[];                                   // shopper mode: the open shops (public), so "min 3end el mir" finds its shop
 };
 export type TurnResult =
-  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[] }
+  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[]; first?: boolean; lang: Lang }
   | { status: 'paused'; reason: 'off' | 'rate' | 'cap_global' | 'cap_shop' | 'cap_user' }
   | { status: 'error'; error: string; conversation_id?: string };
 
@@ -31,15 +32,23 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   if (i.mode === 'seller' && (!i.shopId || !i.role)) return { status: 'error', error: 'not_staff' };
 
   // 1. switches, rate, caps — before a single token is spent
-  const gate = await d.admin.rpc('yorgo_gate', { p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId });
-  const g = (gate.data ?? {}) as { ok?: boolean; reason?: string; history_turns?: number };
+  const wa = i.channel === 'whatsapp' ? (i.waPhone ?? '').trim() : '';
+  if (i.channel === 'whatsapp' ? (!wa || i.mode !== 'shopper') : !i.userId) return { status: 'error', error: 'no_caller' };
+  const gate = wa ? await d.admin.rpc('yorgo_gate_wa', { p_tenant: i.tenant.id, p_phone: wa })
+    : await d.admin.rpc('yorgo_gate', { p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId });
+  const g = (gate.data ?? {}) as { ok?: boolean; reason?: string; history_turns?: number; conversation_id?: string | null; first?: boolean };
   if (gate.error) return { status: 'error', error: 'gate_failed' };
   if (!g.ok) return { status: 'paused', reason: (g.reason as 'off') ?? 'off' };
 
   // 2. history, read with the caller's own token: a conversation that is not theirs simply comes back empty and a new one starts
-  let conversationId = i.conversationId;
+  let conversationId = wa ? (g.conversation_id ?? null) : i.conversationId;      // WhatsApp: the phone's latest conversation, as the gate found it
   let history: Turn[] = [];
-  if (conversationId) {
+  if (conversationId && wa) {
+    const { data } = await d.admin.rpc('yorgo_history_wa', { p_conversation: conversationId, p_phone: wa, p_limit: (g.history_turns ?? 12) * 3 });
+    const rows = ((data as { role: Stored['role']; content: Block[] }[] | null) ?? []).reverse();
+    if (!rows.length) conversationId = null;
+    history = toTurns(rows);
+  } else if (conversationId) {
     const { data } = await d.sb.from('yorgo_messages').select('role,content').eq('conversation_id', conversationId).order('id', { ascending: false }).limit((g.history_turns ?? 12) * 3);
     const rows = ((data as { role: Stored['role']; content: Block[] }[] | null) ?? []).reverse();
     if (!rows.length) conversationId = null;
@@ -105,11 +114,12 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   } catch (e) { failure = (e as Error).message.slice(0, 160); }
 
   // 4. metering — also when the model failed half-way: what was spent is spent
-  const rec = await d.admin.rpc('yorgo_record', { p_conversation: conversationId, p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId, p_channel: i.channel, p_messages: fresh, p_summary: null });
+  const rec = wa ? await d.admin.rpc('yorgo_record_wa', { p_conversation: conversationId, p_tenant: i.tenant.id, p_phone: wa, p_messages: fresh })
+    : await d.admin.rpc('yorgo_record', { p_conversation: conversationId, p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId, p_channel: i.channel, p_messages: fresh, p_summary: null });
   const id = typeof rec.data === 'string' ? rec.data : conversationId;
   if (rec.error || !id) return { status: 'error', error: 'record_failed' };
   if (failure || (!reply && !drafts.length)) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
-  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6, missed };
+  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6, missed, lang: replyLanguage(text, history), ...(wa ? { first: g.first === true } : {}) };
 }
 
 const MISS_BELOW = 0.45;      // best candidate under this = the person asked for something no shop lists (yorgo_misses)

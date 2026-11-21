@@ -120,3 +120,21 @@ listed as long text, and nothing reached `yorgo_misses`.
 - **Misses**: phrases the search itself found nothing close for (best score < 0.45) are counted, also when the answer was only text.
 - **Test set**: `docs/yorgo/eval-cases.json` + `eval-runner.js` (browser, dev, signed in). First run after these changes: 12 / 12,
   2 of 12 answers with a question (both on "do you have…" questions), 30 model calls, $0.13.
+
+## 2026-11-21 — step W1: order by WhatsApp text (dev; script 95 on dev only)
+
+Plan and decisions: `docs/yorgo/PLAN.md`, "step W1". Off until Admin → Yorgo → "Yorgo on the market's WhatsApp" is switched on.
+
+- **Script 95** on dev: `wa_inbox` (each inbound message once), `yorgo_drafts` (a basket behind a link, 24 h), `wa_phone` on
+  conversations, the WhatsApp switch and the cap per phone ($2), and the server-only functions for the gate, the history and the record by phone.
+- **Core** (`core.ts`): a caller can be a WhatsApp phone instead of an account (`waPhone`): `yorgo_gate_wa`, `yorgo_history_wa`,
+  `yorgo_record_wa`. The app and the POS are unchanged. The result now says the reply language and, on WhatsApp, whether it is the phone's first answer.
+- **`lib/yorgo/whatsapp.ts`** (pure, tested): one text → Yorgo's line + one summary line + the link + the AI notice on the first
+  answer; "add" joins the draft sent before; cap → "paused" line; too fast → "one moment"; off → silent; the wording table.
+- **Webhook** (`api/wa/webhook`): Meta gets its 200 at once and the work runs after the response (`after()`); every message is
+  taken once; a text that matches no order goes to Yorgo with the **anonymous** catalog client (no account, no order data);
+  a voice note / photo gets the "text only" line at most once an hour per phone; order messages, locations and driver "ok" as before.
+- **`/y/<id>`**: the draft as the same basket card as the chat (`components/YorgoBasketCard.tsx`, moved out of `YorgoChat.tsx`),
+  prices read again when the page opens; "add to cart" → the usual cart and checkout.
+- **Admin → Yorgo**: the WhatsApp switch and the cap per WhatsApp phone. **Privacy page**: one line (Arabic and English).
+- Not done yet: the test set through the WhatsApp path (plan step 6); an end-to-end run with a real WhatsApp message.

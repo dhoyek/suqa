@@ -114,7 +114,19 @@ const draftBasket: Tool = {
   modes: ['shopper'],
   async run(input, ctx) {
     const base = runDraft(input, 6);
-    const ids = [...new Set([...base.draft.lines.map(l => l.product_id), ...base.draft.choices.flatMap(c => c.options)])];
+    const { lines, choices, not_found, soldOut } = await hydrateBasket(ctx, base.draft);
+    const draft: BasketDraft = { lines, choices, not_found, ...(input.add === true ? { add: true } : {}) };
+    return { ok: true, shown_to_customer: true, ...(soldOut.length ? { not_available_now: soldOut } : {}), ...(input.add === true ? { added_to_open_draft: true } : {}), lines: lines.length, choices: choices.length, not_found: not_found.length, shops: [...new Set(lines.map(l => l.shop.slug))].length, draft };
+  },
+};
+
+/**
+ * A draft held as ids (what the model returned, or what a WhatsApp draft link stores) → the basket the customer sees: names,
+ * prices, shops and availability re-read from the catalog with the given client, so it is always today's price. An id that is not
+ * on sale online is dropped; one that is sold out is said in not_found.
+ */
+export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx'>, slim: Pick<OrderDraft, 'lines' | 'choices' | 'not_found'>): Promise<{ lines: BasketDraft['lines']; choices: BasketDraft['choices']; not_found: string[]; soldOut: string[] }> {
+  const ids = [...new Set([...slim.lines.map(l => l.product_id), ...slim.choices.flatMap(c => c.options)])];
     const found = new Map<string, ItemOut>();
     const soldOut = new Map<string, string>();
     if (ids.length && ctx.sb.from) {
@@ -131,20 +143,23 @@ const draftBasket: Tool = {
           shop: { id: sh.id, slug: sh.slug, name: sh.name, whatsapp: sh.whatsapp, min_order_usd: Number(sh.min_order_usd ?? 0), pickup_enabled: sh.pickup_enabled !== false } });
       }
     }
-    const not_found = [...base.draft.not_found];
+    const not_found = [...slim.not_found];
     const out = (id: string) => { const n = soldOut.get(id); if (n && !not_found.includes(`${n} (غير متوفر الآن)`)) not_found.push(`${n} (غير متوفر الآن)`); };
-    const lines = base.draft.lines.flatMap(l => { const it = found.get(l.product_id); if (!it) out(l.product_id); return it ? [{ ...it, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) }] : []; });
+    const lines = slim.lines.flatMap(l => { const it = found.get(l.product_id); if (!it) out(l.product_id); return it ? [{ ...it, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) }] : []; });
     const choices: BasketDraft['choices'] = [];
-    for (const c of base.draft.choices) {
+    for (const c of slim.choices) {
       const options = c.options.map(o => found.get(o)).filter((o): o is ItemOut => !!o);
       if (options.length > 1) choices.push({ phrase: c.phrase, quantity: c.quantity, options });
       else if (options.length === 1) lines.push({ ...options[0], quantity: c.quantity });
       else not_found.push(c.phrase);
     }
-    const draft: BasketDraft = { lines, choices, not_found, ...(input.add === true ? { add: true } : {}) };
-    return { ok: true, shown_to_customer: true, ...(soldOut.size ? { not_available_now: [...soldOut.values()] } : {}), ...(input.add === true ? { added_to_open_draft: true } : {}), lines: lines.length, choices: choices.length, not_found: not_found.length, shops: [...new Set(lines.map(l => l.shop.slug))].length, draft };
-  },
-};
+    return { lines, choices, not_found, soldOut: [...soldOut.values()] };
+}
+
+/** the reverse: what is kept of a basket draft (ids, quantities, notes, the customer's own words) — no names, no prices */
+export function slimBasket(d: Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>): Pick<OrderDraft, 'lines' | 'choices' | 'not_found'> {
+  return { lines: d.lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) })), choices: d.choices.map(c => ({ phrase: c.phrase, quantity: c.quantity, options: c.options.map(o => o.product_id) })), not_found: [...d.not_found] };
+}
 
 // Takes the open draft off the screen ("remove the options", "start over"). A new draft_order / draft_basket replaces it anyway.
 const clearDraft: Tool = {

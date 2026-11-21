@@ -14,7 +14,7 @@ export default async function AdminYorgo() {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());       // YYYY-MM-DD in the association's time zone
   const monthStart = `${today.slice(0, 8)}01`;
   const [{ data: settings, error: sErr }, { data: shops }, { data: yshops }, { data: usage }, misses] = await Promise.all([
-    sb.from('yorgo_settings').select('enabled,shopper_enabled,cap_global_usd,cap_shop_usd,cap_user_usd,rate_per_min').eq('tenant_id', tenant.id).maybeSingle(),
+    sb.from('yorgo_settings').select('enabled,shopper_enabled,whatsapp_enabled,cap_global_usd,cap_shop_usd,cap_user_usd,cap_wa_phone_usd,rate_per_min').eq('tenant_id', tenant.id).maybeSingle(),
     sb.from('shops').select('id,slug,name,status').eq('tenant_id', tenant.id).order('created_at'),
     sb.from('yorgo_shops').select('shop_id,enabled,cap_usd').eq('tenant_id', tenant.id),
     sb.from('yorgo_usage').select('day,shop_id,user_id,messages,model_calls,cost_usd').eq('tenant_id', tenant.id).gte('day', monthStart).order('day'),
@@ -23,7 +23,7 @@ export default async function AdminYorgo() {
   ]);
   if (sErr) return <div className="card"><p className="muted" style={{ margin: 0 }}>{L === 'ar' ? 'يورغو غير مثبّت في قاعدة البيانات بعد.' : 'Yorgo is not installed in the database yet.'}</p></div>;
   return <YorgoAdmin tenantId={tenant.id} locale={L === 'ar' ? 'ar' : 'en'} today={today} hasKey={!!process.env.ANTHROPIC_API_KEY}
-    settings={settings ? { enabled: !!settings.enabled, shopper_enabled: !!settings.shopper_enabled, cap_global_usd: Number(settings.cap_global_usd), cap_shop_usd: Number(settings.cap_shop_usd), cap_user_usd: Number(settings.cap_user_usd), rate_per_min: Number(settings.rate_per_min) } : null}
+    settings={settings ? { enabled: !!settings.enabled, shopper_enabled: !!settings.shopper_enabled, whatsapp_enabled: !!settings.whatsapp_enabled, cap_wa_phone_usd: Number(settings.cap_wa_phone_usd), cap_global_usd: Number(settings.cap_global_usd), cap_shop_usd: Number(settings.cap_shop_usd), cap_user_usd: Number(settings.cap_user_usd), rate_per_min: Number(settings.rate_per_min) } : null}
     shops={((shops as { id: string; slug: string; name: { ar?: string; en?: string }; status: string }[] | null) ?? []).filter(s => s.status === 'active').map(s => ({ id: s.id, name: (L === 'ar' ? s.name?.ar : s.name?.en) || s.name?.ar || s.name?.en || s.slug }))}
     yshops={((yshops as { shop_id: string; enabled: boolean; cap_usd: number | string | null }[] | null) ?? []).map(y => ({ shop_id: y.shop_id, enabled: y.enabled, cap_usd: y.cap_usd == null ? null : Number(y.cap_usd) }))}
     usage={((usage as { day: string; shop_id: string | null; user_id: string | null; messages: number; model_calls: number; cost_usd: number | string }[] | null) ?? []).map(u => ({ ...u, cost_usd: Number(u.cost_usd) }))}

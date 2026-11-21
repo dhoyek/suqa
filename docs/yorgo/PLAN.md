@@ -302,4 +302,6 @@ in the app chat → staff forwarding → screen-aware Yorgo → item images.
 
 ## Built so far
 
-- **Script 95** (`supabase/schema/95_yorgo_whatsapp.sql`) written, **not applied**. Database test `supabase/test/yorgo_whatsapp.sql` passes on the local database.
+- **Script 95** applied on **dev** (21 Nov). Database test `supabase/test/yorgo_whatsapp.sql` passes on the local database.
+- Steps 2–5 built on dev (core, `/y/<id>`, webhook, admin switch, privacy line): see `docs/yorgo/CHANGELOG.md`, 2026-11-21. Step 6 (test set through the WhatsApp path) and the end-to-end run with a real message are open.
+- Wording: built with the proposed table; Dan has not commented on it yet.

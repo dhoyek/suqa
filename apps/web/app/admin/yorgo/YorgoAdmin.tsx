@@ -3,9 +3,9 @@ import { useMemo, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { useNotify } from '@/components/ConfirmProvider';
 
-type Settings = { enabled: boolean; shopper_enabled: boolean; cap_global_usd: number; cap_shop_usd: number; cap_user_usd: number; rate_per_min: number };
+type Settings = { enabled: boolean; shopper_enabled: boolean; whatsapp_enabled: boolean; cap_global_usd: number; cap_shop_usd: number; cap_user_usd: number; cap_wa_phone_usd: number; rate_per_min: number };
 type Usage = { day: string; shop_id: string | null; user_id: string | null; messages: number; model_calls: number; cost_usd: number };
-const DEFAULTS: Settings = { enabled: false, shopper_enabled: false, cap_global_usd: 20, cap_shop_usd: 5, cap_user_usd: 0.5, rate_per_min: 6 };
+const DEFAULTS: Settings = { enabled: false, shopper_enabled: false, whatsapp_enabled: false, cap_global_usd: 20, cap_shop_usd: 5, cap_user_usd: 0.5, cap_wa_phone_usd: 2, rate_per_min: 6 };
 const usd = (n: number) => (n > 0 && n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`);
 
 function Bar({ value, cap }: { value: number; cap: number }) {
@@ -48,7 +48,7 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
   const shopName = (id: string | null) => (id ? shops.find(x => x.id === id)?.name ?? '—' : T('كل السوق', 'Whole market'));
 
   async function save() {
-    const clean = { ...s, cap_global_usd: Math.max(0, s.cap_global_usd || 0), cap_shop_usd: Math.max(0, s.cap_shop_usd || 0), cap_user_usd: Math.max(0, s.cap_user_usd || 0), rate_per_min: Math.min(60, Math.max(1, Math.round(s.rate_per_min || 6))) };
+    const clean = { ...s, cap_global_usd: Math.max(0, s.cap_global_usd || 0), cap_shop_usd: Math.max(0, s.cap_shop_usd || 0), cap_user_usd: Math.max(0, s.cap_user_usd || 0), cap_wa_phone_usd: Math.max(0, s.cap_wa_phone_usd || 0), rate_per_min: Math.min(60, Math.max(1, Math.round(s.rate_per_min || 6))) };
     setBusy(true);
     const { error } = await sb.from('yorgo_settings').upsert({ tenant_id: tenantId, ...clean, updated_at: new Date().toISOString() }, { onConflict: 'tenant_id' });
     setBusy(false);
@@ -81,9 +81,11 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
         <strong>{T('التشغيل والحدود', 'Switches and limits')}</strong>
         <label className="row"><input type="checkbox" checked={s.enabled} onChange={e => setS(x => ({ ...x, enabled: e.target.checked }))} /> {T('يورغو مفعّل (المفتاح الرئيسي)', 'Yorgo is on (master switch)')}</label>
         <label className="row"><input type="checkbox" checked={s.shopper_enabled} onChange={e => setS(x => ({ ...x, shopper_enabled: e.target.checked }))} /> {T('يورغو للمتسوّقين على الموقع', 'Yorgo for shoppers on the storefront')}</label>
+        <label className="row"><input type="checkbox" checked={s.whatsapp_enabled} onChange={e => setS(x => ({ ...x, whatsapp_enabled: e.target.checked }))} /> {T('يورغو على واتساب السوق: يردّ على الرسائل المكتوبة بسلة مقترحة ورابط (يحتاج المفتاحين أعلاه)', 'Yorgo on the market\'s WhatsApp: answers text messages with a basket draft and a link (needs the two switches above)')}</label>
         <div className="row"><span style={{ minWidth: 220 }}>{T('الحد الشهري الإجمالي ($)', 'Monthly cap, everything ($)')}</span>{num('cap_global_usd', '1')}</div>
         <div className="row"><span style={{ minWidth: 220 }}>{T('الحد الشهري لكل محل ($)', 'Monthly cap per shop ($)')}</span>{num('cap_shop_usd', '1')}</div>
         <div className="row"><span style={{ minWidth: 220 }}>{T('الحد الشهري لكل متسوّق ($)', 'Monthly cap per shopper ($)')}</span>{num('cap_user_usd', '0.1')}</div>
+        <div className="row"><span style={{ minWidth: 220 }}>{T('الحد الشهري لكل رقم واتساب ($)', 'Monthly cap per WhatsApp phone ($)')}</span>{num('cap_wa_phone_usd', '0.1')}</div>
         <div className="row"><span style={{ minWidth: 220 }}>{T('رسائل في الدقيقة لكل شخص', 'Messages per minute per person')}</span>{num('rate_per_min', '1')}</div>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>{T('عند بلوغ الحد يتوقف يورغو حتى أول الشهر التالي؛ الطلب والبيع يعملان كالعادة.', 'When a cap is reached Yorgo pauses until the first of next month; ordering and selling work as usual.')}</p>
         <div><button className="btn primary" disabled={busy || !dirty} onClick={save}>{T('حفظ', 'Save')}</button></div>

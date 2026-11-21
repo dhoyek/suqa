@@ -3,7 +3,7 @@ import Legal from '../Legal';
 import { legalInfo } from '../legal-info';
 
 export const dynamic = 'force-dynamic';
-const UPDATED = '2026-11-18';
+const UPDATED = '2026-11-21';
 
 export default async function Privacy() {
   const t = await getTenantOrNull();
@@ -31,7 +31,7 @@ export default async function Privacy() {
         <h3>مع من نشاركها</h3>
         <p>المتاجر والموصّلون المعنيون بطلبك؛ مزوّدو الخدمة التقنيون الذين يستضيفون المنصة (Supabase وNetlify في الاتحاد الأوروبي، وMeta لرسائل واتساب، وAnthropic للمساعد يورغو). جميعهم ملزمون بحماية بياناتك.</p>
         <h3>المساعد «يورغو» (ذكاء اصطناعي)</h3>
-        <p>يورغو مساعد يعمل بالذكاء الاصطناعي ويمكنك استخدامه أو تجاهله. عندما تكتب له رسالة، تُرسَل الرسالة مع أسماء الأصناف والأسعار المعروضة في السوق إلى مزوّد الذكاء الاصطناعي (Anthropic، نموذج Claude، في الولايات المتحدة) لصياغة الجواب فقط. نحفظ محادثاتك مع يورغو في المنصة لتتابعها أنت ولتحسين الخدمة؛ المتاجر لا تراها، والجمعية ترى أعداد الاستخدام فقط لا نصّ الرسائل. لا تكتب في المحادثة معلومات حسّاسة (كلمات سر، بيانات بطاقات، معلومات صحية). يورغو قد يخطئ: لا يُطلَب شيء ولا يُباع قبل أن تؤكّد أنت.</p>
+        <p>يورغو مساعد يعمل بالذكاء الاصطناعي ويمكنك استخدامه أو تجاهله. عندما تكتب له رسالة، تُرسَل الرسالة مع أسماء الأصناف والأسعار المعروضة في السوق إلى مزوّد الذكاء الاصطناعي (Anthropic، نموذج Claude، في الولايات المتحدة) لصياغة الجواب فقط. نحفظ محادثاتك مع يورغو في المنصة لتتابعها أنت ولتحسين الخدمة؛ المتاجر لا تراها، والجمعية ترى أعداد الاستخدام فقط لا نصّ الرسائل. لا تكتب في المحادثة معلومات حسّاسة (كلمات سر، بيانات بطاقات، معلومات صحية). يورغو قد يخطئ: لا يُطلَب شيء ولا يُباع قبل أن تؤكّد أنت. الرسائل التي ترسلها إلى رقم واتساب السوق يقرأها المساعد الآلي (يورغو) لتجهيز سلتك.</p>
         <h3>مدة الاحتفاظ</h3>
         <p>نحتفظ بسجل الطلبات طوال فترة نشاط حسابك ولمدة تصل إلى ٥ سنوات للأغراض المحاسبية، ثم نحذفه أو نجعله مجهول الهوية.</p>
         <h3>حقوقك</h3>
@@ -57,7 +57,7 @@ export default async function Privacy() {
         <h3>Who we share it with</h3>
         <p>The shops and couriers involved in your order; the technical providers that host the platform (Supabase and Netlify in the EU, Meta for WhatsApp messages, Anthropic for the Yorgo assistant). All are bound to protect your data.</p>
         <h3>The assistant "Yorgo" (AI)</h3>
-        <p>Yorgo is an AI assistant you may use or ignore. When you write to it, your message, together with item names and prices shown in the marketplace, is sent to an AI provider (Anthropic, the Claude model, in the United States) only to produce the answer. Your conversations with Yorgo are stored on the platform so you can continue them and so we can improve the service; shops do not see them, and the association sees usage figures only, not the text. Do not write sensitive information in the chat (passwords, card details, health information). Yorgo can be wrong: nothing is ordered or sold until you confirm it yourself.</p>
+        <p>Yorgo is an AI assistant you may use or ignore. When you write to it, your message, together with item names and prices shown in the marketplace, is sent to an AI provider (Anthropic, the Claude model, in the United States) only to produce the answer. Your conversations with Yorgo are stored on the platform so you can continue them and so we can improve the service; shops do not see them, and the association sees usage figures only, not the text. Do not write sensitive information in the chat (passwords, card details, health information). Yorgo can be wrong: nothing is ordered or sold until you confirm it yourself. Messages you send to the market's WhatsApp number are read by the AI assistant (Yorgo) to prepare your basket.</p>
         <h3>Retention</h3>
         <p>Order history is kept while your account is active and for up to 5 years for accounting purposes, then deleted or anonymised.</p>
         <h3>Your rights</h3>

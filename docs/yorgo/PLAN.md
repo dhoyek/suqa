@@ -440,3 +440,5 @@ content is used to improve their products.
 5. **Audio**: never stored (your earlier preference) — confirm.
 6. **Wording** (Arabic and English): too long, could not hear, and the privacy line. I will propose them once you approve.
 7. **Recordings**: can you record 10–15 voice orders the way customers really speak? They are needed for step 6.
+8. **Who sees the AI providers page**: the platform admin only (you) — proposed, and what script 98 above does — or the
+   association's admins too? Provider, model and prices are the platform's, not one market's.

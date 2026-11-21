@@ -64,4 +64,28 @@ describe('catalog edits & stock moves (offline → sync)', () => {
     expect(server.products.get(n.id)?.name).toEqual({ ar: 'خبز', en: 'Bread' }); expect(server.barcodes.some(b => b.barcode === '333' && b.product_id === n.id)).toBe(true);
     expect(Number(server.products.get('p1')!.price_usd)).toBe(1.5); expect(Number(server.products.get('p1')!.on_hand)).toBe(12);
   });
+  it('a payment row that names a shift counts there (91): a refund or a cancelled payment leaves today\'s drawer, the closed day keeps what it took', async () => {
+    const server = new FakeServer();
+    const p = server.addProduct({ id: 'p1', price_usd: 10, on_hand: 50 });
+    const a = await makeDevice(server, 'A');
+    const day1 = await openShift(a.db, { float_usd_cents: 0, float_lbp: 0, opened_by: 'u1' });
+    const sale = await commitSale(a.db, { draft: addToDraft(newDraft('walkin'), p, 1), rate: RATE, lbpStep: 5000, changeIn: 'usd', shift_id: day1.id, payments: [{ tender: 'cash_usd', amount: 1000, currency: 'usd' }] });
+    await closeShift(a.db, day1, { counted_usd_cents: 1000, counted_lbp: 0, closed_by: 'u1' });
+    const day2 = await openShift(a.db, { float_usd_cents: 2000, float_lbp: 0, opened_by: 'u1' });
+    // what the server writes when the owner cancels that payment today: the old row pinned to day 1, the opposite in day 2
+    const old = (await a.db.payments.where('order_id').equals(sale.order.id).toArray())[0];
+    await a.db.payments.put({ ...old, shift_id: day1.id });
+    await a.db.payments.put({ id: 'x1', order_id: sale.order.id, tender: 'cash_usd', amount: -1000, currency: 'usd', note: 'cancel 1', at: new Date().toISOString(), shift_id: day2.id });
+    expect((await shiftSummary(a.db, { ...day1 })).expected_usd_cents).toBe(1000);        // the closed day is as it was counted
+    expect((await shiftSummary(a.db, day2)).expected_usd_cents).toBe(2000 - 1000);        // today gave the $10 back
+    // paid again today by card: the order moves to day 2, and day 1 still keeps its $10
+    await a.db.orders.put({ ...(await a.db.orders.get(sale.order.id))!, shift_id: day2.id });
+    await a.db.payments.put({ id: 'x2', order_id: sale.order.id, tender: 'card', amount: 1000, currency: 'usd', at: new Date().toISOString() });
+    expect((await shiftSummary(a.db, { ...day1 })).expected_usd_cents).toBe(1000);
+    const s2 = await shiftSummary(a.db, day2);
+    expect(s2.expected_usd_cents).toBe(1000); expect(s2.by_tender.card).toEqual({ usd: 1000, lbp: 0, count: 1 });
+    // a row naming a shift on a cancelled order counts nowhere
+    await a.db.orders.put({ ...(await a.db.orders.get(sale.order.id))!, shift_id: null, status: 'cancelled' });
+    expect((await shiftSummary(a.db, day2)).expected_usd_cents).toBe(2000);
+  });
 });

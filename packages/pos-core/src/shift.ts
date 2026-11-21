@@ -47,7 +47,12 @@ export interface ShiftSummary {
 export async function shiftSummary(db: PosDb, shift: Shift): Promise<ShiftSummary> {
   const orders = (await db.orders.where('shift_id').equals(shift.id).toArray()).filter(o => o.status !== 'cancelled' && o.status !== 'rejected');
   const ids = new Set(orders.map(o => o.id));
-  const payments = (await db.payments.toArray()).filter(p => ids.has(p.order_id));
+  // a payment row counts in the shift it names (91: a refund / a cancelled payment given back from today's drawer, or a row
+  // pinned to the day it was taken); a row that names none counts in its order's shift, as always
+  const all = await db.payments.toArray();
+  const named = [...new Set(all.filter(p => p.shift_id === shift.id && !ids.has(p.order_id)).map(p => p.order_id))];
+  const dead = new Set((await db.orders.bulkGet(named)).filter(o => !o || o.status === 'cancelled' || o.status === 'rejected').map((o, i) => o?.id ?? named[i]));
+  const payments = all.filter(p => (p.shift_id ? p.shift_id === shift.id && !dead.has(p.order_id) : ids.has(p.order_id)));
   const moves = await db.cashMoves.where('shift_id').equals(shift.id).toArray();
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
   const cash_usd_sales = sum(payments.filter(p => p.tender === 'cash_usd').map(p => num(p.amount)));

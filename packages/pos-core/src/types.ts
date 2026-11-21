@@ -54,7 +54,9 @@ export interface OrderLine {
   price_currency: Currency; unit_price_cents: number; unit_price_lbp: number; discount_cents: number; line_total_cents: number;
   cost_cents?: number | null; notes?: string | null; voided: boolean; void_reason?: string | null;
 }
-export interface Payment { id: string; order_id: string; tender: Tender; amount: number; currency: Currency; reference?: string | null; unpaid_name?: string | null; unpaid_phone?: string | null; note?: string | null; settled_at?: string | null; at: string }
+export interface Payment { id: string; order_id: string; tender: Tender; amount: number; currency: Currency; reference?: string | null; unpaid_name?: string | null; unpaid_phone?: string | null; note?: string | null; settled_at?: string | null; at: string;
+  /** the drawer (shift) this row counts in when it is not the order's own shift (91): a refund or a cancelled payment given back today */
+  shift_id?: string | null }
 export interface StockMove { id: string; shop_id: string; product_id: string; qty: number | string; kind: StockKind; ref_order_id?: string | null; ref_id?: string | null; unit_cost_cents?: number | null; note?: string | null; device_id?: string | null; user_id?: string | null; at: string }
 export interface Shift { id: string; shop_id: string; device_id: string; opened_by?: string | null; opened_at: string; float_usd_cents: number; float_lbp: number; closed_by?: string | null; closed_at?: string | null; counted_usd_cents?: number | null; counted_lbp?: number | null; expected_usd_cents?: number | null; expected_lbp?: number | null; diff_usd_cents?: number | null; diff_lbp?: number | null; note?: string | null }
 /** `source`: what made this drawer move (90) — 'manual' is the cashier's own cash in / out, the others belong to an operation (`ref_id`) and are reversed with it. */

@@ -103,6 +103,9 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
   const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
+  // delivered, yet nothing covers it — no payment, no debt, no driver's cash (a payment cancelled from the operations log, 91): it can be collected again
+  const owes = (o: Order) => o.status === 'delivered' && num(o.total_cents) > 1 && !(payments[o.id] ?? []).some(p => p.tender === 'driver')
+    && (payments[o.id] ?? []).reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0) < num(o.total_cents) - 1 - Math.ceil(((boot.shop.lbp_rounding_step ?? 5000) * 100) / (num(o.rate_lbp_per_usd) || rate));   // (a lira total rounded down is still paid)
   // open for more than a day past its time (asked-for time, else when it was placed): forgotten, usually already delivered or dead
   const isStale = (o: Order) => !o.closed_at && !['delivered', 'rejected', 'cancelled'].includes(o.status) && Date.now() - new Date(o.needed_at ?? o.placed_at).getTime() > 24 * 3600_000;
   const staleCount = useMemo(() => orders.filter(isStale).length, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -214,12 +217,13 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(num(o.total_lbp), boot.shop.lbp_rounding_step ?? 5000), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
-                  {(open || steps.length > 0) && (
+                  {(open || steps.length > 0 || owes(o)) && (
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
                       {/* the next step is outlined; solid blue only when one step is left */}
                       {steps.map((n, i) => <button key={n} className={`btn ${steps.length === 1 ? 'primary' : i === 0 ? 'next-step' : ''}`} onClick={() => act(o, n)}>
                         {n === 'delivered' && pickup ? pt('act_pickedUp', locale) : pt(`act_${n}` as Key, locale)}{n === 'delivered' && !isPaid(o) ? ' · ' + (pickup ? pt('collectPayment', locale) : pt('codSettle', locale)) : ''}
                       </button>)}
+                      {owes(o) && <button className="btn primary" onClick={() => setDialog({ k: 'pay', o, status: 'delivered', fee: num(o.courier_fee_cents) })}>💵 {pt('collectAgain', locale)}</button>}
                       {(o.status === 'accepted' || o.status === 'preparing') && <button className="btn" onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>}
                       {!pickup && ASSIGNABLE.includes(o.status) && (open || !!o.driver_id) && <button className="btn" onClick={() => setDialog({ k: 'assign', o })}>🛵 {pt(o.driver_id ? 'changeDriver' : 'chooseDriver', locale)}</button>}
                       {open && !['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}

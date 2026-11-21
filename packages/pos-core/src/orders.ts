@@ -98,8 +98,8 @@ export async function commitReturn(db: PosDb, order: Order, lines: ReturnLineInp
   const id = newId(); const now = new Date().toISOString();
   const deviceId = (await db.meta.get(META.deviceId))?.value as string | undefined;
   await db.transaction('rw', [db.payments, db.stockMoves, db.products, db.outbox], async () => {
-    if (input.refund_usd_cents > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_usd', amount: -input.refund_usd_cents, currency: 'usd', note: `refund ${id}`, at: now });
-    if (input.refund_lbp > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_lbp', amount: -input.refund_lbp, currency: 'lbp', note: `refund ${id}`, at: now });
+    if (input.refund_usd_cents > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_usd', amount: -input.refund_usd_cents, currency: 'usd', note: `refund ${id}`, at: now, shift_id: input.shift_id ?? null });
+    if (input.refund_lbp > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_lbp', amount: -input.refund_lbp, currency: 'lbp', note: `refund ${id}`, at: now, shift_id: input.shift_id ?? null });
     for (const l of lines) {
       if (!l.product_id) continue;
       const p = await db.products.get(l.product_id); if (!p?.track_stock) continue;

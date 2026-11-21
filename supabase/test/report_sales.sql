@@ -2,6 +2,7 @@
 \set ON_ERROR_STOP on
 begin;
 \i supabase/schema/93_report_sales_from_server.sql
+\i supabase/schema/94_report_sales_paid.sql
 create schema if not exists t_rs; grant usage on schema t_rs to authenticated;
 create or replace function t_rs.try_list(p_shop uuid) returns text language plpgsql as $$
 begin perform suqa.pos_report_sales(p_shop, current_date - 400, current_date + 1, '{}'); return 'ok'; exception when others then return sqlerrm; end $$;
@@ -19,7 +20,7 @@ declare v_shop uuid := (select id from suqa.shops where slug = 'abou-elie'); a d
 begin
   assert (rep->'totals'->>'sales_count')::int > 0, 'fixtures hold no sales';
   l := suqa.pos_report_sales(v_shop, a, b, '{}');
-  assert (l->>'count')::int = (rep->'totals'->>'sales_count')::int and (l->>'cents')::bigint = (rep->'totals'->>'total_cents')::bigint, 'all: ' || (l - 'rows') || ' vs ' || (rep->'totals');
+  assert not (l ? 'paid_x') and (l->'rows'->0->>'paid_usd') is null and (l->>'count')::int = (rep->'totals'->>'sales_count')::int and (l->>'cents')::bigint = (rep->'totals'->>'total_cents')::bigint, 'all: ' || (l - 'rows') || ' vs ' || (rep->'totals');
   assert jsonb_array_length(l->'rows') = least((l->>'count')::int, 1000), 'rows';
   for k, x in select * from jsonb_each(rep->'by_channel') loop
     l := suqa.pos_report_sales(v_shop, a, b, jsonb_build_object('channel', k));
@@ -36,7 +37,7 @@ begin
   end loop;
   for k, x in select * from jsonb_each(rep->'by_tender') loop
     l := suqa.pos_report_sales(v_shop, a, b, jsonb_build_object('tender', k));
-    assert (l->>'count')::int >= (x->>'count')::int, 'tender ' || k;                 -- every sale counted there is listed (a sale whose rows add up to nothing is listed too)
+    assert (l->>'count')::int = (x->>'count')::int and coalesce((l->>'paid_usd')::bigint, 0) = (x->>'usd')::bigint and coalesce((l->>'paid_lbp')::bigint, 0) = (x->>'lbp')::bigint, 'tender ' || k || ': ' || (l - 'rows') || ' vs ' || x;   -- the list adds up to the line (94)
   end loop;
   o := t_rs.any_order(v_shop); d := suqa.pos_sale_detail(v_shop, o);
   assert d->'order'->>'id' = o::text and jsonb_array_length(d->'lines') > 0 and d ? 'payments' and d ? 'returned', 'detail';

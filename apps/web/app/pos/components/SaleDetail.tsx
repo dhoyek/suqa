@@ -81,7 +81,7 @@ export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me,
 
 /** What a list of sales is narrowed to: one channel, one way of paying, one item, or one category ('' = items with no category). With an item or a category each row shows those items' quantity and amount. */
 export type SalesFilter = { channel?: string; tender?: string; productId?: string; section?: string };
-type SaleRow = { id: string; number: string | null; local_number: string | null; placed_at: string; customer_name: string | null; channel: string; items: number; qty: number | null; cents: number };
+type SaleRow = { id: string; number: string | null; local_number: string | null; placed_at: string; customer_name: string | null; channel: string; items: number; qty: number | null; cents: number; paid_usd?: number | null; paid_lbp?: number | null };
 
 /**
  * Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items.
@@ -91,21 +91,26 @@ type SaleRow = { id: string; number: string | null; local_number: string | null;
  */
 export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, sb, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; sb?: SupabaseClient; onClose: () => void }) {
   const [rows, setRows] = useState<SaleRow[] | null>(null); const [open, setOpen] = useState<string | null>(null);
-  const [total, setTotal] = useState<{ count: number; cents: number } | null>(null); const [local, setLocal] = useState(false);
+  const [total, setTotal] = useState<{ count: number; cents: number; paid_usd?: number | null; paid_lbp?: number | null } | null>(null); const [local, setLocal] = useState(false);
   const byItem = filter?.productId != null || filter?.section != null;
   useEffect(() => { let on = true; void (async () => {
     if (sb && (typeof navigator === 'undefined' || navigator.onLine)) {
       const day = from ?? new Date().toISOString().slice(0, 10);
       const { data, error } = await sb.rpc('pos_report_sales', { p_shop: boot.shop.id, p_from: day, p_to: to ?? day, p_filter: { ...(shiftId ? { shift_id: shiftId } : {}), ...(filter?.channel ? { channel: filter.channel } : {}), ...(filter?.tender ? { tender: filter.tender } : {}), ...(filter?.productId != null ? { product_id: filter.productId } : {}), ...(filter?.section != null ? { section: filter.section } : {}) } });
-      const r = data as { count: number; cents: number; rows: SaleRow[] } | null;
-      if (!error && r?.rows) { if (on) { setRows(r.rows.map(x => ({ ...x, cents: num(x.cents), qty: x.qty == null ? null : num(x.qty) }))); setTotal({ count: num(r.count), cents: num(r.cents) }); setLocal(false); } return; }
+      const r = data as { count: number; cents: number; paid_usd?: number | null; paid_lbp?: number | null; rows: SaleRow[] } | null;
+      if (!error && r?.rows) { if (on) { setRows(r.rows.map(x => ({ ...x, cents: num(x.cents), qty: x.qty == null ? null : num(x.qty) }))); setTotal({ count: num(r.count), cents: num(r.cents), paid_usd: r.paid_usd, paid_lbp: r.paid_lbp }); setLocal(false); } return; }
     }
     let os: Order[];
     if (shiftId) os = (await boot.db.orders.toArray()).filter(o => o.shift_id === shiftId);
     else { const s = new Date(`${from}T00:00:00`); const e = new Date(`${to ?? from}T00:00:00`); e.setDate(e.getDate() + 1); os = await boot.db.orders.where('placed_at').between(s.toISOString(), e.toISOString()).toArray(); }
     os = os.filter(o => !o.parked && o.status !== 'cancelled' && o.status !== 'rejected').sort((a, b) => b.placed_at.localeCompare(a.placed_at));
     if (filter?.channel) os = os.filter(o => o.channel === filter.channel);
-    if (filter?.tender) { const paid = new Set((await boot.db.payments.toArray()).filter(p => p.tender === filter.tender).map(p => p.order_id)); os = os.filter(o => paid.has(o.id)); }
+    // a way of paying: what each sale took that way; a sale whose rows add up to nothing there (a cancelled payment) is left out
+    const took = new Map<string, { usd: number; lbp: number }>();
+    if (filter?.tender) {
+      for (const p of await boot.db.payments.toArray()) if (p.tender === filter.tender) { const t = took.get(p.order_id) ?? { usd: 0, lbp: 0 }; if (p.currency === 'lbp') t.lbp += num(p.amount); else t.usd += num(p.amount); took.set(p.order_id, t); }
+      os = os.filter(o => { const t = took.get(o.id); return !!t && (t.usd !== 0 || t.lbp !== 0); });
+    }
     const ids = new Set(os.map(o => o.id)); const count = new Map<string, number>(); const hit = new Map<string, { qty: number; cents: number }>();
     const inSection = filter?.section != null ? new Set((await boot.db.products.toArray()).filter(p => (p.section || '') === filter.section).map(p => p.id)) : null;
     const wanted = (pid: string | null | undefined) => (filter?.productId != null ? pid === filter.productId : inSection ? (pid ? inSection.has(pid) : filter?.section === '') : false);
@@ -116,20 +121,24 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, staf
     if (byItem) os = os.filter(o => hit.has(o.id));
     if (!on) return;
     setRows(os.map(o => ({ id: o.id, number: o.number ?? null, local_number: o.local_number ?? null, placed_at: o.placed_at, customer_name: o.customer_name ?? null, channel: o.channel, items: count.get(o.id) ?? 0,
-      qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents) })));
+      qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents), paid_usd: filter?.tender ? took.get(o.id)!.usd : null, paid_lbp: filter?.tender ? took.get(o.id)!.lbp : null })));
     setTotal(null); setLocal(true);
   })(); return () => { on = false; }; }, [boot, sb, from, to, shiftId, filter]); // eslint-disable-line react-hooks/exhaustive-deps
   const sum = total?.cents ?? (rows ?? []).reduce((s, r) => s + r.cents, 0); const n = total?.count ?? rows?.length;
+  // by way of paying: the amounts are what was taken that way (they add up to the report's line); the sale's total sits under them
+  const byPaid = !!filter?.tender && !!rows?.length && rows.every(r => r.paid_usd != null || r.paid_lbp != null);
+  const paid = (u: unknown, l: unknown) => [num(u as number) ? fmtUsd(num(u as number)) : '', num(l as number) ? fmtLbp(num(l as number), locale) : ''].filter(Boolean).join(' · ') || fmtUsd(0);
+  const head = byPaid ? paid(total ? total.paid_usd : rows!.reduce((s, r) => s + num(r.paid_usd as number), 0), total ? total.paid_lbp : rows!.reduce((s, r) => s + num(r.paid_lbp as number), 0)) : fmtUsd(sum);
   return (
     <>
-      <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {n ?? '…'} · {fmtUsd(sum)}</span></>}
+      <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {n ?? '…'} · {head}</span></>}
         footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
         {local && <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>ⓘ {pt('salesOnDeviceOnly', locale)}</p>}
         {!rows ? <p className="muted">…</p> : !rows.length ? <p className="muted">—</p> : <table className="table clickable"><tbody>
           {rows.map(r => <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}>
             <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(r.placed_at, locale)}</td>
             <td><strong dir="ltr">{r.number ?? r.local_number}</strong> <span className="muted">{r.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{r.qty != null ? <>{pt('qty', locale)} <span dir="ltr">{r.qty}</span> · </> : null}{r.items} {pt('itemsCount', locale)} · {r.channel === 'online' ? pt('onlineShop', locale) : pt(r.channel as 'walkin', locale)}</div></td>
-            <td className="num">{fmtUsd(r.cents)}</td><td className="muted">›</td>
+            <td className="num">{byPaid ? <>{paid(r.paid_usd, r.paid_lbp)}<div className="muted" style={{ fontSize: 12 }}>{pt('total', locale)} {fmtUsd(r.cents)}</div></> : fmtUsd(r.cents)}</td><td className="muted">›</td>
           </tr>)}
         </tbody></table>}
         {total && rows && total.count > rows.length && <p className="muted" style={{ fontSize: 12 }}>ⓘ {pt('salesFirstRows', locale).replace('{n}', String(rows.length))}</p>}

@@ -276,16 +276,30 @@ None for this step. `WHATSAPP_TOKEN`, the app secret and the Yorgo key are alrea
 W1 text orders → **B + W2 together** (provider wrapper and voice notes: voice is what needs a second provider) → photo and voice
 in the app chat → staff forwarding → screen-aware Yorgo → item images.
 
-## Decisions for Dan
+## Decisions (Dan, 21 Nov)
 
-1. **Number**: same market number (recommended for now: no new Meta registration; order messages keep working as today), or a
-   separate Yorgo number.
-2. **Confirm inside WhatsApp**: recommended **no** in this step — always "open in app". It is what keeps Yorgo from acting for a
-   phone number.
-3. **Wording** customers see (Arabic and English): the first-reply AI notice, the "paused" line when a cap is reached, the reply
-   to a voice note / photo, the line under the summary.
-4. **Caps**: per WhatsApp phone per month (proposed $0.50, about 45 messages), and whether the global cap stays as it is.
-5. **Keep or delete**: WhatsApp texts are kept in `yorgo_messages` like app chats (needed for the conversation and for
-   improving). Drafts are deleted after 24 h? (proposed: yes, by a daily clean-up.)
-6. **Who gets an answer**: every phone, or Lebanese numbers (+961) only (recommended at the start).
-7. **Privacy page**: one line saying messages sent to the WhatsApp number are read by the AI assistant.
+1. **Number**: the same market number. Order messages keep working as today; only what is silent today goes to Yorgo.
+2. **Confirm inside WhatsApp**: no in this step — always "open in app".
+3. **Wording**: proposed below, waiting for his OK.
+4. **Cap per WhatsApp phone**: $0.50 a month (a setting). The global cap stays as it is.
+5. **Drafts** are deleted after 24 hours (removed at the next save; no scheduled job).
+6. **Who gets an answer**: every phone.
+7. **Privacy page**: one line saying messages to the WhatsApp number are read by the AI assistant.
+
+## Wording proposed (waiting for Dan's OK)
+
+`{brand}` = the market's name, `{link}` = the draft link, `{site}` = the market's address.
+
+| When | Arabic | English |
+|---|---|---|
+| First answer to a phone (added once, under the answer) | أنا يورغو، المساعد الآلي (ذكاء اصطناعي) لـ{brand}. أجهّز لك السلة، وأنت تراجعها وتؤكّد الطلب من التطبيق. | I'm Yorgo, {brand}'s AI assistant. I prepare your basket; you check it and confirm the order in the app. |
+| Under the summary | افتح السلة، راجعها واطلب: {link}\n(الرابط صالح 24 ساعة) | Open your basket, check it and order: {link}\n(the link works for 24 hours) |
+| Cap reached / assistant off for the month | المساعد متوقف مؤقتاً. يمكنك الطلب مباشرة من التطبيق: {site} | The assistant is paused for now. You can order directly in the app: {site} |
+| Too many messages in a minute | لحظة من فضلك، ثم أرسل رسالتك من جديد. | One moment please, then send your message again. |
+| Voice note, photo, sticker, contact (once an hour at most; both languages in one message, since there is no text to tell the language from) | حالياً أقرأ الرسائل المكتوبة فقط. اكتب لي ما تريد طلبه وأجهّز لك السلة. | For now I read text messages only. Write what you would like to order and I'll prepare your basket. |
+| Something failed | عذراً، حصل خطأ. جرّب مرة أخرى، أو اطلب من التطبيق: {site} | Sorry, something went wrong. Try again, or order in the app: {site} |
+| Privacy page | الرسائل التي ترسلها إلى رقم واتساب السوق يقرأها المساعد الآلي (يورغو) لتجهيز سلتك. | Messages you send to the market's WhatsApp number are read by the AI assistant (Yorgo) to prepare your basket. |
+
+## Built so far
+
+- **Script 95** (`supabase/schema/95_yorgo_whatsapp.sql`) written, **not applied**. Database test `supabase/test/yorgo_whatsapp.sql` passes on the local database.

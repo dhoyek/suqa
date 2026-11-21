@@ -156,3 +156,6 @@ Dan: asking for a product that several shops sell brought suggestions from one s
   leaks inside food. The till's own search and the storefront's shop search use the same lists (`Folded.section`).
 - Left as is: "Chips & Nuts" is one category, so "chips" still brings nuts and "mkasarat" still brings chips; only splitting the
   category would separate them.
+- **Script 97 applied on dev** (21 Nov). Checked on dev's catalog: "khebez" → bread, kaak, toast (no Panadol); "ahwe" → Coffee, Drinks;
+  "may" → Water, Drinks; "chay" → tea categories; "sakaker" → sweets and chocolate; "jebne" → cheese, dairy, manakish (no chips);
+  "tandif", "dekhen", "deo" unchanged. 8 phrases in one call: 0.39 s. Scripts 95, 96, 97 are on dev only.

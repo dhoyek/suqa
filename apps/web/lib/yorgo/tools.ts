@@ -17,7 +17,7 @@ const matchItems: Tool = {
   name: 'match_items',
   description: 'Find real catalog items for what the person called them. Pass each item\'s words WITHOUT the quantity (Arabic, Arabizi or English as written). '
     + 'A kind of item works too ("machroub", "may", "chokola", "dekhen", "drinks"): it returns items of that kind (matched_on "kind"); with a name ("machroub pepsi") the name decides. '
-    + 'Returns up to 6 candidates per phrase with score (1 = exact name or alias), category, price and availability. This is the ONLY source of item names and prices.',
+    + 'Returns up to 8 candidates per phrase (each shop's best one first when no shop is given) with score (1 = exact name or alias), category, price and availability. This is the ONLY source of item names and prices.',
   input_schema: {
     type: 'object', additionalProperties: false, required: ['phrases'],
     properties: {
@@ -31,7 +31,7 @@ const matchItems: Tool = {
     if (!phrases.length) throw new Error('phrases_required');
     // a seller only ever searches their own shop, whatever the model asks for
     const shop = ctx.mode === 'seller' ? ctx.shopId : (typeof input.shop_id === 'string' && UUID.test(input.shop_id) ? input.shop_id : null);
-    const { data, error } = await ctx.sb.rpc('match_items', { p_tenant: ctx.tenantId, p_phrases: phrases, p_shop: shop, p_limit: 6 });
+    const { data, error } = await ctx.sb.rpc('match_items', { p_tenant: ctx.tenantId, p_phrases: phrases, p_shop: shop, p_limit: shop ? 6 : 8 });      // the whole market: room for every shop that has it (96 puts each shop's best first)
     if (error) throw new Error(error.message);
     // the item's category (shared list, 87): tells food from seeds or tools with the same word. Read with the caller's own access.
     const rows = (data as { product_id: string }[] | null) ?? []; const cat = new Map<string, string>();

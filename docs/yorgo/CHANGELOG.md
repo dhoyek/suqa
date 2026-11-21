@@ -138,3 +138,10 @@ Plan and decisions: `docs/yorgo/PLAN.md`, "step W1". Off until Admin → Yorgo �
   prices read again when the page opens; "add to cart" → the usual cart and checkout.
 - **Admin → Yorgo**: the WhatsApp switch and the cap per WhatsApp phone. **Privacy page**: one line (Arabic and English).
 - Not done yet: the test set through the WhatsApp path (plan step 6); an end-to-end run with a real WhatsApp message.
+
+## 2026-11-21 — every shop that has the thing (script 96 written, not applied)
+
+Dan: asking for a product that several shops sell brought suggestions from one shop only.
+- Cause: `match_items` returned the market's best 6 by score, so a shop with many variants took every place; and the prompt said "prefer one shop".
+- **Script 96** (not applied): market-wide searches put each shop's best candidate first; one-shop searches unchanged.
+- Tool: 8 candidates for a market-wide search (6 inside one shop). Prompt: several shops sell it and none was named → the best of each shop as choices; "is there X?" names each shop with its price.

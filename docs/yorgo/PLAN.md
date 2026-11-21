@@ -188,14 +188,14 @@ create table if not exists suqa.yorgo_settings (
   cap_global_usd   numeric(10,2) not null default 20 check (cap_global_usd >= 0),   -- per calendar month, everything together
   cap_shop_usd     numeric(10,2) not null default 5  check (cap_shop_usd  >= 0),    -- per calendar month, one shop's sellers
   cap_user_usd     numeric(10,2) not null default 0.50 check (cap_user_usd >= 0),   -- per calendar month, one shopper
-  cap_wa_phone_usd numeric(10,2) not null default 0.50 check (cap_wa_phone_usd >= 0), -- 95: per calendar month, one WhatsApp phone
+  cap_wa_phone_usd numeric(10,2) not null default 2.00 check (cap_wa_phone_usd >= 0), -- 95: per calendar month, one WhatsApp phone
   rate_per_min     int not null default 6  check (rate_per_min between 1 and 60),   -- messages a person may send per minute
   history_turns    int not null default 12 check (history_turns between 2 and 40),  -- turns kept word for word; older ones are summarised
   updated_at       timestamptz not null default now(),
   updated_by       uuid
 );
 alter table suqa.yorgo_settings add column if not exists whatsapp_enabled boolean not null default false;
-alter table suqa.yorgo_settings add column if not exists cap_wa_phone_usd numeric(10,2) not null default 0.50 check (cap_wa_phone_usd >= 0);
+alter table suqa.yorgo_settings add column if not exists cap_wa_phone_usd numeric(10,2) not null default 2.00 check (cap_wa_phone_usd >= 0);
 
 -- changed: + wa_phone (a WhatsApp conversation belongs to a phone, not to an account)
 create table if not exists suqa.yorgo_conversations (
@@ -281,7 +281,7 @@ in the app chat → staff forwarding → screen-aware Yorgo → item images.
 1. **Number**: the same market number. Order messages keep working as today; only what is silent today goes to Yorgo.
 2. **Confirm inside WhatsApp**: no in this step — always "open in app".
 3. **Wording**: proposed below, waiting for his OK.
-4. **Cap per WhatsApp phone**: $0.50 a month (a setting). The global cap stays as it is.
+4. **Cap per WhatsApp phone**: $2 a month (a setting; the cap per app customer on prod was raised to $2 the same day). The global cap stays as it is.
 5. **Drafts** are deleted after 24 hours (removed at the next save; no scheduled job).
 6. **Who gets an answer**: every phone.
 7. **Privacy page**: one line saying messages to the WhatsApp number are read by the AI assistant.

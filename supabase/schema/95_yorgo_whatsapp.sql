@@ -19,14 +19,14 @@ create table if not exists suqa.yorgo_settings (
   cap_global_usd   numeric(10,2) not null default 20 check (cap_global_usd >= 0),   -- per calendar month, everything together
   cap_shop_usd     numeric(10,2) not null default 5  check (cap_shop_usd  >= 0),    -- per calendar month, one shop's sellers
   cap_user_usd     numeric(10,2) not null default 0.50 check (cap_user_usd >= 0),   -- per calendar month, one shopper
-  cap_wa_phone_usd numeric(10,2) not null default 0.50 check (cap_wa_phone_usd >= 0), -- 95: per calendar month, one WhatsApp phone
+  cap_wa_phone_usd numeric(10,2) not null default 2.00 check (cap_wa_phone_usd >= 0), -- 95: per calendar month, one WhatsApp phone
   rate_per_min     int not null default 6  check (rate_per_min between 1 and 60),   -- messages a person may send per minute
   history_turns    int not null default 12 check (history_turns between 2 and 40),  -- turns kept word for word; older ones are summarised
   updated_at       timestamptz not null default now(),
   updated_by       uuid
 );
 alter table suqa.yorgo_settings add column if not exists whatsapp_enabled boolean not null default false;
-alter table suqa.yorgo_settings add column if not exists cap_wa_phone_usd numeric(10,2) not null default 0.50 check (cap_wa_phone_usd >= 0);
+alter table suqa.yorgo_settings add column if not exists cap_wa_phone_usd numeric(10,2) not null default 2.00 check (cap_wa_phone_usd >= 0);
 
 -- ── conversations (full table; wa_phone added below) ─────────────────────────────────────────────────────────────────────────
 create table if not exists suqa.yorgo_conversations (

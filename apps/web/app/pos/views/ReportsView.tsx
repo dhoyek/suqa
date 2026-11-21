@@ -40,7 +40,6 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
   const secLabel = (k: string | null | undefined) => (k ? text(index.categories.get(k)?.name ?? index.shared.find(c => c.id === k)?.name ?? { ar: k, en: k }, locale) : '—');
   // tap a record: a day or a shift opens its sales, a sale opens its items
   const [open, setOpen] = useState<null | { k: 'day'; day: string } | { k: 'shift'; id: string; title: string } | { k: 'sale'; id: string } | { k: 'list'; title: string; filter: SalesFilter }>(null);
-  const sectionFilter = async (k: string): Promise<SalesFilter> => ({ productIds: (await boot.db.products.toArray()).filter(p => (p.section || '') === k).map(p => p.id), noProduct: !k });
   const [last, setLast] = useState<string | null>(null);                                   // a tapped line of "last sales" (shown to every role)
   const [rep, setRep] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
@@ -176,11 +175,11 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               </div>}
               {tab === 'items' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qtySold', locale)}</th><th>{pt('sales', locale)}</th><th>{pt('grossMargin', locale)}</th></tr>
-                {rep.by_item.map((i, n) => <tr key={i.product_id ?? n} style={i.product_id ? { cursor: 'pointer' } : undefined} onClick={() => { if (i.product_id) setOpen({ k: 'list', title: text(i.name, locale), filter: { productIds: [i.product_id] } }); }}><td>{text(i.name, locale)}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td><td className="num muted">{i.cost_cents ? N(i.cents - i.cost_cents) : '—'}</td></tr>)}
+                {rep.by_item.map((i, n) => <tr key={i.product_id ?? n} style={i.product_id ? { cursor: 'pointer' } : undefined} onClick={() => { if (i.product_id) setOpen({ k: 'list', title: text(i.name, locale), filter: { productId: i.product_id } }); }}><td>{text(i.name, locale)}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td><td className="num muted">{i.cost_cents ? N(i.cents - i.cost_cents) : '—'}</td></tr>)}
               </tbody></table>}
               {tab === 'sections' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('section', locale)}</th><th>{pt('qtySold', locale)}</th><th>{pt('sales', locale)}</th></tr>
-                {rep.by_section.map(i => <tr key={i.section} style={{ cursor: 'pointer' }} onClick={() => void sectionFilter(i.section || '').then(filter => setOpen({ k: 'list', title: secLabel(i.section), filter }))}><td>{secLabel(i.section)}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td></tr>)}
+                {rep.by_section.map(i => <tr key={i.section} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k: 'list', title: secLabel(i.section), filter: { section: i.section || '' } })}><td>{secLabel(i.section)}</td><td style={{ textAlign: 'center' }}>{i.qty}</td><td className="num">{N(i.cents)}</td></tr>)}
               </tbody></table>}
               {tab === 'slow' && (rep.slow.length ? <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('noSalesInPeriod', locale)}</th><th>{pt('onHand', locale)}</th><th>{pt('atCost', locale)}</th></tr>
@@ -210,10 +209,10 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}
               </tbody></table>}
               {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} />}
-              {open?.k === 'day' && <SalesList boot={boot} locale={locale} staff={staff} title={open.day} from={open.day} onClose={() => setOpen(null)} />}
-              {open?.k === 'shift' && <SalesList boot={boot} locale={locale} staff={staff} title={open.title} shiftId={open.id} onClose={() => setOpen(null)} />}
-              {open?.k === 'list' && <SalesList boot={boot} locale={locale} staff={staff} title={open.title} from={range[0]} to={range[1]} filter={open.filter} onClose={() => setOpen(null)} />}
-              {open?.k === 'sale' && <SaleDetail boot={boot} locale={locale} staff={staff} orderId={open.id} onClose={() => setOpen(null)} />}
+              {open?.k === 'day' && <SalesList boot={boot} locale={locale} staff={staff} sb={owner && online ? sb : undefined} title={open.day} from={open.day} onClose={() => setOpen(null)} />}
+              {open?.k === 'shift' && <SalesList boot={boot} locale={locale} staff={staff} sb={owner && online ? sb : undefined} title={open.title} shiftId={open.id} onClose={() => setOpen(null)} />}
+              {open?.k === 'list' && <SalesList boot={boot} locale={locale} staff={staff} sb={owner && online ? sb : undefined} title={open.title} from={range[0]} to={range[1]} filter={open.filter} onClose={() => setOpen(null)} />}
+              {open?.k === 'sale' && <SaleDetail boot={boot} locale={locale} staff={staff} sb={online ? sb : undefined} orderId={open.id} onClose={() => setOpen(null)} />}
               {tab === 'approvals' && <ApprovalsReport boot={boot} sb={sb} locale={locale} index={index} from={range[0]} to={range[1]} onSale={id => setOpen({ k: 'sale', id })} />}
               {tab === 'shifts' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('openedAt', locale)}</th><th>{pt('closedAt', locale)}</th><th>{pt('expected', locale)}</th><th>{pt('counted', locale)}</th><th>{pt('diff', locale)}</th></tr>
@@ -234,7 +233,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
         <table className="table"><tbody>
           {recent.map(o => <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setLast(o.id)}><td><strong>{o.number ?? o.local_number}</strong>{o.number && o.local_number ? <span className="muted"> ({o.local_number})</span> : ''}</td><td className="muted">{fmtTime(o.placed_at, locale)}</td><td className="muted">{pt(o.channel as 'walkin', locale)}</td><td className="num">{N(num(o.total_cents))}</td><td onClick={e => e.stopPropagation()}><button className="btn icon" title={pt('reprint', locale)} onClick={() => reprint(o)}>🖨</button></td></tr>)}
         </tbody></table>
-        {last && <SaleDetail boot={boot} locale={locale} staff={staff} orderId={last} onClose={() => setLast(null)} />}
+        {last && <SaleDetail boot={boot} locale={locale} staff={staff} sb={online ? sb : undefined} orderId={last} onClose={() => setLast(null)} />}
       </section>
     </div>
   );

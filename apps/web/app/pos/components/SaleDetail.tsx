@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
-import { fmtLbp, fmtUsd, num, text, type Order, type OrderLine, type Payment, type Staff } from '@suqa/pos-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { fillCents, fmtLbp, fmtUsd, num, text, type Order, type OrderLine, type Payment, type Staff } from '@suqa/pos-core';
 import { pt, type Key, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -16,20 +17,30 @@ import ReturnDialog from './ReturnDialog';
  * it — with print and WhatsApp. Read from this device (every till keeps the shop's orders), so it opens offline too.
  * Cancel from here: the operations log passes its own button (`actions`); elsewhere, give `staff` and the owner gets the same
  * cancel the log has for a sale — a counter sale paid in cash, not returned yet: reason, then the full return.
+ * A sale that is not on this till (older than what it holds) is read from the server when `sb` is given and the till is online (93);
+ * it is shown, printed and sent the same way, but cancelled from a till that holds it.
  */
-export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me }: { boot: Booted; locale: L; orderId: string; onClose: () => void; actions?: ReactNode; staff?: Staff }) {
-  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[]; returned: boolean } | null | 'missing'>(null);
+export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me, sb }: { boot: Booted; locale: L; orderId: string; onClose: () => void; actions?: ReactNode; staff?: Staff; sb?: SupabaseClient }) {
+  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[]; returned: boolean; remote?: boolean } | null | 'missing'>(null);
   const [ask, setAsk] = useState(false); const [ret, setRet] = useState<string | null>(null);
   useEffect(() => { void (async () => {
-    const o = await boot.db.orders.get(orderId); if (!o) { setD('missing'); return; }
+    const o = await boot.db.orders.get(orderId);
+    if (!o) {
+      if (sb && (typeof navigator === 'undefined' || navigator.onLine)) {
+        const { data } = await sb.rpc('pos_sale_detail', { p_shop: boot.shop.id, p_order: orderId });
+        const r = data as { order: Record<string, unknown>; lines: Record<string, unknown>[]; payments: Record<string, unknown>[]; returned: boolean } | null;
+        if (r?.order) { setD({ o: fillCents('orders', r.order) as unknown as Order, lines: r.lines.map(l => fillCents('order_items', l) as unknown as OrderLine).filter(l => !l.voided), pays: r.payments as unknown as Payment[], staff: await boot.db.staff.toArray(), returned: r.returned, remote: true }); return; }
+      }
+      setD('missing'); return;
+    }
     const [lines, pays, staff, rets] = await Promise.all([boot.db.orderLines.where('order_id').equals(orderId).toArray(), boot.db.payments.where('order_id').equals(orderId).toArray(), boot.db.staff.toArray(), boot.db.returns.where('order_id').equals(orderId).count()]);
     setD({ o, lines: lines.filter(l => !l.voided), pays, staff, returned: rets > 0 });
-  })(); }, [boot, orderId]);
+  })(); }, [boot, orderId, sb]);
   if (d === null) return null;
   if (d === 'missing') return <Modal open onClose={onClose} title={pt('saleDetails', locale)}><p className="muted">{pt('opsNotOnDevice', locale)}</p></Modal>;
   const { o, lines, pays, staff } = d; const rate = num(o.rate_lbp_per_usd);
   // the owner's cancel, same rule as the operations log: a counter sale, all cash, nothing given back yet
-  const owner = !!me && can(roleOf(me), 'reports.profit'); const live = o.status !== 'cancelled' && o.status !== 'rejected' && !d.returned && !pays.some(p => num(p.amount) < 0);
+  const owner = !!me && can(roleOf(me), 'reports.profit'); const live = !d.remote && o.status !== 'cancelled' && o.status !== 'rejected' && !d.returned && !pays.some(p => num(p.amount) < 0);
   const why = !owner || actions || !live ? null : o.channel !== 'walkin' ? pt('opsWhyOrder', locale) : !pays.length || pays.some(p => p.tender !== 'cash_usd' && p.tender !== 'cash_lbp') ? pt('opsWhyNotCash', locale) : null;
   const canCancel = owner && !actions && live && !why;
   if (ret != null && me) return <ReturnDialog boot={boot} locale={locale} order={o} lines={lines} staff={me} full presetReason={ret} onDone={() => { boot.engine.poke(); onClose(); }} onClose={() => setRet(null)} />;
@@ -68,14 +79,27 @@ export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me 
   );
 }
 
-/** What a list of sales is narrowed to: one channel, one way of paying, or the sales holding given items (then each row shows those items' quantity and amount). */
-export type SalesFilter = { channel?: string; tender?: string; productIds?: string[]; noProduct?: boolean };
+/** What a list of sales is narrowed to: one channel, one way of paying, one item, or one category ('' = items with no category). With an item or a category each row shows those items' quantity and amount. */
+export type SalesFilter = { channel?: string; tender?: string; productId?: string; section?: string };
+type SaleRow = { id: string; number: string | null; local_number: string | null; placed_at: string; customer_name: string | null; channel: string; items: number; qty: number | null; cents: number };
 
-/** Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items. */
-export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; onClose: () => void }) {
-  const [rows, setRows] = useState<{ o: Order; items: number; qty: number | null; cents: number }[] | null>(null); const [open, setOpen] = useState<string | null>(null);
-  const byItem = !!(filter?.productIds || filter?.noProduct);
-  useEffect(() => { void (async () => {
+/**
+ * Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items.
+ * With `sb` (the owner, online) the list is read from the server, with the report's own rules, so it agrees with the report's
+ * totals for any period (93). Without it, or when the server cannot be reached, it is this till's own copy — which starts where
+ * this till started — and the list says so.
+ */
+export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, sb, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; sb?: SupabaseClient; onClose: () => void }) {
+  const [rows, setRows] = useState<SaleRow[] | null>(null); const [open, setOpen] = useState<string | null>(null);
+  const [total, setTotal] = useState<{ count: number; cents: number } | null>(null); const [local, setLocal] = useState(false);
+  const byItem = filter?.productId != null || filter?.section != null;
+  useEffect(() => { let on = true; void (async () => {
+    if (sb && (typeof navigator === 'undefined' || navigator.onLine)) {
+      const day = from ?? new Date().toISOString().slice(0, 10);
+      const { data, error } = await sb.rpc('pos_report_sales', { p_shop: boot.shop.id, p_from: day, p_to: to ?? day, p_filter: { ...(shiftId ? { shift_id: shiftId } : {}), ...(filter ?? {}) } });
+      const r = data as { count: number; cents: number; rows: SaleRow[] } | null;
+      if (!error && r?.rows) { if (on) { setRows(r.rows.map(x => ({ ...x, cents: num(x.cents), qty: x.qty == null ? null : num(x.qty) }))); setTotal({ count: num(r.count), cents: num(r.cents) }); setLocal(false); } return; }
+    }
     let os: Order[];
     if (shiftId) os = (await boot.db.orders.toArray()).filter(o => o.shift_id === shiftId);
     else { const s = new Date(`${from}T00:00:00`); const e = new Date(`${to ?? from}T00:00:00`); e.setDate(e.getDate() + 1); os = await boot.db.orders.where('placed_at').between(s.toISOString(), e.toISOString()).toArray(); }
@@ -83,28 +107,34 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, staf
     if (filter?.channel) os = os.filter(o => o.channel === filter.channel);
     if (filter?.tender) { const paid = new Set((await boot.db.payments.toArray()).filter(p => p.tender === filter.tender).map(p => p.order_id)); os = os.filter(o => paid.has(o.id)); }
     const ids = new Set(os.map(o => o.id)); const count = new Map<string, number>(); const hit = new Map<string, { qty: number; cents: number }>();
-    const want = new Set(filter?.productIds ?? []);
+    const inSection = filter?.section != null ? new Set((await boot.db.products.toArray()).filter(p => (p.section || '') === filter.section).map(p => p.id)) : null;
+    const wanted = (pid: string | null | undefined) => (filter?.productId != null ? pid === filter.productId : inSection ? (pid ? inSection.has(pid) : filter?.section === '') : false);
     for (const l of await boot.db.orderLines.toArray()) if (ids.has(l.order_id) && !l.voided) {
       count.set(l.order_id, (count.get(l.order_id) ?? 0) + 1);
-      if (byItem && (l.product_id ? want.has(l.product_id) : !!filter?.noProduct)) { const h = hit.get(l.order_id) ?? { qty: 0, cents: 0 }; h.qty += num(l.quantity); h.cents += num(l.line_total_cents); hit.set(l.order_id, h); }
+      if (byItem && wanted(l.product_id)) { const h = hit.get(l.order_id) ?? { qty: 0, cents: 0 }; h.qty += num(l.quantity); h.cents += num(l.line_total_cents); hit.set(l.order_id, h); }
     }
     if (byItem) os = os.filter(o => hit.has(o.id));
-    setRows(os.map(o => ({ o, items: count.get(o.id) ?? 0, qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents) })));
-  })(); }, [boot, from, to, shiftId, filter]); // eslint-disable-line react-hooks/exhaustive-deps
-  const sum = (rows ?? []).reduce((s, r) => s + r.cents, 0);
+    if (!on) return;
+    setRows(os.map(o => ({ id: o.id, number: o.number ?? null, local_number: o.local_number ?? null, placed_at: o.placed_at, customer_name: o.customer_name ?? null, channel: o.channel, items: count.get(o.id) ?? 0,
+      qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents) })));
+    setTotal(null); setLocal(true);
+  })(); return () => { on = false; }; }, [boot, sb, from, to, shiftId, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sum = total?.cents ?? (rows ?? []).reduce((s, r) => s + r.cents, 0); const n = total?.count ?? rows?.length;
   return (
     <>
-      <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {rows?.length ?? '…'} · {fmtUsd(sum)}</span></>}
+      <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {n ?? '…'} · {fmtUsd(sum)}</span></>}
         footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
+        {local && <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>ⓘ {pt('salesOnDeviceOnly', locale)}</p>}
         {!rows ? <p className="muted">…</p> : !rows.length ? <p className="muted">—</p> : <table className="table clickable"><tbody>
-          {rows.map(({ o, items, qty, cents }) => <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(o.id)}>
-            <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(o.placed_at, locale)}</td>
-            <td><strong dir="ltr">{o.number ?? o.local_number}</strong> <span className="muted">{o.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{qty != null ? <>{pt('qty', locale)} <span dir="ltr">{qty}</span> · </> : null}{items} {pt('itemsCount', locale)} · {o.channel === 'online' ? pt('onlineShop', locale) : pt(o.channel as 'walkin', locale)}</div></td>
-            <td className="num">{fmtUsd(cents)}</td><td className="muted">›</td>
+          {rows.map(r => <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}>
+            <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(r.placed_at, locale)}</td>
+            <td><strong dir="ltr">{r.number ?? r.local_number}</strong> <span className="muted">{r.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{r.qty != null ? <>{pt('qty', locale)} <span dir="ltr">{r.qty}</span> · </> : null}{r.items} {pt('itemsCount', locale)} · {r.channel === 'online' ? pt('onlineShop', locale) : pt(r.channel as 'walkin', locale)}</div></td>
+            <td className="num">{fmtUsd(r.cents)}</td><td className="muted">›</td>
           </tr>)}
         </tbody></table>}
+        {total && rows && total.count > rows.length && <p className="muted" style={{ fontSize: 12 }}>ⓘ {pt('salesFirstRows', locale).replace('{n}', String(rows.length))}</p>}
       </Modal>
-      {open && <SaleDetail boot={boot} locale={locale} orderId={open} staff={staff} onClose={() => setOpen(null)} />}
+      {open && <SaleDetail boot={boot} locale={locale} orderId={open} staff={staff} sb={sb} onClose={() => setOpen(null)} />}
     </>
   );
 }

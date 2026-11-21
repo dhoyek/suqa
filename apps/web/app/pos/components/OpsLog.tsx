@@ -171,7 +171,7 @@ export default function OpsLog({ boot, sb, locale, staff, from, to }: { boot: Bo
       {view && (() => {
         const a = view.after ?? {}; const orderId = view.action === 'sale.commit' ? (view.ref_id ?? a.id) : view.action === 'order.pay' ? a.id : view.action === 'return.commit' ? a.order_id : null;
         const btn = view.canUndo ? <button className="btn danger" onClick={() => { setAsk(view); setView(null); }}>✕ {pt('opsCancel', locale)}</button> : null;
-        return orderId ? <SaleDetail boot={boot} locale={locale} orderId={String(orderId)} actions={btn} onClose={() => setView(null)} />
+        return orderId ? <SaleDetail boot={boot} locale={locale} sb={sb} orderId={String(orderId)} actions={btn} onClose={() => setView(null)} />
           : <OpDetail boot={boot} locale={locale} op={view} label={label(view.action)} who={nameOf(view.user_id)} actions={btn} onClose={() => setView(null)} />;
       })()}
       {ask && <ReasonDialog locale={locale} title={`${pt('opsCancel', locale)} · ${label(ask.action)}`} line={<><strong>{label(ask.action)}</strong> {ask.amount} <span className="muted">{ask.detail}</span></>}

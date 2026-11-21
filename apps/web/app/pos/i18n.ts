@@ -384,6 +384,8 @@ const T = {
   opsNotOnDevice: { ar: 'هذه العملية غير موجودة على هذا الجهاز بعد — انتظر المزامنة أو ألغِها من الجهاز الذي سجّلها.', en: 'This operation is not on this device yet — wait for the sync, or cancel it from the device that made it.' },
   opsWhyOrder: { ar: 'طلب — يُلغى من صندوق الطلبات', en: 'An order — cancel it from the orders inbox' }, opsWhyNotCash: { ar: 'دُفعت بغير النقد أو بالدين — إلغاؤها في الخطوة التالية', en: 'Paid by card, wallet or on credit — its cancel comes next' },
   opsReasonTest: { ar: 'تجربة', en: 'Test' }, opsReasonMistake: { ar: 'خطأ', en: 'Mistake' }, opsReasonOther: { ar: 'سبب آخر', en: 'Other' }, opsReasonNote: { ar: 'ملاحظة (اختياري، أو السبب)', en: 'Note (optional, or the reason)' },
+  salesOnDeviceOnly: { ar: 'من نسخة هذا الجهاز فقط — قد لا تشمل المبيعات الأقدم. اتصل بالإنترنت لعرض الكل.', en: 'From this device only — older sales may be missing. Go online to see them all.' },
+  salesFirstRows: { ar: 'تُعرض أحدث {n} عملية؛ المجموع أعلاه للكل.', en: 'Showing the latest {n}; the total above is for all.' },
   opsSaleHow: { ar: 'يُفتح المرتجع بكل الأصناف: تعود البضاعة إلى المخزون ويخرج المبلغ نقداً من وردية اليوم.', en: 'The return opens with every line: the goods go back to stock and the amount leaves today\'s drawer in cash.' },
   opsPurchaseHow: { ar: 'تُلغى فاتورة الشراء: تخرج الكميات من المخزون ويُصحَّح رصيد المورّد.', en: 'The purchase is voided: its quantities leave stock and the supplier balance is corrected.' },
   opsDebtHow: { ar: 'يُلغى التحصيل: يعود الدين على الزبون، والنقد يخرج من وردية اليوم.', en: 'The collection is undone: the customer owes it again, and the cash leaves today\'s drawer.' },

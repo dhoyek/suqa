@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   const { data: last } = await admin.from('yorgo_messages').select('id').eq('conversation_id', result.conversation_id).eq('role', 'assistant').order('id', { ascending: false }).limit(1).maybeSingle();
   // what was asked for and not found, as a counted phrase only (script 78; quietly skipped where it is not installed)
   // (a draft's not_found, and what the search itself came back empty for — also when the answer was only text)
-  const missed = [...new Map([...(result.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []), ...result.missed].map(m => [m.trim().toLowerCase(), m.trim()])).values()].filter(Boolean).slice(0, 20);
+  const missed = [...new Map([...(result.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []), ...result.missed].map(m => [m.trim().toLowerCase(), m.trim()])).values()].filter(m => m && !m.endsWith('(غير متوفر الآن)')).slice(0, 20);      // (sold out is not a miss)
   if (missed.length) await admin.rpc('yorgo_miss', { p_tenant: tenant.id, p_shop: mode === 'seller' ? shopId : focusShop?.id ?? null, p_phrases: missed }).then(() => null, () => null);
   const { missed: _m, ...out } = result; void _m;
   return NextResponse.json({ ...out, message_id: (last?.id as number | undefined) ?? null });

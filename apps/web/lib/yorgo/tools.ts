@@ -116,6 +116,7 @@ const draftBasket: Tool = {
     const base = runDraft(input, 6);
     const ids = [...new Set([...base.draft.lines.map(l => l.product_id), ...base.draft.choices.flatMap(c => c.options)])];
     const found = new Map<string, ItemOut>();
+    const soldOut = new Map<string, string>();
     if (ids.length && ctx.sb.from) {
       const { data, error } = await ctx.sb.from('products')
         .select('id,name,unit,price_usd,price_currency,price_lbp,is_available,is_active,visible_online,available_days,shops!inner(id,tenant_id,slug,name,whatsapp,min_order_usd,pickup_enabled,status)').in('id', ids);
@@ -124,13 +125,15 @@ const draftBasket: Tool = {
         shops: { id: string; tenant_id: string; slug: string; name: Record<string, string>; whatsapp: string | null; min_order_usd: number | string | null; pickup_enabled: boolean | null; status: string } };
       for (const r of (data as Row[] | null) ?? []) {
         const sh = Array.isArray(r.shops) ? (r.shops as Row['shops'][])[0] : r.shops;
-        if (!sh || sh.tenant_id !== ctx.tenantId || sh.status !== 'active' || !r.is_active || !r.is_available || r.visible_online === false) continue;
+        if (!sh || sh.tenant_id !== ctx.tenantId || sh.status !== 'active' || !r.is_active || r.visible_online === false) continue;
+        if (!r.is_available) { soldOut.set(r.id, r.name?.ar || r.name?.en || ''); continue; }      // on the menu, not available now: said on the card, never dropped silently
         found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: usdPrice(r, ctx.fx), days: r.available_days?.length ? r.available_days : null,
           shop: { id: sh.id, slug: sh.slug, name: sh.name, whatsapp: sh.whatsapp, min_order_usd: Number(sh.min_order_usd ?? 0), pickup_enabled: sh.pickup_enabled !== false } });
       }
     }
     const not_found = [...base.draft.not_found];
-    const lines = base.draft.lines.flatMap(l => { const it = found.get(l.product_id); return it ? [{ ...it, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) }] : []; });
+    const out = (id: string) => { const n = soldOut.get(id); if (n && !not_found.includes(`${n} (غير متوفر الآن)`)) not_found.push(`${n} (غير متوفر الآن)`); };
+    const lines = base.draft.lines.flatMap(l => { const it = found.get(l.product_id); if (!it) out(l.product_id); return it ? [{ ...it, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) }] : []; });
     const choices: BasketDraft['choices'] = [];
     for (const c of base.draft.choices) {
       const options = c.options.map(o => found.get(o)).filter((o): o is ItemOut => !!o);
@@ -139,7 +142,7 @@ const draftBasket: Tool = {
       else not_found.push(c.phrase);
     }
     const draft: BasketDraft = { lines, choices, not_found, ...(input.add === true ? { add: true } : {}) };
-    return { ok: true, shown_to_customer: true, ...(input.add === true ? { added_to_open_draft: true } : {}), lines: lines.length, choices: choices.length, not_found: not_found.length, shops: [...new Set(lines.map(l => l.shop.slug))].length, draft };
+    return { ok: true, shown_to_customer: true, ...(soldOut.size ? { not_available_now: [...soldOut.values()] } : {}), ...(input.add === true ? { added_to_open_draft: true } : {}), lines: lines.length, choices: choices.length, not_found: not_found.length, shops: [...new Set(lines.map(l => l.shop.slug))].length, draft };
   },
 };
 

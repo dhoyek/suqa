@@ -73,6 +73,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
   const onPin = (p: { lat: number; lng: number }) => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); };
   const address: CustomerAddress = useMemo(() => ({ ...(line1.trim() ? { line1: line1.trim() } : {}), ...(map.trim() ? { map_url: map.trim() } : {}), ...(coords ? { lat: coords.lat, lng: coords.lng } : {}) }), [line1, map, coords]);
   const ok = !isOrder || key.length >= 6;
+  const [miss, setMiss] = useState(false);          // "done" tapped without the number an order needs: say so (the button used to be greyed out and silent)
   const book = useMemo(() => addressBook(picked), [picked]);
   // the customer's own online-account addresses (read-only suggestions), minus the ones the shop already has
   const [acct, setAcct] = useState<SavedAddress[]>([]);
@@ -95,7 +96,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
 
   /** A saved address was edited → ask whether to update it, keep it as a new one, or use it this once. */
   const submit = async (repeat?: OrderLine[]) => {
-    if (!ok) return;
+    if (!ok) { setMiss(true); phoneRef.current?.scrollIntoView({ block: 'center' }); phoneRef.current?.focus(); return; }
     if (isOrder && ful === 'delivery' && addrDirty && !askAddr) { setAskAddr({ repeat }); return; }
     await finish('new', repeat);
   };
@@ -118,10 +119,10 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
   return (
     <>
       <Modal open onClose={onClose} title={editing ? `${pt('editOrderInfo', locale)} · ${editing.number}` : pt('customer', locale)} wide={isOrder}
-        footer={editing ? <><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={() => submit()}>{pt('save', locale)}</button></>
+        footer={editing ? <><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => submit()}>{pt('save', locale)}</button></>
           : <><button className="btn ghost" onClick={() => onDone({ patch: { channel: 'walkin', customer_name: '', customer_phone: '', fulfillment: 'pickup', address: {}, notes: null }, feeCents: 0 })}>✕ {pt('walkin', locale)}</button>
           {last && isOrder && <button className="btn" onClick={() => submit(last.lines)}>🔁 {pt('repeatLast', locale)} ({last.lines.length})</button>}
-          <span style={{ flex: 1 }} /><button className="btn primary" disabled={!ok} onClick={() => submit()}>{pt('ok', locale)}</button></>}>
+          <span style={{ flex: 1 }} /><button className="btn primary" onClick={() => submit()}>{pt('ok', locale)}</button></>}>
         <div className={`cust-grid ${isOrder ? '' : 'one'}`}>
           <div className="stack">
             {!editing && <><label className="label">{pt('channelLabel', locale)}</label>
@@ -130,7 +131,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
             <label className="label">{pt('customerPhone', locale)}{isOrder ? ' *' : ''}</label>
             <div className="row" style={{ gap: 6 }}>
             <div style={{ position: 'relative', flex: 1 }}>
-              <input ref={phoneRef} className="input" inputMode="tel" dir="ltr" value={phone} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches} placeholder="70 123 456" onChange={e => { setPhone(e.target.value); setPicked(null); setShowList(true); }} onFocus={() => setShowList(true)} onBlur={() => setTimeout(() => setShowList(false), 150)} />
+              <input ref={phoneRef} className="input" inputMode="tel" dir="ltr" value={phone} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches} placeholder="70 123 456" style={miss && !ok ? { borderColor: '#c62828' } : undefined} onChange={e => { setPhone(e.target.value); setPicked(null); setShowList(true); }} onFocus={() => setShowList(true)} onBlur={() => setTimeout(() => setShowList(false), 150)} />
               {showList && matches.length > 0 && (
                 <div className="cust-list">
                   {matches.map(c => <button key={c.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => pick(c)}>
@@ -141,6 +142,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
             </div>
             <button className="btn" type="button" onClick={() => setPicker(true)} title={pt('pickCustomer', locale)}>👥 {pt('pickCustomer', locale)}</button>
             </div>
+            {miss && !ok && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>⚠ {pt('phoneNeeded', locale)}</div>}
             {!phone && !name && matches.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}><small className="muted">{pt('recentCustomers', locale)}:</small>{matches.slice(0, isOrder ? 5 : 8).map(c => <button key={c.id} className="chip" onClick={() => pick(c)}>{c.name || fmtPhone(c.phone)}</button>)}</div>}
             {!editing && openOrders > 0 && <div className="open-orders">
               <button type="button" className="pill warn" style={{ border: 0, cursor: 'pointer', font: 'inherit' }} onClick={() => setShowOpen(v => !v)}>⚠ {pt('hasOpenOrder', locale).replace('{n}', String(openOrders))} {showOpen ? '▴' : '▾'}</button>

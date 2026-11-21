@@ -367,14 +367,14 @@ audio message ─► webhook (once-only, as W1) ─► after Meta's 200:
 
 | # | Step | Files | Tested how |
 |---|---|---|---|
-| 1 | Script 98 (below) | `supabase/schema/98_yorgo_ai_routes.sql`, `supabase/test/yorgo_ai_routes.sql` | database test: only an admin reads or writes routes; a shop owner, a customer and a visitor read nothing; a route without prices cannot be enabled |
+| 1 | Script 99 (below) | `supabase/schema/99_yorgo_ai_routes.sql`, `supabase/test/yorgo_ai_routes.sql` | database test: only an admin reads or writes routes; a shop owner, a customer and a visitor read nothing; a route without prices cannot be enabled |
 | 2 | Wrapper + Anthropic adapter (no behaviour change) | new `lib/ai/*`; `lib/yorgo/model.ts` becomes the Anthropic adapter | the existing 143 tests unchanged; the 40-message test set before and after on dev |
 | 3 | Google adapter, task `voice` | `lib/ai/google.ts` + tests with recorded responses | unit tests; live with the admin Test button once your key is in |
 | 4 | Admin page | `app/admin/yorgo/providers/*`, `api/admin/yorgo/routes` | browser on dev as admin |
 | 5 | Voice on WhatsApp | `lib/server/whatsapp.ts` (media download), `lib/yorgo/whatsapp.ts` (`waVoiceTurn`), webhook | unit tests (too long, empty, provider down, cap); end to end on dev needs **your voice notes** |
 | 6 | Quality report | `docs/yorgo/voice-cases/` (your recordings stay out of the repo; only transcripts and results) | at least 10 real Lebanese voice orders: transcript quality and correct-draft rate, in the CHANGELOG |
 
-## Database — script 98 (not applied until "approve 98")
+## Database — script 99 (not applied until "approve 99")
 
 ```sql
 create table if not exists suqa.yorgo_ai_routes (
@@ -440,5 +440,5 @@ content is used to improve their products.
 5. **Audio**: never stored (your earlier preference) — confirm.
 6. **Wording** (Arabic and English): too long, could not hear, and the privacy line. I will propose them once you approve.
 7. **Recordings**: can you record 10–15 voice orders the way customers really speak? They are needed for step 6.
-8. **Who sees the AI providers page**: the platform admin only (you) — proposed, and what script 98 above does — or the
+8. **Who sees the AI providers page**: the platform admin only (you) — proposed, and what script 99 above does — or the
    association's admins too? Provider, model and prices are the platform's, not one market's.

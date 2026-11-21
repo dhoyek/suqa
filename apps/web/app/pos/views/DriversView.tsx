@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { currentShift, dayKey, driverPayRule, fmtLbp, fmtPhone, fmtUsd, payDriver, roundLbp, setOrderDriverCash, setOrderDriverPay, text, usdToLbp, waDigits, type Currency, type DriverPayMode, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
+import { currentShift, dayKey, driverPayRule, fmtLbp, fmtPhone, fmtUsd, normPhone, payDriver, roundLbp, setOrderDriverCash, setOrderDriverPay, text, upsertDriver, usdToLbp, waDigits, type Currency, type Driver, type DriverPayMode, type DriverScope, type Rate, type Shift, type Staff, type SyncStatus } from '@suqa/pos-core';
 import { pt, posErr, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -37,7 +37,7 @@ export default function DriversView({ boot, sb, locale, status, staff, tick }: {
   const online = status?.online ?? true;
   const [preset, setPreset] = useState<Preset>('month');
   const [rep, setRep] = useState<Rep | null>(null); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState<string | null>(null); const [rate, setRate] = useState(89500);
+  const [open, setOpen] = useState<string | null>(null); const [rate, setRate] = useState(89500); const [adding, setAdding] = useState(false);
   const [from, to] = useMemo(() => range(preset), [preset]);
   const load = useCallback(async () => {
     if (!online) return;
@@ -63,6 +63,7 @@ export default function DriversView({ boot, sb, locale, status, staff, tick }: {
         <h3 style={{ margin: 0 }}>🛵 {pt('driversNav', locale)}</h3>
         <div className="seg">{(['today', 'week', 'month', 'lastMonth'] as Preset[]).map(p => <button key={p} className={preset === p ? 'active' : ''} onClick={() => setPreset(p)}>{pt(p === 'today' ? 'pToday' : p === 'week' ? 'pWeek' : p === 'month' ? 'pMonth' : 'pLastMonth', locale)}</button>)}</div>
         <span style={{ flex: 1 }} />
+        <button className="btn primary" onClick={() => setAdding(true)}>＋ {pt('drvAdd', locale)}</button>
         <button className="btn" disabled={busy || !online} onClick={() => void load()}>{busy ? '…' : '🔄'}</button>
       </div>
       {!online && <div className="card muted">{pt('needOnline', locale)}</div>}
@@ -96,6 +97,7 @@ export default function DriversView({ boot, sb, locale, status, staff, tick }: {
         orders={rep.orders.filter(o => o.driver_id === sel.id)} payouts={rep.payouts.filter(p => p.driver_id === sel.id)}
         onClose={() => setOpen(null)}
         onChanged={patch => { setRep(r => (r ? patch(r) : r)); setTimeout(() => void load(), 2500); }} />}
+      {adding && <AddDriver boot={boot} sb={sb} locale={locale} online={online} onClose={() => setAdding(false)} onAdded={() => { boot.engine.poke(); setTimeout(() => void load(), 2500); }} />}
     </div>
   );
 }
@@ -108,6 +110,10 @@ function DriverSheet({ boot, locale, staff, d, rule, rate, from, to, orders, pay
   const done = orders.filter(o => o.status === 'delivered');
   const [picked, setPicked] = useState<Set<string>>(() => new Set(openList.map(o => o.id)));
   const [settle, setSettle] = useState(false); const [edit, setEdit] = useState<DrvOrder | null>(null); const [editCash, setEditCash] = useState<DrvOrder | null>(null);
+  // for the shop only, or shared with the association's other shops (98): kept on the till's own copy of the driver
+  const [scope, setScope] = useState<DriverScope>('shop');
+  useEffect(() => { boot.db.drivers.get(d.id).then((x: Driver | undefined) => setScope(x?.scope ?? 'shop')); }, [boot, d.id]);
+  const setScopeOf = async (v: DriverScope) => { if (v === scope) return; setScope(v); try { await upsertDriver(boot.db, boot.shop.id, { id: d.id, name: d.name, phone: d.phone, vehicle: d.vehicle, scope: v }); boot.engine.poke(); } catch { setScope(scope); } };
   const chosen = openList.filter(o => picked.has(o.id) && payOpen(o)); const chosenCents = chosen.reduce((s, o) => s + o.pay_cents, 0);
   const chosenCash = openList.filter(o => picked.has(o.id) && cashOpen(o)); const chosenCashCents = chosenCash.reduce((s, o) => s + (o.cash_cents ?? 0), 0);
   const chosenUsd = chosenCash.reduce((s, o) => s + (o.cash_usd_cents ?? 0), 0), chosenLbp = chosenCash.reduce((s, o) => s + (o.cash_lbp ?? 0), 0);
@@ -133,7 +139,10 @@ function DriverSheet({ boot, locale, staff, d, rule, rate, from, to, orders, pay
       <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="muted" dir="ltr">{fmtPhone(d.phone)}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`}>📞</a>
         <span className="pill">{rule}</span>
+        <span style={{ flex: 1 }} />
+        <ScopeSeg locale={locale} value={scope} onChange={v => void setScopeOf(v)} />
       </div>
+      {scope === 'association' && <small className="muted">{pt('drvScopeHint', locale)}</small>}
       <div className="kpis" style={{ marginTop: 10 }}>
         <div className="kpi"><span>{pt('drvCash', locale)}</span><strong dir="ltr" style={{ fontSize: (d.cash_lbp ?? 0) ? 16 : undefined }}>{cashText(d.cash_usd_cents ?? 0, d.cash_lbp ?? 0, locale)}</strong><small>{out.length ? `${pt('drvOut', locale)} ${out.length} · ${fmtUsd(d.holding_cents)}` : `${d.cash_count ?? 0} ${pt('drvDeliveries', locale)}`}</small></div>
         <div className="kpi"><span>{pt('drvOwed', locale)}</span><strong className={d.owed_cents > 0 ? 'bad' : ''}>{fmtUsd(d.owed_cents)}</strong><small>{d.owed_count} {pt('drvDeliveries', locale)}</small></div>
@@ -243,6 +252,60 @@ function SettleDialog({ boot, locale, staff, d, orders, cents, cashOrders, cashC
         {!shift && <small className="muted">{pt('settleNoShift', locale)}</small>}
         <input className="input" placeholder={pt('note', locale)} value={note} maxLength={200} onChange={e => setNote(e.target.value)} />
         {err && <div className="bad">{err}</div>}
+      </div>
+    </Modal>
+  );
+}
+
+function ScopeSeg({ locale, value, onChange }: { locale: L; value: DriverScope; onChange: (v: DriverScope) => void }) {
+  return <div className="seg">{(['shop', 'association'] as DriverScope[]).map(v => <button key={v} type="button" className={value === v ? 'active' : ''} onClick={() => onChange(v)}>{pt(v === 'shop' ? 'drvScopeShop' : 'drvScopeAssoc', locale)}</button>)}</div>;
+}
+
+/**
+ * ＋ سائق: a new driver from the Drivers screen (name, number, vehicle, and whether he is for this shop only or for the whole
+ * association) — it works offline like the rest of the till. Online, the association's drivers that this shop has not got yet are
+ * listed underneath: one tap adds one as this shop's own driver (own pay rule, own balance; nothing of another shop's is shown).
+ */
+function AddDriver({ boot, sb, locale, online, onClose, onAdded }: { boot: Booted; sb: SupabaseClient; locale: L; online: boolean; onClose: () => void; onAdded: () => void }) {
+  type Shared = { name: string; phone: string; vehicle: string | null; source: 'shop' | 'association' };
+  const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [vehicle, setVehicle] = useState(''); const [scope, setScope] = useState<DriverScope>('shop');
+  const [err, setErr] = useState<string | null>(null); const [shared, setShared] = useState<Shared[] | null>(null); const [added, setAdded] = useState<string[]>([]);
+  useEffect(() => { if (!online) return; let on = true;
+    Promise.resolve(sb.rpc('pos_association_drivers', { p_shop: boot.shop.id })).then(({ data, error }) => { if (on) setShared(error || !Array.isArray(data) ? [] : data as Shared[]); }, () => { if (on) setShared([]); });
+    return () => { on = false; }; }, [sb, boot, online]);
+  const save = async () => {
+    if (!name.trim()) { setErr(pt('drvNeedName', locale)); return; }
+    if (normPhone(phone).length < 6) { setErr(pt('drvNeedPhone', locale)); return; }
+    try { await upsertDriver(boot.db, boot.shop.id, { name, phone, vehicle: vehicle.trim() || null, scope, active: true, available: true }); onAdded(); onClose(); }
+    catch (e) { setErr(posErr((e as Error).message, locale)); }
+  };
+  const take = async (x: Shared) => {
+    try { await upsertDriver(boot.db, boot.shop.id, { name: x.name, phone: x.phone, vehicle: x.vehicle, active: true, available: true }); setAdded(a => [...a, x.phone]); onAdded(); }
+    catch (e) { setErr(posErr((e as Error).message, locale)); }
+  };
+  return (
+    <Modal open onClose={onClose} title={`＋ ${pt('drvAdd', locale)}`}
+      footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => void save()}>{pt('save', locale)}</button></>}>
+      <div className="stack">
+        <label className="label">{pt('customerName', locale)} *</label>
+        <input className="input" value={name} onChange={e => { setName(e.target.value); setErr(null); }} />
+        <label className="label">{pt('customerPhone', locale)} *</label>
+        <input className="input" dir="ltr" inputMode="tel" placeholder="70 123 456" value={phone} onChange={e => { setPhone(e.target.value); setErr(null); }} />
+        <label className="label">{pt('drvVehicle', locale)}</label>
+        <input className="input" value={vehicle} placeholder={pt('drvVehicleHint', locale)} onChange={e => setVehicle(e.target.value)} />
+        <label className="label">{pt('drvScope', locale)}</label>
+        <ScopeSeg locale={locale} value={scope} onChange={setScope} />
+        <small className="muted">{pt(scope === 'association' ? 'drvScopeHint' : 'drvScopeShopHint', locale)}</small>
+        {err && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>⚠ {err}</div>}
+        <hr style={{ width: '100%', border: 0, borderTop: '1px solid #eee' }} />
+        <strong>{pt('drvAssocList', locale)}</strong>
+        {!online ? <small className="muted">{pt('needOnline', locale)}</small>
+          : shared === null ? <small className="muted">…</small>
+          : !shared.length ? <small className="muted">{pt('drvAssocNone', locale)}</small>
+          : <ul className="tender-list">{shared.map(x => <li key={x.phone}>
+              <span><strong>🛵 {x.name}</strong> <span className="muted" dir="ltr">{fmtPhone(x.phone)}</span>{x.vehicle ? <small className="muted"> · {x.vehicle}</small> : null}</span>
+              {added.includes(x.phone) ? <span className="pill ok">✓</span> : <button className="btn" onClick={() => void take(x)}>＋ {pt('drvTake', locale)}</button>}
+            </li>)}</ul>}
       </div>
     </Modal>
   );

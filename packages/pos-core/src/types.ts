@@ -75,7 +75,8 @@ export interface SavedAddress extends CustomerAddress { id: string; last_used_at
 /** A shop's contracted driver (shop_drivers): just a name and a WhatsApp number; user_id when he also has an account. */
 /** 'none' = nothing per order (salaried), 'per_delivery' = a fixed amount, 'delivery_fee' = the fee the customer paid on that order. */
 export type DriverPayMode = 'none' | 'per_delivery' | 'delivery_fee';
-export interface Driver { pay_mode?: DriverPayMode | null; pay_cents?: number | null; id: string; shop_id: string; name: string; phone: string; phone_key: string; vehicle?: string | null; active: boolean; available: boolean; notes?: string | null; user_id?: string | null; last_used_at?: string | null; updated_at?: string }
+export type DriverScope = 'shop' | 'association';
+export interface Driver { /** 98: 'association' = the other shops of the association may add him */ scope?: DriverScope; pay_mode?: DriverPayMode | null; pay_cents?: number | null; id: string; shop_id: string; name: string; phone: string; phone_key: string; vehicle?: string | null; active: boolean; available: boolean; notes?: string | null; user_id?: string | null; last_used_at?: string | null; updated_at?: string }
 export interface ShopCustomer { id: string; shop_id: string; phone: string; phone_key: string; name: string; address: CustomerAddress; addresses?: SavedAddress[]; notes?: string | null; credit_limit_cents?: number | null; discount_pct?: number | string | null; user_id?: string | null; orders_count: number; last_order_at?: string | null; active?: boolean; updated_at?: string }
 export interface CustomerSeen { phone: string; name?: string; last_address?: Record<string, unknown>; last_seen: string }
 

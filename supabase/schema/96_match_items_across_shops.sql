@@ -8,6 +8,10 @@
 --
 -- Changes: match_items (two fragments, patched in place — the function is long and live). No table changes.
 
+-- the function carries a pg_trgm setting: the library must be loaded in this session before the function is created again
+-- (otherwise "permission denied to set parameter" on Supabase — same as script 84)
+select extensions.similarity('a', 'a');
+
 do $$
 declare v_def text := pg_get_functiondef('suqa.match_items(uuid,text[],uuid,int)'::regprocedure);
         v_a text := $q$row_number() over (partition by r.no order by r.sc desc, p.is_available desc, length(coalesce(p.name->>'ar', '')) + length(coalesce(p.name->>'en', '')), p.sort_order, p.id) as ord$q$;

@@ -305,3 +305,138 @@ in the app chat → staff forwarding → screen-aware Yorgo → item images.
 - **Script 95** applied on **dev** (21 Nov). Database test `supabase/test/yorgo_whatsapp.sql` passes on the local database.
 - Steps 2–5 built on dev (core, `/y/<id>`, webhook, admin switch, privacy line): see `docs/yorgo/CHANGELOG.md`, 2026-11-21. Step 6 (test set through the WhatsApp path) and the end-to-end run with a real message are open.
 - Wording: built with the proposed table; Dan has not commented on it yet.
+
+---
+
+# Plan — step B1 + W2: choose the AI provider per task, and voice notes on WhatsApp (2026-11-21)
+
+**Status: plan only. Nothing built, no script applied, no key touched. Waiting for Dan's approval and decisions (last section).**
+
+## Bottom line
+
+A customer sends a **voice note** to the market's WhatsApp number; Yorgo turns it into text with a second AI provider (Google),
+then prepares the basket exactly as for a typed message (step W1) and answers with what it heard, the summary and the link.
+The admin gets a page to choose **which provider and model does which task**, starting with two tasks: `chat` (Claude, as today)
+and `voice` (Google). The audio is never stored: it is read in memory, sent for transcription, and gone.
+
+## What is there today
+
+1. A voice note reaches the webhook as type `audio` with a media id. Since W1 it gets the "text only" line (when Yorgo is on).
+2. Yorgo talks to one provider through one small interface (`lib/yorgo/model.ts`, `ModelClient`). Claude does not take audio.
+3. Costs are counted per stored message (`yorgo_messages.cost_usd`), from prices in the app's configuration (`config.ts`).
+4. Meta (their media page, read 21 Nov): the media id gives a download URL that lives **5 minutes**; the file stays 7 days;
+   audio is at most 16 MB; voice notes are OGG/Opus.
+5. Google (their Gemini audio page, read 21 Nov): OGG and Opus are accepted, sent inline up to 20 MB per request;
+   audio counts **32 tokens per second** (1 minute = 1,920 tokens). Model names and prices on their pages are newer than what I
+   know, so they are **to confirm** at build time and are settings, not code.
+
+## How a voice note is handled
+
+```
+audio message ─► webhook (once-only, as W1) ─► after Meta's 200:
+   media id ─► Meta: URL ─► download (≤ 2 min, ≤ 2 MB; longer → "please send a shorter note or type it")
+            ─► ai.run('voice'): the words as said, nothing added ─► transcript (audio dropped here)
+            ─► the same Yorgo turn as a typed message (Claude, public catalog, the phone's conversation)
+            ─► reply: 🎤 "what I heard" (one line, shortened) + Yorgo's line + summary + link
+```
+
+- **Two steps on purpose**: transcription only turns sound into the customer's own words (Arabic, Arabizi words written as said,
+  English, mixed); the drafting is the tested W1 path. A transcript is customer content, never instructions.
+- **Empty or unclear audio** (silence, noise, music) → "I could not hear an order. Try again or type it." No drafting, no cost
+  beyond the transcription.
+- **Stored**: the transcript, as the customer's message in the phone's conversation, marked as coming from a voice note; the
+  transcription's cost as its own line. **Not stored**: the audio.
+- **Limits**: the same switch, rate, cap per phone and global cap as text. Transcription cost counts toward the caps.
+- **If Google fails or times out**: the fallback provider of the route if one is set; otherwise the "text only" line.
+
+## The provider wrapper (B1)
+
+- `lib/ai/` with one entry point `ai.run(task, input)` and one adapter per provider: `anthropic` (today's code, moved as is)
+  and `google`. Tasks in this step: **`chat`** and **`voice`**. The other tasks from the brief (`photo_read`, `image_generate`,
+  `image_cleanup`, `bulk_cleanup`) get their rows in the table, switched off, and are built with the steps that need them.
+- **`chat` stays on Claude and is not switchable in this step.** Running Yorgo's drafting on another provider means translating
+  tools, tool calls and caching, and re-running the whole test set per provider: its own step (B2), when you want to try it.
+- Table `yorgo_ai_routes` (one row per task): provider, model, optional fallback provider and model, enabled, prices, notes.
+  Read by the server with the service role, cached 60 s. **Keys are never in the table**: they are Netlify secrets you enter.
+- **A route cannot be switched on while its prices are empty** — otherwise the caps would count nothing. I leave the prices
+  empty; you fill them from the provider's pricing page.
+- **Admin → Yorgo → AI providers**: per task: provider, model, fallback, prices, on/off, a **Test** button (for `voice`: you
+  upload or record a short clip and see the transcript, the time it took and the cost), Save. Admins only; changes audited.
+
+## Work, in small steps
+
+| # | Step | Files | Tested how |
+|---|---|---|---|
+| 1 | Script 98 (below) | `supabase/schema/98_yorgo_ai_routes.sql`, `supabase/test/yorgo_ai_routes.sql` | database test: only an admin reads or writes routes; a shop owner, a customer and a visitor read nothing; a route without prices cannot be enabled |
+| 2 | Wrapper + Anthropic adapter (no behaviour change) | new `lib/ai/*`; `lib/yorgo/model.ts` becomes the Anthropic adapter | the existing 143 tests unchanged; the 40-message test set before and after on dev |
+| 3 | Google adapter, task `voice` | `lib/ai/google.ts` + tests with recorded responses | unit tests; live with the admin Test button once your key is in |
+| 4 | Admin page | `app/admin/yorgo/providers/*`, `api/admin/yorgo/routes` | browser on dev as admin |
+| 5 | Voice on WhatsApp | `lib/server/whatsapp.ts` (media download), `lib/yorgo/whatsapp.ts` (`waVoiceTurn`), webhook | unit tests (too long, empty, provider down, cap); end to end on dev needs **your voice notes** |
+| 6 | Quality report | `docs/yorgo/voice-cases/` (your recordings stay out of the repo; only transcripts and results) | at least 10 real Lebanese voice orders: transcript quality and correct-draft rate, in the CHANGELOG |
+
+## Database — script 98 (not applied until "approve 98")
+
+```sql
+create table if not exists suqa.yorgo_ai_routes (
+  task              text primary key check (task in ('chat','voice','photo_read','image_generate','image_cleanup','bulk_cleanup')),
+  provider          text not null check (provider in ('anthropic','google')),
+  model             text not null check (char_length(model) between 1 and 80),
+  fallback_provider text check (fallback_provider in ('anthropic','google')),
+  fallback_model    text check (fallback_model is null or char_length(fallback_model) between 1 and 80),
+  enabled           boolean not null default false,
+  price_in_per_m    numeric(10,4) check (price_in_per_m  >= 0),   -- USD per 1M input tokens (text)
+  price_out_per_m   numeric(10,4) check (price_out_per_m >= 0),   -- USD per 1M output tokens
+  price_audio_per_m numeric(10,4) check (price_audio_per_m >= 0), -- USD per 1M audio input tokens (voice)
+  price_per_image   numeric(10,4) check (price_per_image >= 0),   -- USD per image (image tasks)
+  notes             text check (notes is null or char_length(notes) <= 500),
+  updated_at        timestamptz not null default now(),
+  updated_by        uuid,
+  constraint yorgo_ai_routes_fallback_pair check ((fallback_provider is null) = (fallback_model is null)),
+  -- no route runs unpriced: the caps count money
+  constraint yorgo_ai_routes_priced check (not enabled or task = 'chat' or (price_out_per_m is not null and (price_in_per_m is not null or price_audio_per_m is not null or price_per_image is not null)))
+);
+alter table suqa.yorgo_ai_routes enable row level security;
+-- platform settings, not a market's: platform admins only (the repo's existing check); the server reads with the service role
+create policy yorgo_ai_routes_admin on suqa.yorgo_ai_routes for all to authenticated using (suqa.is_platform_admin()) with check (suqa.is_platform_admin());
+revoke all on suqa.yorgo_ai_routes from anon;
+grant select, insert, update on suqa.yorgo_ai_routes to authenticated;
+-- seed: chat = today's setup (prices stay in config.ts for it), voice = Google, off, no prices
+insert into suqa.yorgo_ai_routes (task, provider, model, enabled) values ('chat', 'anthropic', 'claude-sonnet-5-5', true), ('voice', 'google', 'to-choose', false) on conflict (task) do nothing;
+```
+
+No change to `yorgo_messages` / `yorgo_usage`: a transcription is recorded as one more costed line of the conversation, which
+the caps and the admin figures already add up. (Audio minutes as their own figure can be added later if you want to see them.)
+
+## Secrets you add (names only)
+
+`GOOGLE_AI_API_KEY` in Netlify, on dev first, then prod when released. A **paid** key: Google's pricing page says free-tier
+content is used to improve their products.
+
+## Cost (to confirm from Google's pricing page when you choose the model)
+
+- A 30-second voice note = 960 audio tokens; one minute = 1,920. At the audio rates their page showed on 21 Nov ($0.50 to $1.50
+  per 1M input tokens depending on the model) that is **about $0.001–0.003 per minute**, plus a few hundred output tokens.
+- Then the same drafting turn as text: about $0.011 per message (measured). So a voice order costs **about $0.012–0.015**.
+- Meta: one reply, as for text.
+
+## Risks and open questions
+
+- **Lebanese dialect quality** is the real unknown: mixed Arabic / English / French, shop and brand names. Step 6 measures it
+  before anything goes to prod; the transcript shown back to the customer lets them catch a mishearing.
+- **Model names and prices** on Google's pages are newer than my knowledge; they are read from the page at build time and live
+  in the table.
+- **Running after Meta's answer** on Netlify (needed since W1) has not been seen working with a real message yet; W1's
+  end-to-end test must pass first.
+- **Privacy**: voice is more personal than text. Audio is not stored; the transcript is. The privacy page needs a line.
+- Not in this step: voice or photo in the app chat (step E), staff forwarding (D), chat on another provider (B2).
+
+## Decisions for Dan
+
+1. **Scope**: `voice` on Google now, `chat` stays on Claude and becomes switchable later (B2) — or do you want chat switchable
+   in this step too (bigger: every tool and the whole test set, per provider)?
+2. **Voice model**: I propose the cheapest Google model that passes the 10-recording test; you fill its prices.
+3. **Voice length**: 2 minutes max (proposed).
+4. **Show "what I heard"** in the reply: yes (proposed), one line, shortened after ~200 characters.
+5. **Audio**: never stored (your earlier preference) — confirm.
+6. **Wording** (Arabic and English): too long, could not hear, and the privacy line. I will propose them once you approve.
+7. **Recordings**: can you record 10–15 voice orders the way customers really speak? They are needed for step 6.

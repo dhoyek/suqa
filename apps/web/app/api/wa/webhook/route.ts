@@ -29,8 +29,8 @@ type Msg = { id: string; from: string; type: string; timestamp?: string; text?: 
 // A message that quotes one of our order messages — or comes from a phone with exactly one open order — is attached to
 // that order (order_events note) and forwarded to the other party from the same number. A text that matches no order goes to
 // Yorgo when the market switched it on (step W1, script 95): a basket draft behind a link, never an order.
-// Meta gets its 200 at once; the work runs after the response. Each message id is taken once (wa_inbox), so Meta's retries —
-// which come when an answer is slow — never do the work twice.
+// Statuses, locations, driver "ok" and order messages are handled before Meta gets its 200, exactly as before. Only a Yorgo
+// answer (5–20 s) runs after the response. Each message id is taken once (wa_inbox), so Meta's retries never do the work twice.
 export async function POST(req: Request) {
   const raw = await req.text();
   if (!waVerifySignature(raw, req.headers.get('x-hub-signature-256'))) return new Response('bad signature', { status: 401 });
@@ -48,16 +48,18 @@ export async function POST(req: Request) {
   const site = `https://${req.headers.get('x-forwarded-host') ?? new URL(req.url).host}`;
   const host = messages.length ? await getTenantOrNull().catch(() => null) : null;
   const tenant = host ? { id: host.id, brand: host.brand_name, fx_lbp_rate: host.fx_lbp_rate } : null;
-  after(async () => {
-    await Promise.allSettled([...statuses.map(updateStatus), ...messages.map(x => inbound(x.m, x.phoneNumberId, { site, tenant }))]);
-  });
+  const later: (() => Promise<void>)[] = [];
+  await Promise.allSettled([...statuses.map(updateStatus), ...messages.map(x => inbound(x.m, x.phoneNumberId, { site, tenant }, later))]);
+  if (later.length) after(async () => { await Promise.allSettled(later.map(f => f())); });
   return NextResponse.json({ ok: true });
 }
 
 type Ctx = { site: string; tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null } | null };
 
-/** One message, once: taken in wa_inbox first (a retry from Meta finds it taken and stops), then handled, then marked. */
-async function inbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx) {
+type Deferred = { later: () => Promise<string> };
+/** One message, once: taken in wa_inbox first (a retry from Meta finds it taken and stops), then handled, then marked.
+ *  What must not hold Meta's answer (a Yorgo turn) is pushed to `later` and runs after the response. */
+async function inbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx, later: (() => Promise<void>)[]) {
   const sb = supabaseAdmin(); if (!sb) return;
   const from = normalizePhone(m.from) ?? m.from;
   let guarded = false;
@@ -65,9 +67,12 @@ async function inbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx) {
     const { data, error } = await sb.rpc('wa_inbox_claim', { p_wamid: m.id, p_tenant: ctx.tenant?.id ?? null, p_phone: from, p_phone_number_id: phoneNumberId ?? null, p_kind: m.type, p_body: m.text?.body ?? null });
     if (!error) { guarded = true; if (data !== true) { console.log('[wa inbox] seen before', m.id); return; } }      // (before script 95 the function is missing: carry on as before, unguarded)
   } catch { /* unguarded */ }
-  let as = 'error'; let err: string | null = null;
-  try { as = await handleInbound(m, phoneNumberId, ctx); } catch (e) { err = (e as Error).message; console.error('[wa inbound]', err); }
-  if (guarded) await sb.rpc('wa_inbox_done', { p_wamid: m.id, p_as: as, p_error: err }).then(() => null, () => null);
+  const done = async (as: string, err: string | null) => { if (guarded) await sb.rpc('wa_inbox_done', { p_wamid: m.id, p_as: as, p_error: err }).then(() => null, () => null); };
+  try {
+    const r = await handleInbound(m, phoneNumberId, ctx);
+    if (typeof r === 'string') { await done(r, null); return; }
+    later.push(async () => { try { await done(await r.later(), null); } catch (e) { console.error('[wa yorgo]', (e as Error).message); await done('error', (e as Error).message); } });
+  } catch (e) { console.error('[wa inbound]', (e as Error).message); await done('error', (e as Error).message); }
 }
 
 async function updateStatus(s: Status) {
@@ -75,7 +80,7 @@ async function updateStatus(s: Status) {
   await sb.from('wa_messages').update({ status: s.status, error: s.errors?.[0]?.title ?? null }).eq('wamid', s.id);
 }
 
-async function handleInbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx): Promise<string> {
+async function handleInbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx): Promise<string | Deferred> {
   const sb = supabaseAdmin(); if (!sb) return 'error';
   const text = m.text?.body ?? m.button?.text ?? (m.location ? `📍 ${m.location.latitude},${m.location.longitude}${m.location.name ? ' ' + m.location.name : ''}` : `[${m.type}]`);
   const from = normalizePhone(m.from) ?? m.from;
@@ -103,7 +108,7 @@ async function handleInbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx
   const { data: match } = await sb.rpc('wa_match_order', { p_phone: from, p_context_wamid: m.context?.id ?? null, p_phone_number_id: phoneNumberId ?? null });
   const hit = (Array.isArray(match) ? match[0] : match) as { order_id: string; party: Party } | undefined;
   await logWaMessage({ wamid: m.id, order_id: hit?.order_id ?? null, direction: 'in', party: hit?.party ?? 'unknown', phone: from, phone_number_id: phoneNumberId, body: text });
-  if (!hit) return m.type === 'location' ? 'location' : yorgo(m, from, phoneNumberId, ctx);      // no order behind it: Yorgo, when the market switched it on
+  if (!hit) return m.type === 'location' ? 'location' : { later: () => yorgo(m, from, phoneNumberId, ctx) };      // no order behind it: Yorgo, when the market switched it on — after Meta has its answer
 
   const { data: o } = await sb.from('orders').select('id,number,tenant_id,customer_phone,customer_name,shop:shops(name,whatsapp)').eq('id', hit.order_id).maybeSingle();
   if (!o) return 'order_message';

@@ -49,6 +49,10 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
     return () => { on = false; };
   }, [sb, boot, from, to, tick]);
 
+  // an order payment carries the order's id only: its number comes from this till's own copy of the order
+  const [nums, setNums] = useState<Record<string, string>>({});
+  useEffect(() => { const ids = [...new Set((rows ?? []).filter(r => r.action === 'order.pay').map(r => String(r.after?.id ?? r.ref_id ?? '')).filter(Boolean))]; if (!ids.length) return;
+    boot.db.orders.bulkGet(ids).then(os => setNums(Object.fromEntries(os.filter(Boolean).map(o => [o!.id, String(o!.number ?? o!.local_number ?? '')])))); }, [boot, rows]);
   const nameOf = (id: string | null | undefined) => { const s = members.find(x => x.user_id === id); return s?.display_name || s?.full_name || (id ? id.slice(0, 8) : '—'); };
   const label = (a: string) => { const k = `a_${a.replace('.', '_')}` as Key; const t = pt(k, locale); return !t || t === k ? a : t; };
   const usd = (c: unknown) => fmtUsd(num(c as number)); const lbp = (v: unknown) => fmtLbp(num(v as number), locale);
@@ -81,7 +85,7 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
         case 'return.commit': amount = '−' + (num(a.refund_lbp) ? lbp(a.refund_lbp) : usd(a.refund_usd_cents)); detail = [String(res.number ?? ''), (a.reason as string) || ''].filter(Boolean).join(' · '); break;
         case 'order.pay': { amount = usd(a.paid_usd_cents) + (num(a.paid_lbp) ? ' + ' + lbp(a.paid_lbp) : ''); undone = undoneBy(cancelled.get(String(r.id)));
           const pays = Array.isArray(a.payments) ? (a.payments as { tender?: string }[]) : [];
-          detail = [...new Set(pays.map(p => pt(String(p.tender) as Key, locale)))].join(' + ');
+          detail = [nums[String(a.id ?? r.ref_id ?? '')] ?? '', [...new Set(pays.map(p => pt(String(p.tender) as Key, locale)))].join(' + ')].filter(Boolean).join(' · ');
           if (!undone && pays.length) canUndo = 'pay';                      // (a step with no payment has nothing to cancel)
           break; }
         case 'cash.move': amount = (a.kind === 'out' ? '−' : '+') + money(a.currency, a.amount); detail = String(a.reason ?? ''); undone = undoneBy(cancelled.get(String(r.id)));
@@ -105,7 +109,7 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
       if (failed) { canUndo = null; why = null; }
       return { ...r, failed, amount, detail, undone, canUndo, why };
     });
-  }, [rows, members, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rows, members, locale, nums]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = ops.filter(o => (!who || o.user_id === who) && (kind === 'all' || MONEY.includes(o.action)) && (!type || o.action === type));
   const types = [...new Set(ops.map(o => o.action))];
@@ -187,7 +191,7 @@ function ReasonDialog({ locale, op, label, onOk, onClose }: { locale: L; op: Op;
 }
 
 /** Any operation other than a sale: what the till recorded — its lines (purchase, return, stock) with item names, and its fields. */
-function OpDetail({ boot, locale, op, label, who, onClose }: { boot: Booted; locale: L; op: Op; label: string; who: string; onClose: () => void }) {
+export function OpDetail({ boot, locale, op, label, who, onClose }: { boot: Booted; locale: L; op: Pick<Op, 'id' | 'at' | 'after' | 'amount' | 'detail'>; label: string; who: string; onClose: () => void }) {
   const a = op.after ?? {}; const lines = Array.isArray(a.lines) ? (a.lines as Record<string, unknown>[]) : [];
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => { const ids = lines.map(l => String(l.product_id ?? '')).filter(Boolean); if (!ids.length) return;

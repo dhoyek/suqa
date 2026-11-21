@@ -5,17 +5,18 @@ import { fmtLbp, fmtUsd, num, text, type CatalogIndex, type Staff } from '@suqa/
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
+import { OpDetail } from './OpsLog';
 
 type Row = { id: number; at: string; user_id: string | null; action: string; ref_id: string | null; after: Record<string, unknown> | null };
-type Item = { key: string; at: string; who: string | null; by: string; action: string; detail: string };
+type Item = { key: string; at: string; who: string | null; by: string; action: string; detail: string; row: Row };
 
 /**
  * Reports → approvals: every action that needed an approval in the period — who was at the till, what it was, who approved.
  * Read from the audit log (owner, online). "Approved for staff" hides what an owner did under their own tile.
  */
-export default function ApprovalsReport({ boot, sb, locale, index, from, to }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; from: string; to: string }) {
+export default function ApprovalsReport({ boot, sb, locale, index, from, to, onSale }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; from: string; to: string; onSale?: (orderId: string) => void }) {
   const [rows, setRows] = useState<Row[] | null>(null); const [err, setErr] = useState<string | null>(null);
-  const [staff, setStaff] = useState<Staff[]>([]); const [all, setAll] = useState(false); const [who, setWho] = useState('');
+  const [staff, setStaff] = useState<Staff[]>([]); const [all, setAll] = useState(false); const [who, setWho] = useState(''); const [view, setView] = useState<Item | null>(null);
   useEffect(() => { boot.db.staff.toArray().then(setStaff); }, [boot]);
   useEffect(() => {
     let on = true; setRows(null); setErr(null);
@@ -46,14 +47,14 @@ export default function ApprovalsReport({ boot, sb, locale, index, from, to }: {
         else if (r.action === 'product.patch') { const p = index.byId.get(String(a.id ?? r.ref_id ?? '')); detail = `${p ? text(p.name, locale) : ''} · ${Object.keys((a.fields as Record<string, unknown>) ?? {}).join(', ')}`; }
         else if (r.action === 'purchase.commit') detail = `${a.invoice_no ?? ''} · ${usd('total_cents')}`;
         else detail = String(a.reason ?? a.note ?? '');
-        out.push({ key: `${r.id}`, at: r.at, who: r.user_id, by: top, action: actionLabel(r.action), detail });
+        out.push({ key: `${r.id}`, at: r.at, who: r.user_id, by: top, action: actionLabel(r.action), detail, row: r });
       }
       if (r.action === 'sale.commit') for (const l of ((a.lines as Record<string, unknown>[]) ?? [])) {
         if (!l.approved_by) continue;
         const p = l.product_id ? index.byId.get(String(l.product_id)) : undefined; const list = p ? Math.round(num(p.price_usd) * 100) : null;
         const price = l.price_currency === 'lbp' ? fmtLbp(num(l.unit_price_lbp as number), locale) : fmtUsd(num(l.unit_price_cents as number));
         out.push({ key: `${r.id}:${l.id}`, at: r.at, who: r.user_id, by: String(l.approved_by), action: num(l.discount_cents as number) ? pt('discount', locale) : pt('price', locale),
-          detail: `${a.local_number ?? ''} · ${text(l.name as never, locale)} × ${l.qty} · ${price}${list != null && l.price_currency !== 'lbp' && list !== num(l.unit_price_cents as number) ? ` (${pt('currentPrice', locale)} ${fmtUsd(list)})` : ''}${num(l.discount_cents as number) ? ` · −${fmtUsd(num(l.discount_cents as number))}` : ''}` });
+          detail: `${a.local_number ?? ''} · ${text(l.name as never, locale)} × ${l.qty} · ${price}${list != null && l.price_currency !== 'lbp' && list !== num(l.unit_price_cents as number) ? ` (${pt('currentPrice', locale)} ${fmtUsd(list)})` : ''}${num(l.discount_cents as number) ? ` · −${fmtUsd(num(l.discount_cents as number))}` : ''}`, row: r });
       }
     }
     return out;
@@ -73,10 +74,14 @@ export default function ApprovalsReport({ boot, sb, locale, index, from, to }: {
       </div>
       <table className="table"><tbody>
         <tr><th style={{ textAlign: 'start' }}>{pt('when', locale)}</th><th style={{ textAlign: 'start' }}>{pt('atTill', locale)}</th><th style={{ textAlign: 'start' }}>{pt('what', locale)}</th><th style={{ textAlign: 'start' }}>{pt('details', locale)}</th><th style={{ textAlign: 'start' }}>{pt('approvedBy', locale)}</th></tr>
-        {shown.map(i => <tr key={i.key}><td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(i.at, locale)}</td><td>{nameOf(i.who)}</td><td>{i.action}</td><td className="muted" style={{ fontSize: 13 }}>{i.detail}</td><td>{i.who === i.by ? '—' : nameOf(i.by)}</td></tr>)}
+        {shown.map(i => <tr key={i.key} style={{ cursor: 'pointer' }} onClick={() => {
+          // a sale or a return opens the sale with its items; anything else opens what was recorded
+          const a = i.row.after ?? {}; const orderId = i.row.action === 'sale.commit' ? (i.row.ref_id ?? a.id) : i.row.action === 'return.commit' ? a.order_id : null;
+          if (orderId && onSale) onSale(String(orderId)); else setView(i); }}><td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(i.at, locale)}</td><td>{nameOf(i.who)}</td><td>{i.action}</td><td className="muted" style={{ fontSize: 13 }}>{i.detail}</td><td>{i.who === i.by ? '—' : nameOf(i.by)}</td></tr>)}
         {!shown.length && <tr><td className="muted" colSpan={5}>{pt('approvalsNone', locale)}</td></tr>}
       </tbody></table>
       {rows.length >= 500 && <p className="muted" style={{ fontSize: 12 }}>{pt('approvalsCapped', locale)}</p>}
+      {view && <OpDetail boot={boot} locale={locale} op={{ id: view.row.id, at: view.row.at, after: view.row.after, amount: '', detail: view.detail }} label={view.action} who={nameOf(view.who)} onClose={() => setView(null)} />}
     </div>
   );
 }

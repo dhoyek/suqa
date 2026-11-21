@@ -33,6 +33,18 @@ export async function cashMove(db: PosDb, shift: Shift, input: { kind: 'in' | 'o
   return m;
 }
 
+/**
+ * Totals per way of paying. The count is the number of sales paid that way, not the number of rows: a cancelled payment leaves
+ * its own row plus the rows that give it back (91), and a sale whose rows add up to nothing in a tender is not counted there.
+ */
+export function tenderTotals(payments: Payment[]): Record<string, { usd: number; lbp: number; count: number }> {
+  const per = new Map<string, { tender: string; usd: number; lbp: number }>();
+  for (const p of payments) { const k = `${p.tender}|${p.order_id}`; const x = per.get(k) ?? { tender: p.tender, usd: 0, lbp: 0 }; if (p.currency === 'lbp') x.lbp += num(p.amount); else x.usd += num(p.amount); per.set(k, x); }
+  const out: Record<string, { usd: number; lbp: number; count: number }> = {};
+  for (const x of per.values()) { if (!x.usd && !x.lbp) continue; const t = (out[x.tender] ??= { usd: 0, lbp: 0, count: 0 }); t.count++; t.usd += x.usd; t.lbp += x.lbp; }
+  return out;
+}
+
 export interface ShiftSummary {
   shift: Shift; orders: Order[]; payments: Payment[]; moves: CashMove[];
   sales_count: number; total_cents: number; total_lbp: number;
@@ -63,8 +75,7 @@ export async function shiftSummary(db: PosDb, shift: Shift): Promise<ShiftSummar
   const in_lbp = sum(moves.filter(m => m.kind === 'in' && m.currency === 'lbp').map(m => num(m.amount)));
   const out_usd = sum(moves.filter(m => m.kind === 'out' && m.currency === 'usd').map(m => num(m.amount)));
   const out_lbp = sum(moves.filter(m => m.kind === 'out' && m.currency === 'lbp').map(m => num(m.amount)));
-  const by_tender: ShiftSummary['by_tender'] = {};
-  for (const p of payments) { const t = (by_tender[p.tender] ??= { usd: 0, lbp: 0, count: 0 }); t.count++; if (p.currency === 'lbp') t.lbp += num(p.amount); else t.usd += num(p.amount); }
+  const by_tender = tenderTotals(payments);
   const by_channel: ShiftSummary['by_channel'] = {};
   for (const o of orders) { const c = (by_channel[o.channel] ??= { count: 0, cents: 0 }); c.count++; c.cents += num(o.total_cents); }
   return {
@@ -98,8 +109,7 @@ export async function todaySummary(db: PosDb, now = new Date()): Promise<Omit<Sh
   const payments = (await db.payments.toArray()).filter(p => ids.has(p.order_id));
   const lines = (await db.orderLines.toArray()).filter(l => ids.has(l.order_id) && !l.voided);
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-  const by_tender: ShiftSummary['by_tender'] = {};
-  for (const p of payments) { const t = (by_tender[p.tender] ??= { usd: 0, lbp: 0, count: 0 }); t.count++; if (p.currency === 'lbp') t.lbp += num(p.amount); else t.usd += num(p.amount); }
+  const by_tender = tenderTotals(payments);
   const by_channel: ShiftSummary['by_channel'] = {};
   for (const o of orders) { const c = (by_channel[o.channel] ??= { count: 0, cents: 0 }); c.count++; c.cents += num(o.total_cents); }
   return {

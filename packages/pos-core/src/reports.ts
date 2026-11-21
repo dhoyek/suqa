@@ -1,5 +1,6 @@
 import type { PosDb } from './db';
 import { num } from './types';
+import { tenderTotals } from './shift';
 import type { Channel, Localized, Product, Tender } from './types';
 
 /** Shape returned by `suqa.pos_report` (server) and by `localReport` (offline fallback from the mirror). */
@@ -45,7 +46,7 @@ export async function localReport(db: PosDb, from: string, to: string): Promise<
     const k = dayKey(new Date(o.placed_at)); const d = byDay.get(k) ?? { count: 0, cents: 0 }; d.count++; d.cents += num(o.total_cents); byDay.set(k, d);
     const c = (byChannel[o.channel] ??= { count: 0, cents: 0 }); c.count++; c.cents += num(o.total_cents);
   }
-  for (const p of payments) { const t = (byTender[p.tender] ??= { count: 0, usd: 0, lbp: 0 }); t.count++; if (p.currency === 'lbp') t.lbp += num(p.amount); else t.usd += num(p.amount); }
+  Object.assign(byTender, tenderTotals(payments));
   const byItem = new Map<string, Report['by_item'][number]>();
   const bySection = new Map<string, { qty: number; cents: number }>();
   const sold = new Set<string>();

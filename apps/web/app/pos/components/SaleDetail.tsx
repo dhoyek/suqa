@@ -54,28 +54,39 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
   );
 }
 
-/** Reports → tap a day or a shift: its sales, newest first; tap one for its items. */
-export function SalesList({ boot, locale, title, from, to, shiftId, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; onClose: () => void }) {
-  const [rows, setRows] = useState<{ o: Order; items: number }[] | null>(null); const [open, setOpen] = useState<string | null>(null);
+/** What a list of sales is narrowed to: one channel, one way of paying, or the sales holding given items (then each row shows those items' quantity and amount). */
+export type SalesFilter = { channel?: string; tender?: string; productIds?: string[]; noProduct?: boolean };
+
+/** Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items. */
+export function SalesList({ boot, locale, title, from, to, shiftId, filter, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; onClose: () => void }) {
+  const [rows, setRows] = useState<{ o: Order; items: number; qty: number | null; cents: number }[] | null>(null); const [open, setOpen] = useState<string | null>(null);
+  const byItem = !!(filter?.productIds || filter?.noProduct);
   useEffect(() => { void (async () => {
     let os: Order[];
     if (shiftId) os = (await boot.db.orders.toArray()).filter(o => o.shift_id === shiftId);
     else { const s = new Date(`${from}T00:00:00`); const e = new Date(`${to ?? from}T00:00:00`); e.setDate(e.getDate() + 1); os = await boot.db.orders.where('placed_at').between(s.toISOString(), e.toISOString()).toArray(); }
     os = os.filter(o => !o.parked && o.status !== 'cancelled' && o.status !== 'rejected').sort((a, b) => b.placed_at.localeCompare(a.placed_at));
-    const ids = new Set(os.map(o => o.id)); const count = new Map<string, number>();
-    for (const l of await boot.db.orderLines.toArray()) if (ids.has(l.order_id) && !l.voided) count.set(l.order_id, (count.get(l.order_id) ?? 0) + 1);
-    setRows(os.map(o => ({ o, items: count.get(o.id) ?? 0 })));
-  })(); }, [boot, from, to, shiftId]);
-  const sum = (rows ?? []).reduce((s, r) => s + num(r.o.total_cents), 0);
+    if (filter?.channel) os = os.filter(o => o.channel === filter.channel);
+    if (filter?.tender) { const paid = new Set((await boot.db.payments.toArray()).filter(p => p.tender === filter.tender).map(p => p.order_id)); os = os.filter(o => paid.has(o.id)); }
+    const ids = new Set(os.map(o => o.id)); const count = new Map<string, number>(); const hit = new Map<string, { qty: number; cents: number }>();
+    const want = new Set(filter?.productIds ?? []);
+    for (const l of await boot.db.orderLines.toArray()) if (ids.has(l.order_id) && !l.voided) {
+      count.set(l.order_id, (count.get(l.order_id) ?? 0) + 1);
+      if (byItem && (l.product_id ? want.has(l.product_id) : !!filter?.noProduct)) { const h = hit.get(l.order_id) ?? { qty: 0, cents: 0 }; h.qty += num(l.quantity); h.cents += num(l.line_total_cents); hit.set(l.order_id, h); }
+    }
+    if (byItem) os = os.filter(o => hit.has(o.id));
+    setRows(os.map(o => ({ o, items: count.get(o.id) ?? 0, qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents) })));
+  })(); }, [boot, from, to, shiftId, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sum = (rows ?? []).reduce((s, r) => s + r.cents, 0);
   return (
     <>
       <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {rows?.length ?? '…'} · {fmtUsd(sum)}</span></>}
         footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
         {!rows ? <p className="muted">…</p> : !rows.length ? <p className="muted">—</p> : <table className="table clickable"><tbody>
-          {rows.map(({ o, items }) => <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(o.id)}>
+          {rows.map(({ o, items, qty, cents }) => <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(o.id)}>
             <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(o.placed_at, locale)}</td>
-            <td><strong dir="ltr">{o.number ?? o.local_number}</strong> <span className="muted">{o.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{items} {pt('itemsCount', locale)} · {o.channel === 'online' ? pt('onlineShop', locale) : pt(o.channel as 'walkin', locale)}</div></td>
-            <td className="num">{fmtUsd(num(o.total_cents))}</td><td className="muted">›</td>
+            <td><strong dir="ltr">{o.number ?? o.local_number}</strong> <span className="muted">{o.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{qty != null ? <>{pt('qty', locale)} <span dir="ltr">{qty}</span> · </> : null}{items} {pt('itemsCount', locale)} · {o.channel === 'online' ? pt('onlineShop', locale) : pt(o.channel as 'walkin', locale)}</div></td>
+            <td className="num">{fmtUsd(cents)}</td><td className="muted">›</td>
           </tr>)}
         </tbody></table>}
       </Modal>

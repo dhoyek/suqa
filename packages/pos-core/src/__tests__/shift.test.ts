@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer } from '../sync/fake-server';
 import { makeDevice, wipeAll, RATE } from './helpers';
 import { addToDraft, commitSale, newDraft } from '../sale';
-import { cashMove, closeShift, currentShift, openShift, shiftSummary, todaySummary } from '../shift';
+import { cashMove, closeShift, currentShift, openShift, shiftSummary, todaySummary, tenderTotals } from '../shift';
 
 afterEach(wipeAll);
 
@@ -87,5 +87,11 @@ describe('catalog edits & stock moves (offline → sync)', () => {
     // a row naming a shift on a cancelled order counts nowhere
     await a.db.orders.put({ ...(await a.db.orders.get(sale.order.id))!, shift_id: null, status: 'cancelled' });
     expect((await shiftSummary(a.db, day2)).expected_usd_cents).toBe(2000);
+  });
+
+  it('counts sales per way of paying, not rows: a cancelled payment and what gives it back are not counted', () => {
+    const row = (order_id: string, tender: string, amount: number, currency: 'usd' | 'lbp' = 'usd') => ({ id: order_id + tender + amount, order_id, tender, amount, currency, at: '' }) as unknown as Parameters<typeof tenderTotals>[0][number];
+    const t = tenderTotals([row('a', 'cash_usd', 600), row('a', 'cash_lbp', -85000, 'lbp'), row('a', 'cash_lbp', 85000, 'lbp'), row('a', 'cash_usd', -600), row('a', 'cash_usd', 503), row('b', 'cash_usd', 200), row('c', 'card', 100), row('c', 'card', -100)]);
+    expect(t).toEqual({ cash_usd: { usd: 703, lbp: 0, count: 2 } });
   });
 });

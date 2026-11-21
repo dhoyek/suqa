@@ -17,7 +17,7 @@ const matchItems: Tool = {
   name: 'match_items',
   description: 'Find real catalog items for what the person called them. Pass each item\'s words WITHOUT the quantity (Arabic, Arabizi or English as written). '
     + 'A kind of item works too ("machroub", "may", "chokola", "dekhen", "drinks"): it returns items of that kind (matched_on "kind"); with a name ("machroub pepsi") the name decides. '
-    + 'Returns up to 8 candidates per phrase (each shop's best one first when no shop is given) with score (1 = exact name or alias), category, price and availability. This is the ONLY source of item names and prices.',
+    + 'Returns up to 8 candidates per phrase (the best one of each shop first when no shop is given) with score (1 = exact name or alias), category, price and availability. This is the ONLY source of item names and prices.',
   input_schema: {
     type: 'object', additionalProperties: false, required: ['phrases'],
     properties: {

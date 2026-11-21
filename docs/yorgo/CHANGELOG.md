@@ -145,3 +145,14 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Cause: `match_items` returned the market's best 6 by score, so a shop with many variants took every place; and the prompt said "prefer one shop".
 - **Script 96** (not applied): market-wide searches put each shop's best candidate first; one-shop searches unchanged.
 - Tool: 8 candidates for a market-wide search (6 inside one shop). Prompt: several shops sell it and none was named → the best of each shop as choices; "is there X?" names each shop with its price.
+
+## 2026-11-21 — a kind never matches in the wrong category (script 96 on dev; script 97 written, not applied)
+
+- Script 96 applied on dev: "khebez" now starts with Elie Grocery, Furn Mona, Jneinet Baytna.
+- Found on the way: "khebez" also returns Panadol — the kind "bread" has the French tag "pain" and the category is "Pain Relief".
+  An audit of every kind on dev showed the same leak elsewhere (deodorant for coffee and alcohol, irrigation for water, tools for
+  milk, toothpaste and shampoo for tea, cheese chips for cheese, chocolate milk for milk).
+- **Script 97** (not applied) + `concepts.ts`: `NON_FOOD` (38 categories no food kind matches in) and `notIn` per kind for flavour
+  leaks inside food. The till's own search and the storefront's shop search use the same lists (`Folded.section`).
+- Left as is: "Chips & Nuts" is one category, so "chips" still brings nuts and "mkasarat" still brings chips; only splitting the
+  category would separate them.

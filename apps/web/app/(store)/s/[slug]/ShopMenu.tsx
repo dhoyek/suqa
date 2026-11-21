@@ -34,7 +34,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   // every item folded once: names, description, its section's names and its aliases ("man2ouche", "mayy" …)
-  const folded = useMemo(() => new Map<string, Folded>(products.map(p => [p.id, foldItem(p.name?.ar, p.name?.en, p.description?.ar, p.description?.en, secText(p.section ?? ''), ...((p as { aliases?: string[] | null }).aliases ?? []))])),
+  const folded = useMemo(() => new Map<string, Folded>(products.map(p => [p.id, { ...foldItem(p.name?.ar, p.name?.en, p.description?.ar, p.description?.en, secText(p.section ?? ''), ...((p as { aliases?: string[] | null }).aliases ?? [])), section: p.section ?? null }])),
     [products]);   // eslint-disable-line react-hooks/exhaustive-deps
   const visible = useMemo(() => {
     const hit = makeMatcher(q);                                  // Arabic, Arabizi, English, small typos, and the item's other names

@@ -115,7 +115,7 @@ export class CatalogIndex {
     for (const p of this.byId.values()) {
       this.rows.push({ id: p.id,
         norm: normalize(`${p.name?.ar ?? ''} ${p.name?.en ?? ''} ${p.sku ?? ''} ${[...(this.barcodesOf.get(p.id) ?? [])].join(' ')} ${p.description?.ar ?? ''} ${p.description?.en ?? ''} ${(p.aliases ?? []).join(' ')}`),
-        fold: foldItem(p.name?.ar, p.name?.en, p.section, ...(p.aliases ?? [])) });   // the section too: "machroub" finds the items of SYRO JUS/SOFTDR
+        fold: { ...foldItem(p.name?.ar, p.name?.en, p.section, ...(p.aliases ?? [])), section: p.section ?? null } });   // the section too: "machroub" finds the items of SYRO JUS/SOFTDR
     }
     this.dirty = false;
   }

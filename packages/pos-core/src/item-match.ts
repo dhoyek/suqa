@@ -1,7 +1,7 @@
 // Item search the way people type: Arabic, Arabizi ("man2ouche", "7alib"), English, small typos, and an item's aliases.
 // The folding mirrors suqa.norm_text / suqa.skel_text (supabase/schema/75_item_matching.sql) — keep the two in step.
 
-import { CONCEPTS } from './concepts';
+import { CONCEPTS, notInOf } from './concepts';
 
 const AR_FROM = 'أإآٱةىؤئ٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹éèêëàâäçôöùûüîï';
 const AR_TO = 'ااااهيوي01234567890123456789eeeeaaacoouuuii';
@@ -36,13 +36,13 @@ function near(a: string, b: string): boolean {
   return ea - i <= 1 && eb - i <= 1;
 }
 
-export type Folded = { norm: string; skels: string[] };
+export type Folded = { norm: string; skels: string[]; section?: string | null };      // section: the item's category key, when the caller knows it (97: a kind never matches in some categories)
 /** fold an item once (names, description, aliases …) */
 export const foldItem = (...parts: (string | null | undefined)[]): Folded => { const all = parts.filter(Boolean).join(' '); return { norm: normText(all), skels: skelWords(all) }; };
 
 // ---- kinds of item (concepts.ts): "machroub" finds every drink, "machroub pepsi" the Pepsi ----
 type Tag = { t: string; whole: boolean };
-type Kind = { say: { n: string; s: string | null }[]; tags: Tag[]; not: Tag[] };
+type Kind = { say: { n: string; s: string | null }[]; tags: Tag[]; not: Tag[]; notIn: Set<string> };
 const tagOf = (raw: string): Tag & { neg: boolean } => {
   const neg = raw.startsWith('-'), eq = raw.replace(/^-/, '').startsWith('='); const t = normText(raw.replace(/^[-=]+/, ''));
   return { t, neg, whole: eq || t.replace(/ /g, '').length <= 4 };
@@ -53,14 +53,14 @@ const getKinds = (): Kind[] => kinds ??= CONCEPTS.map(c => {
   return {
     // by sound only towards the Arabic-script names (as in 84): "machroub" = مشروب, while "galaxy" is not "glaces"
     say: c.say.map(w => { const n = normText(w); const sk = n.includes(' ') || !/[ء-ي]/.test(n) ? null : skelWord(n); return { n, s: sk && sk.length >= 3 ? sk : null }; }).filter(x => x.n),
-    tags: tags.filter(x => !x.neg), not: tags.filter(x => x.neg),
+    tags: tags.filter(x => !x.neg), not: tags.filter(x => x.neg), notIn: new Set(notInOf(c)),
   };
 });
 const tagIn = (t: string, g: Tag) => (g.whole ? t.includes(` ${g.t} `) : t.includes(` ${g.t}`));
 /** is an item (its folded names, aliases and section) of one of these kinds? */
-export const ofKind = (norm: string, ks: Kind[]): boolean => {
+export const ofKind = (norm: string, ks: Kind[], section?: string | null): boolean => {
   const t = ` ${norm} `;
-  return ks.some(k => k.tags.some(g => tagIn(t, g)) && !k.not.some(g => tagIn(t, g)));
+  return ks.some(k => !(section && k.notIn.has(section)) && k.tags.some(g => tagIn(t, g)) && !k.not.some(g => tagIn(t, g)));
 };
 // by sound: the same word, or with one more sound at the end ("machroubet" = machroub + t)
 const sameKindWord = (w: string, say: string) => w === say || (w.startsWith(say) && w.length - say.length <= 1);
@@ -88,7 +88,7 @@ export function makeMatcher(query: string): ((item: Folded) => boolean) | null {
     if (!kindWords.size && item.norm.includes(qn)) return true;                // as typed
     return toks.every(t => {
       // a word that names a kind of item: the items of that kind, or that word itself — no guessing by sound ("may" is not "mayonnaise")
-      if (t.kinds) return ` ${item.norm} `.includes(` ${t.w} `) || ofKind(item.norm, t.kinds);
+      if (t.kinds) return ` ${item.norm} `.includes(` ${t.w} `) || ofKind(item.norm, t.kinds, item.section);
       if (item.norm.includes(t.w)) return true;
       if (t.num) return false;                                                   // a size or count must be there as written
       if (t.s.length < 2) return t.w.length <= 2;                                // "w", "b", "el" join words and carry no weight; a longer word with no sound to compare ("mayy", "zzzz") must be there as typed

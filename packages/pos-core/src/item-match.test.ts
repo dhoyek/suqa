@@ -64,3 +64,26 @@ test('"machroub" is soft drinks, not alcohol', () => {
   expect(m('machroub')(foldItem('بيرة ألمازة 50 سل', 'Almaza beer', 'ALCOOL مشروبات روحية'))).toBe(false);
   expect(m('bira')(foldItem('بيرة ألمازة 50 سل', 'Almaza beer', 'ALCOOL'))).toBe(true);
 });
+
+test('a kind never matches in a category it cannot belong to (97); a name still matches anywhere', () => {
+  const m = (q: string) => makeMatcher(q)!; const it = (section: string, ...names: string[]) => ({ ...foldItem(...names, section), section });
+  expect(m('khebez')(it('Pain Relief', 'بانادول اكسترا', 'Panadol Extra'))).toBe(false);          // French "pain" = bread, and the category is "Pain Relief"
+  expect(m('khebez')(it('Bread & Bakery', 'خبز عربي', 'Arabic bread'))).toBe(true);
+  expect(m('ahwe')(it('Deodorants', 'مزيل عرق', 'Deo coffee'))).toBe(false);
+  expect(m('ahwe')(it('Coffee', 'بن مطحون', 'Ground coffee'))).toBe(true);
+  expect(m('ahwe')(it('My Own Category', 'بن', 'Coffee beans'))).toBe(true);                       // a shop's own category is left alone
+  expect(m('jebne')(it('Chips & Nuts', 'شيبس', 'Cheese chips'))).toBe(false);
+  expect(m('jebne')(it('Packaged Cheese', 'عكاوي', 'Akawi cheese'))).toBe(true);
+  expect(m('tandif')(it('Detergents & Disinfectants', 'ديتول', 'Dettol'))).toBe(true);            // not a food kind: the non-food list does not apply to it
+  expect(m('panadol')(it('Pain Relief', 'بانادول اكسترا', 'Panadol Extra'))).toBe(true);
+  expect(m('cheese chips')(it('Chips & Nuts', 'شيبس', 'Cheese chips'))).toBe(true);                // the word itself is in the name
+  expect(m('khebez')(foldItem('خبز', 'bread'))).toBe(true);                                        // no category known: as before
+});
+
+test('the categories a kind never matches in are the same in the till and in the database (97)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { CONCEPTS, notInOf } = await import('./concepts');
+  const sql = readFileSync(new URL('../../../supabase/schema/97_kind_not_in_category.sql', import.meta.url), 'utf8');
+  const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]::text[]`;
+  for (const c of CONCEPTS) expect(sql.includes(`update suqa.match_concepts set not_in = ${lit(notInOf(c))} where id = '${c.id}';`), c.id).toBe(true);
+});

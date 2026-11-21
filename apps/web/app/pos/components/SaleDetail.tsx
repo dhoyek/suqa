@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { fmtLbp, fmtUsd, num, text, type Order, type OrderLine, type Payment, type Staff } from '@suqa/pos-core';
 import { pt, type Key, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -7,21 +7,33 @@ import { fmtTime } from '../lib/boot';
 import Modal from './Modal';
 import { doPrint, loadPrintSettings, receiptHtml } from '../lib/print';
 import { invoiceText, waHref } from '../lib/invoice';
+import { can, roleOf } from '../lib/perm';
+import ReasonDialog from './ReasonDialog';
+import ReturnDialog from './ReturnDialog';
 
 /**
  * Reports → tap a record: one sale in full — items with quantity × price, discount, total in $ and L.L., how it was paid, who sold
  * it — with print and WhatsApp. Read from this device (every till keeps the shop's orders), so it opens offline too.
+ * Cancel from here: the operations log passes its own button (`actions`); elsewhere, give `staff` and the owner gets the same
+ * cancel the log has for a sale — a counter sale paid in cash, not returned yet: reason, then the full return.
  */
-export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; locale: L; orderId: string; onClose: () => void }) {
-  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[] } | null | 'missing'>(null);
+export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me }: { boot: Booted; locale: L; orderId: string; onClose: () => void; actions?: ReactNode; staff?: Staff }) {
+  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[]; returned: boolean } | null | 'missing'>(null);
+  const [ask, setAsk] = useState(false); const [ret, setRet] = useState<string | null>(null);
   useEffect(() => { void (async () => {
     const o = await boot.db.orders.get(orderId); if (!o) { setD('missing'); return; }
-    const [lines, pays, staff] = await Promise.all([boot.db.orderLines.where('order_id').equals(orderId).toArray(), boot.db.payments.where('order_id').equals(orderId).toArray(), boot.db.staff.toArray()]);
-    setD({ o, lines: lines.filter(l => !l.voided), pays, staff });
+    const [lines, pays, staff, rets] = await Promise.all([boot.db.orderLines.where('order_id').equals(orderId).toArray(), boot.db.payments.where('order_id').equals(orderId).toArray(), boot.db.staff.toArray(), boot.db.returns.where('order_id').equals(orderId).count()]);
+    setD({ o, lines: lines.filter(l => !l.voided), pays, staff, returned: rets > 0 });
   })(); }, [boot, orderId]);
   if (d === null) return null;
   if (d === 'missing') return <Modal open onClose={onClose} title={pt('saleDetails', locale)}><p className="muted">{pt('opsNotOnDevice', locale)}</p></Modal>;
   const { o, lines, pays, staff } = d; const rate = num(o.rate_lbp_per_usd);
+  // the owner's cancel, same rule as the operations log: a counter sale, all cash, nothing given back yet
+  const owner = !!me && can(roleOf(me), 'reports.profit'); const live = o.status !== 'cancelled' && o.status !== 'rejected' && !d.returned && !pays.some(p => num(p.amount) < 0);
+  const why = !owner || actions || !live ? null : o.channel !== 'walkin' ? pt('opsWhyOrder', locale) : !pays.length || pays.some(p => p.tender !== 'cash_usd' && p.tender !== 'cash_lbp') ? pt('opsWhyNotCash', locale) : null;
+  const canCancel = owner && !actions && live && !why;
+  if (ret != null && me) return <ReturnDialog boot={boot} locale={locale} order={o} lines={lines} staff={me} full presetReason={ret} onDone={() => { boot.engine.poke(); onClose(); }} onClose={() => setRet(null)} />;
+  if (ask) return <ReasonDialog locale={locale} title={`${pt('opsCancel', locale)} · ${o.number ?? o.local_number ?? ''}`} line={<><strong dir="ltr">{o.number ?? o.local_number}</strong> {fmtUsd(num(o.total_cents))}</>} how={pt('opsSaleHow', locale)} onOk={r => { setAsk(false); setRet(r); }} onClose={() => setAsk(false)} />;
   const seller = staff.find(s => s.user_id === o.staff_user_id); const sellerName = seller?.display_name || seller?.full_name || '';
   const fee = num((o as unknown as { delivery_fee_cents?: number }).delivery_fee_cents);
   return (
@@ -29,6 +41,7 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
       footer={<>
         <button className="btn" onClick={() => doPrint(receiptHtml(o, lines, pays, boot.shop, locale, loadPrintSettings(), { again: true, cashier: sellerName }))}>🖨 {pt('print', locale)}</button>
         <a className="btn" href={waHref(o.customer_phone, invoiceText(o, lines, pays, boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 WhatsApp</a>
+        {actions}{canCancel && <button className="btn danger" onClick={() => setAsk(true)}>✕ {pt('opsCancel', locale)}</button>}
         <span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
       <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
         {o.channel === 'online' ? pt('onlineShop', locale) : pt(o.channel as 'walkin', locale)} · {pt(`st_${o.status}` as Key, locale)}{sellerName ? ` · ${pt('cashier', locale)}: ${sellerName}` : ''}
@@ -50,6 +63,7 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
         <tr><th colSpan={3} style={{ textAlign: 'start' }}>{pt('payments', locale)}</th></tr>
         {pays.map(p => { const refund = num(p.amount) < 0 || /^refund /.test(p.note ?? ''); const amt = Math.abs(num(p.amount)); return <tr key={p.id} className={refund ? 'bad' : undefined}><td className="muted">{fmtTime(p.at, locale)}</td><td>{refund ? `↩ ${pt('refund', locale)} · ` : ''}{pt(p.tender, locale)}{p.unpaid_name ? ` · ${p.unpaid_name}` : ''}{p.note && !refund ? <span className="muted"> · {p.note}</span> : null}</td><td className="num">{refund ? '−' : ''}{p.currency === 'lbp' ? fmtLbp(amt, locale) : fmtUsd(amt)}</td></tr>; })}
       </tbody></table>}
+      {why && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>ⓘ {why}</p>}
     </Modal>
   );
 }
@@ -58,7 +72,7 @@ export function SaleDetail({ boot, locale, orderId, onClose }: { boot: Booted; l
 export type SalesFilter = { channel?: string; tender?: string; productIds?: string[]; noProduct?: boolean };
 
 /** Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items. */
-export function SalesList({ boot, locale, title, from, to, shiftId, filter, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; onClose: () => void }) {
+export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; onClose: () => void }) {
   const [rows, setRows] = useState<{ o: Order; items: number; qty: number | null; cents: number }[] | null>(null); const [open, setOpen] = useState<string | null>(null);
   const byItem = !!(filter?.productIds || filter?.noProduct);
   useEffect(() => { void (async () => {
@@ -90,7 +104,7 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, onCl
           </tr>)}
         </tbody></table>}
       </Modal>
-      {open && <SaleDetail boot={boot} locale={locale} orderId={open} onClose={() => setOpen(null)} />}
+      {open && <SaleDetail boot={boot} locale={locale} orderId={open} staff={staff} onClose={() => setOpen(null)} />}
     </>
   );
 }

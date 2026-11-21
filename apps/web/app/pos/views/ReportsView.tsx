@@ -209,11 +209,11 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 {rep.unpaid.map((u, n) => <tr key={n} style={{ cursor: 'pointer' }} onClick={() => setOpen({ k: 'sale', id: u.order_id })}><td className="muted">{fmtTime(u.at, locale)}</td><td>{u.number}</td><td>{u.name} <span className="muted" dir="ltr">{u.phone}</span></td><td className="num">{u.currency === 'lbp' ? fmtLbp(u.amount, locale) : N(u.amount)}</td></tr>)}
                 {!rep.unpaid.length && <tr><td className="muted">—</td></tr>}
               </tbody></table>}
-              {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} onSale={id => setOpen({ k: 'sale', id })} />}
-              {open?.k === 'day' && <SalesList boot={boot} locale={locale} title={open.day} from={open.day} onClose={() => setOpen(null)} />}
-              {open?.k === 'shift' && <SalesList boot={boot} locale={locale} title={open.title} shiftId={open.id} onClose={() => setOpen(null)} />}
-              {open?.k === 'list' && <SalesList boot={boot} locale={locale} title={open.title} from={range[0]} to={range[1]} filter={open.filter} onClose={() => setOpen(null)} />}
-              {open?.k === 'sale' && <SaleDetail boot={boot} locale={locale} orderId={open.id} onClose={() => setOpen(null)} />}
+              {tab === 'ops' && owner && <OpsLog boot={boot} sb={sb} locale={locale} staff={staff} from={range[0]} to={range[1]} />}
+              {open?.k === 'day' && <SalesList boot={boot} locale={locale} staff={staff} title={open.day} from={open.day} onClose={() => setOpen(null)} />}
+              {open?.k === 'shift' && <SalesList boot={boot} locale={locale} staff={staff} title={open.title} shiftId={open.id} onClose={() => setOpen(null)} />}
+              {open?.k === 'list' && <SalesList boot={boot} locale={locale} staff={staff} title={open.title} from={range[0]} to={range[1]} filter={open.filter} onClose={() => setOpen(null)} />}
+              {open?.k === 'sale' && <SaleDetail boot={boot} locale={locale} staff={staff} orderId={open.id} onClose={() => setOpen(null)} />}
               {tab === 'approvals' && <ApprovalsReport boot={boot} sb={sb} locale={locale} index={index} from={range[0]} to={range[1]} onSale={id => setOpen({ k: 'sale', id })} />}
               {tab === 'shifts' && <table className="table"><tbody>
                 <tr><th style={{ textAlign: 'start' }}>{pt('openedAt', locale)}</th><th>{pt('closedAt', locale)}</th><th>{pt('expected', locale)}</th><th>{pt('counted', locale)}</th><th>{pt('diff', locale)}</th></tr>
@@ -234,7 +234,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
         <table className="table"><tbody>
           {recent.map(o => <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => setLast(o.id)}><td><strong>{o.number ?? o.local_number}</strong>{o.number && o.local_number ? <span className="muted"> ({o.local_number})</span> : ''}</td><td className="muted">{fmtTime(o.placed_at, locale)}</td><td className="muted">{pt(o.channel as 'walkin', locale)}</td><td className="num">{N(num(o.total_cents))}</td><td onClick={e => e.stopPropagation()}><button className="btn icon" title={pt('reprint', locale)} onClick={() => reprint(o)}>🖨</button></td></tr>)}
         </tbody></table>
-        {last && <SaleDetail boot={boot} locale={locale} orderId={last} onClose={() => setLast(null)} />}
+        {last && <SaleDetail boot={boot} locale={locale} staff={staff} orderId={last} onClose={() => setLast(null)} />}
       </section>
     </div>
   );

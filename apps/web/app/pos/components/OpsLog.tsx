@@ -10,14 +10,16 @@ import ReturnDialog from './ReturnDialog';
 
 const num = (v: unknown) => num0(v as number);
 type Row = { id: number; at: string; user_id: string | null; action: string; ref_id: string | null; after: Record<string, unknown> | null };
-type Op = Row & { failed: boolean; amount: string; detail: string; undone: string | null; canUndo: 'sale' | 'purchase' | 'debt' | null; why: string | null };
+type Op = Row & { failed: boolean; amount: string; detail: string; undone: string | null; canUndo: 'sale' | 'purchase' | 'debt' | 'cash' | 'stock' | 'supplier' | 'payout' | null; why: string | null };
 
 /** The operations a till sends (no admin-side actions). */
 const POS_OPS = ['sale.commit', 'sale.cancel', 'return.commit', 'order.pay', 'order.status', 'order.edit', 'order.info', 'order.merge', 'order.delete', 'order.needed',
   'order.driver_cash', 'order.driver_pay', 'driver.payout', 'cash.move', 'shift.open', 'shift.close', 'rate.set', 'debt.settle', 'debt.unsettle', 'stock.move',
   'product.patch', 'purchase.commit', 'purchase.void', 'supplier.pay', 'customer.upsert', 'customer.merge', 'customer.delete', 'supplier.upsert', 'supplier.merge',
-  'supplier.delete', 'driver.upsert', 'driver.delete'];
-const MONEY = ['sale.commit', 'return.commit', 'order.pay', 'driver.payout', 'cash.move', 'debt.settle', 'debt.unsettle', 'purchase.commit', 'purchase.void', 'supplier.pay', 'shift.open', 'shift.close'];
+  'supplier.delete', 'driver.upsert', 'driver.delete', 'op.cancel'];
+/** cancelled on the server in one step (90): the opposite entry is written there, once, and reaches every till by sync */
+const SERVER_CANCEL = ['cash', 'stock', 'supplier', 'payout'];
+const MONEY = ['op.cancel', 'sale.commit', 'return.commit', 'order.pay', 'driver.payout', 'cash.move', 'debt.settle', 'debt.unsettle', 'purchase.commit', 'purchase.void', 'supplier.pay', 'shift.open', 'shift.close'];
 const REASONS = ['test', 'mistake', 'other'] as const;
 
 /**
@@ -55,13 +57,14 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
   const ops = useMemo<Op[]>(() => {
     const all = rows ?? [];
     // what has already been reversed: returns by sale, voided purchases, undone debt collections
-    const returned = new Map<string, Row>(), voided = new Map<string, Row>(), unsettled = new Map<string, Row>();
+    const returned = new Map<string, Row>(), voided = new Map<string, Row>(), unsettled = new Map<string, Row>(), cancelled = new Map<string, Row>();
     for (const r of all) {
       const a = r.after ?? {}; const ok = (a.result as { status?: string } | undefined)?.status !== 'rejected';
       if (!ok) continue;
       if (r.action === 'return.commit' && a.order_id) returned.set(String(a.order_id), r);
       if (r.action === 'purchase.void' && (r.ref_id || a.id)) voided.set(String(r.ref_id ?? a.id), r);
       if (r.action === 'debt.unsettle' && (r.ref_id || a.id)) unsettled.set(String(r.ref_id ?? a.id), r);
+      if (r.action === 'op.cancel' && a.id) cancelled.set(`${a.action}:${a.id}`, r);
     }
     const undoneBy = (r: Row | undefined) => (r ? `${label(r.action)} · ${nameOf(r.user_id)} · ${fmtTime(r.at, locale)}${(r.after?.reason as string) ? ` · ${r.after?.reason}` : ''}` : null);
     return all.map(r => {
@@ -77,17 +80,21 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
           break; }
         case 'return.commit': amount = '−' + (num(a.refund_lbp) ? lbp(a.refund_lbp) : usd(a.refund_usd_cents)); detail = [String(res.number ?? ''), (a.reason as string) || ''].filter(Boolean).join(' · '); break;
         case 'order.pay': amount = usd(a.paid_usd_cents) + (num(a.paid_lbp) ? ' + ' + lbp(a.paid_lbp) : ''); break;
-        case 'cash.move': amount = (a.kind === 'out' ? '−' : '+') + money(a.currency, a.amount); detail = String(a.reason ?? ''); break;
-        case 'driver.payout': amount = money(a.currency, a.amount); detail = `${num(res.orders)} ${pt('ordersCount', locale)}`; break;
+        case 'cash.move': amount = (a.kind === 'out' ? '−' : '+') + money(a.currency, a.amount); detail = String(a.reason ?? ''); undone = undoneBy(cancelled.get(`cash.move:${id}`));
+          // only a move made by hand: one that belongs to a debt, a supplier payment, a driver or a fee goes with that operation
+          if (!undone) { if (a.source === 'manual') canUndo = 'cash'; else why = pt(a.source ? 'opsWhyCashLinked' : 'opsWhyCashOld', locale); }
+          break;
+        case 'driver.payout': amount = money(a.currency, a.amount); detail = `${num(res.orders)} ${pt('ordersCount', locale)}`; undone = undoneBy(cancelled.get(`driver.payout:${id}`)); if (!undone) canUndo = 'payout'; break;
         case 'debt.settle': amount = money(a.currency, a.amount); detail = String(a.name || a.phone || ''); undone = undoneBy(unsettled.get(id)); if (!undone) canUndo = 'debt'; break;
         case 'debt.unsettle': detail = String(a.reason ?? ''); break;
         case 'purchase.commit': amount = usd(a.total_cents); detail = String(a.invoice_no ?? ''); undone = undoneBy(voided.get(id)); if (!undone) canUndo = 'purchase'; break;
         case 'purchase.void': detail = String(a.reason ?? ''); break;
-        case 'supplier.pay': amount = money(a.currency, a.amount); detail = String(a.note ?? ''); break;
+        case 'supplier.pay': amount = money(a.currency, a.amount); detail = String(a.note ?? ''); undone = undoneBy(cancelled.get(`supplier.pay:${id}`)); if (!undone) canUndo = 'supplier'; break;
         case 'shift.open': amount = usd(a.float_usd_cents) + (num(a.float_lbp) ? ' + ' + lbp(a.float_lbp) : ''); break;
         case 'shift.close': amount = usd(a.counted_usd_cents) + (num(a.counted_lbp) ? ' + ' + lbp(a.counted_lbp) : ''); detail = num(a.diff_usd_cents) || num(a.diff_lbp) ? `${pt('difference', locale)} ${usd(a.diff_usd_cents)} / ${lbp(a.diff_lbp)}` : ''; break;
-        case 'stock.move': amount = `${num(a.qty) > 0 ? '+' : ''}${num(a.qty)}`; detail = String(a.kind ?? '') + (a.note ? ` · ${a.note}` : ''); break;
+        case 'stock.move': amount = `${num(a.qty) > 0 ? '+' : ''}${num(a.qty)}`; detail = String(a.kind ?? '') + (a.note ? ` · ${a.note}` : ''); undone = undoneBy(cancelled.get(`stock.move:${id}`)); if (!undone) canUndo = 'stock'; break;
         case 'rate.set': amount = `$1 = ${num(a.lbp_per_usd).toLocaleString('en-US')}`; break;
+        case 'op.cancel': detail = [label(String(a.action ?? '')), String(a.reason ?? '')].filter(Boolean).join(' · '); break;
         case 'sale.cancel': detail = `${num(a.lines)} ${pt('itemsCount', locale)}${a.reason ? ' · ' + a.reason : ''}`; break;
         default: detail = String((a.customer_name ?? a.name ?? '') || '');
       }
@@ -104,6 +111,12 @@ export default function OpsLog({ boot, sb, locale, staff, from, to, onSale }: { 
     setAsk(null); setMsg(null);
     const id = String(o.ref_id ?? o.after?.id ?? '');
     try {
+      if (o.canUndo && SERVER_CANCEL.includes(o.canUndo)) {
+        const shift = await currentShift(boot.db);
+        const { error } = await sb.rpc('pos_op_cancel', { p_shop: boot.shop.id, p_audit_id: o.id, p_shift: shift?.id ?? null, p_reason: reason });
+        if (error) { const k = ({ no_open_shift: 'opsErrNoShift', owner_only: 'opsErrOwner', cash_move_unmarked: 'opsWhyCashOld', cash_move_belongs_to_operation: 'opsWhyCashLinked' } as Record<string, Key>)[error.message]; setMsg(k ? pt(k, locale) : error.message); return; }
+        boot.engine.poke(); setMsg(pt('opsCancelled', locale)); setTick(t => t + 1); return;
+      }
       if (o.canUndo === 'sale') {
         const order = await boot.db.orders.get(id); const lines = await boot.db.orderLines.where('order_id').equals(id).toArray();
         if (!order || !lines.length) { setMsg(pt('opsNotOnDevice', locale)); return; }
@@ -162,7 +175,7 @@ function ReasonDialog({ locale, op, label, onOk, onClose }: { locale: L; op: Op;
     <Modal open onClose={onClose} title={`${pt('opsCancel', locale)} · ${label}`}
       footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn danger" disabled={!reason} onClick={() => onOk(reason)}>✕ {pt('opsCancel', locale)}</button></>}>
       <p style={{ marginTop: 0 }}><strong>{label}</strong> {op.amount} <span className="muted">{op.detail}</span></p>
-      <p className="muted" style={{ fontSize: 13 }}>{pt(op.canUndo === 'sale' ? 'opsSaleHow' : op.canUndo === 'purchase' ? 'opsPurchaseHow' : 'opsDebtHow', locale)}</p>
+      <p className="muted" style={{ fontSize: 13 }}>{pt(({ sale: 'opsSaleHow', purchase: 'opsPurchaseHow', debt: 'opsDebtHow', cash: 'opsCashHow', stock: 'opsStockHow', supplier: 'opsSupplierHow', payout: 'opsPayoutHow' } as const)[op.canUndo ?? 'debt'], locale)}</p>
       <div className="seg" style={{ marginBottom: 8 }}>{REASONS.map(r => <button key={r} className={k === r ? 'active' : ''} onClick={() => setK(r)}>{pt(r === 'test' ? 'opsReasonTest' : r === 'mistake' ? 'opsReasonMistake' : 'opsReasonOther', locale)}</button>)}</div>
       <input className="input" placeholder={pt('opsReasonNote', locale)} value={note} onChange={e => setNote(e.target.value)} />
     </Modal>

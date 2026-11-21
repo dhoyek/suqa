@@ -268,7 +268,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
           if (extra && extra.fee_amount > 0) {
             const label = `${pt('driverFee', locale)} · ${dialog.o.number ?? dialog.o.local_number ?? ''}${extra.courier_name ? ' · ' + extra.courier_name : ''}`;
             if (dialog.o.driver_id && !dialog.o.driver_paid_at) { if (extra.pay_now) await payDriver(boot.db, { driver: { id: dialog.o.driver_id, name: extra.courier_name ?? '' }, orders: [{ id: dialog.o.id, courier_fee_cents: extra.courier_fee_cents }], currency: extra.fee_currency, amount: extra.fee_amount, rate: r, from_drawer: true, shift, user_id: staff.user_id, label }); }
-            else if (shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: label, user_id: staff.user_id });
+            else if (shift) await cashMove(boot.db, shift, { kind: 'out', amount: extra.fee_amount, currency: extra.fee_currency, reason: label, user_id: staff.user_id, source: 'fee' });
           }
           boot.engine.poke(); setDialog(null); await reload();
         }} onClose={() => setDialog(null)} />}

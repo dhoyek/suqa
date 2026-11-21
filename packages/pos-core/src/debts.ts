@@ -78,7 +78,7 @@ export async function settleDebt(db: PosDb, input: {
     await enqueue(db, 'debt.settle', { ...settlement, allocations: allocations.map(a => ({ id: a.id, order_id: a.order_id, amount_cents: a.amount_cents })) });
   });
   if (input.shift && (input.tender === 'cash_usd' || input.tender === 'cash_lbp')) {
-    await cashMove(db, input.shift, { kind: 'in', amount: input.amount, currency: input.currency, reason: input.reason ?? `debt · ${input.name || settlement.phone}`, user_id: input.user_id });
+    await cashMove(db, input.shift, { kind: 'in', amount: input.amount, currency: input.currency, reason: input.reason ?? `debt · ${input.name || settlement.phone}`, user_id: input.user_id, source: 'debt', ref_id: settlement.id });
   }
   return { settlement, allocations, unallocated_cents: amount_cents - allocations.reduce((s, a) => s + a.amount_cents, 0) };
 }
@@ -94,7 +94,7 @@ export async function unsettleDebt(db: PosDb, s: DebtSettlement, opts: { shift: 
     await enqueue(db, 'debt.unsettle', { id: s.id, reason: opts.reason ?? null, approved_by: opts.approved_by ?? null });
   });
   if (opts.shift && (s.tender === 'cash_usd' || s.tender === 'cash_lbp')) {
-    await cashMove(db, opts.shift, { kind: 'out', amount: num(s.amount), currency: s.currency, reason: opts.label ?? `debt undo · ${s.name || s.phone}`, user_id: opts.user_id });
+    await cashMove(db, opts.shift, { kind: 'out', amount: num(s.amount), currency: s.currency, reason: opts.label ?? `debt undo · ${s.name || s.phone}`, user_id: opts.user_id, source: 'debt', ref_id: s.id });
   }
 }
 

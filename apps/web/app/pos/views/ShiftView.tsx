@@ -70,7 +70,7 @@ export default function ShiftView({ boot, locale, staff, tick, status }: { boot:
       {dialog === 'open' && <TwoCurrency locale={locale} title={pt('openShift', locale)} labels={[pt('float', locale) + ' $', pt('float', locale) + ' ل.ل.']}
         onDone={async (usd, lbp) => { await openShift(boot.db, { float_usd_cents: usd, float_lbp: lbp, opened_by: staff.user_id }); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
       {(dialog === 'in' || dialog === 'out') && shift && <CashDialog locale={locale} kind={dialog}
-        onDone={async (amount, currency, reason) => { await cashMove(boot.db, shift, { kind: dialog, amount, currency, reason, user_id: staff.user_id }); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
+        onDone={async (amount, currency, reason) => { await cashMove(boot.db, shift, { kind: dialog, amount, currency, reason, user_id: staff.user_id, source: 'manual' }); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
       {dialog === 'close' && shift && sum && <TwoCurrency locale={locale} title={pt('closeShift', locale)} labels={[pt('counted', locale) + ' $', pt('counted', locale) + ' ل.ل.']} note
         hint={`${pt('expected', locale)}: ${fmtUsd(sum.expected_usd_cents)} · ${fmtLbp(sum.expected_lbp, locale)}`}
         onDone={async (usd, lbp, note) => { const c = await closeShift(boot.db, shift, { counted_usd_cents: usd, counted_lbp: lbp, closed_by: staff.user_id, note }); boot.engine.poke(); setDialog(null); await reload(); if (loadPrintSettings().autoPrint) void printZ(c); }} onClose={() => setDialog(null)} />}

@@ -21,8 +21,8 @@ describe('shifts & cash', () => {
     // sale 2: $20 paid 1,000,000 LBP + $5 card → change in LBP: paid 11.17+5 = 16.17 → short... use 1,500,000 LBP → 16.76+5 = 21.76 → change 1.76$ = 157,520 → rounded down 155,000
     d = addToDraft(newDraft('walkin'), p, 2);
     await commitSale(a.db, { draft: d, rate: RATE, lbpStep: 5000, changeIn: 'lbp', shift_id: sh.id, payments: [{ tender: 'cash_lbp', amount: 1500000, currency: 'lbp' }, { tender: 'card', amount: 500, currency: 'usd' }] });
-    await cashMove(a.db, sh, { kind: 'out', amount: 1000, currency: 'usd', reason: 'supplier', user_id: 'u1' });
-    await cashMove(a.db, sh, { kind: 'in', amount: 100000, currency: 'lbp', reason: 'owner', user_id: 'u1' });
+    await cashMove(a.db, sh, { kind: 'out', amount: 1000, currency: 'usd', reason: 'supplier', user_id: 'u1', source: 'manual' });
+    await cashMove(a.db, sh, { kind: 'in', amount: 100000, currency: 'lbp', reason: 'owner', user_id: 'u1', source: 'manual' });
 
     const s = await shiftSummary(a.db, sh);
     expect(s.sales_count).toBe(2); expect(s.total_cents).toBe(3000);

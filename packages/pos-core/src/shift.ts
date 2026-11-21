@@ -1,6 +1,6 @@
 import { META, type PosDb } from './db';
 import { enqueue, newId } from './sale';
-import { num, type CashMove, type Order, type Payment, type Shift } from './types';
+import { num, type CashMove, type CashSource, type Order, type Payment, type Shift } from './types';
 
 // Shifts are per device. Expected cash per currency at close:
 //   float + cash sales (cash_usd / cash_lbp tenders) − change given (in that currency) + cash in − cash out
@@ -24,11 +24,11 @@ export async function openShift(db: PosDb, input: { float_usd_cents: number; flo
   return s;
 }
 
-export async function cashMove(db: PosDb, shift: Shift, input: { kind: 'in' | 'out'; amount: number; currency: 'usd' | 'lbp'; reason: string; user_id: string }): Promise<CashMove> {
-  const m: CashMove = { id: newId(), shift_id: shift.id, kind: input.kind, amount: input.amount, currency: input.currency, reason: input.reason, user_id: input.user_id, at: new Date().toISOString() };
+export async function cashMove(db: PosDb, shift: Shift, input: { kind: 'in' | 'out'; amount: number; currency: 'usd' | 'lbp'; reason: string; user_id: string; source: Exclude<CashSource, 'cancel'>; ref_id?: string | null }): Promise<CashMove> {
+  const m: CashMove = { id: newId(), shift_id: shift.id, kind: input.kind, amount: input.amount, currency: input.currency, reason: input.reason, user_id: input.user_id, at: new Date().toISOString(), source: input.source, ref_id: input.ref_id ?? null };
   await db.transaction('rw', [db.cashMoves, db.outbox], async () => {
     await db.cashMoves.put(m);
-    await enqueue(db, 'cash.move', { id: m.id, shift_id: m.shift_id, kind: m.kind, amount: m.amount, currency: m.currency, reason: m.reason, at: m.at });
+    await enqueue(db, 'cash.move', { id: m.id, shift_id: m.shift_id, kind: m.kind, amount: m.amount, currency: m.currency, reason: m.reason, at: m.at, source: m.source, ref_id: m.ref_id });
   });
   return m;
 }

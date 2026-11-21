@@ -84,7 +84,7 @@ export async function paySupplier(db: PosDb, input: { supplier: Supplier; purcha
     await enqueue(db, 'supplier.pay', { ...row, device_id: deviceId ?? null, approved_by: input.approved_by ?? null });
   });
   if (row.from_drawer && input.shift && (input.tender === 'cash_usd' || input.tender === 'cash_lbp')) {
-    await cashMove(db, input.shift, { kind: 'out', amount: input.amount, currency: input.currency, reason: `${input.supplier.name} · ${input.purchase_id ? 'invoice' : 'payment'}`, user_id: input.user_id });
+    await cashMove(db, input.shift, { kind: 'out', amount: input.amount, currency: input.currency, reason: `${input.supplier.name} · ${input.purchase_id ? 'invoice' : 'payment'}`, user_id: input.user_id, source: 'supplier', ref_id: row.id });
   }
   return row;
 }

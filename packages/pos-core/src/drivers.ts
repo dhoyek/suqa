@@ -93,7 +93,7 @@ export async function payDriver(db: PosDb, input: { driver: Pick<Driver, 'id' | 
   });
   if (fromDrawer) for (const cur of ['usd', 'lbp'] as Currency[]) {
     const n = net[cur]; if (!n) continue;
-    await cashMove(db, input.shift!, { kind: n > 0 ? 'in' : 'out', amount: Math.abs(n), currency: cur, reason: input.label ?? `driver · ${input.driver.name}`, user_id: input.user_id });
+    await cashMove(db, input.shift!, { kind: n > 0 ? 'in' : 'out', amount: Math.abs(n), currency: cur, reason: input.label ?? `driver · ${input.driver.name}`, user_id: input.user_id, source: 'driver', ref_id: id });
   }
   return { id, amount_cents, cash_cents, cash_lbp };
 }

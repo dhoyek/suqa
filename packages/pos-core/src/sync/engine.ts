@@ -151,6 +151,12 @@ export class SyncEngine {
         // merge over the local copy: feed rows are full server rows, but the snapshot adds joined fields (e.g. staff full_name) we keep
         const row = fillCents(r.tbl, r.row);
         await table.put(existing ? { ...existing, ...row } : row);
+        // a return's refund: the till that made it wrote its own row at once (so the drawer was right offline); the server's
+        // row for the same refund has another id — when it arrives it takes the place of the till's, or the refund counts twice
+        if (r.tbl === 'payments' && String(row.note ?? '').startsWith('refund ')) {
+          const twins = await this.db.payments.where('order_id').equals(row.order_id as string).filter(p => p.id !== row.id && p.note === row.note && p.tender === row.tender && p.currency === row.currency).primaryKeys();
+          if (twins.length) await this.db.payments.bulkDelete(twins);
+        }
       }
       await setMeta(this.db, META.cursor, cursor);
     });
@@ -212,8 +218,19 @@ export class SyncEngine {
     return n;
   }
 
+  /** Once per start: refunds this till already holds twice (its own row + the server's, from before the fix above) keep the server's row only. */
+  async repairRefunds(): Promise<number> {
+    const groups = new Map<string, { id: string }[]>();
+    for (const p of await this.db.payments.filter(x => String(x.note ?? '').startsWith('refund ')).toArray()) { const k = `${p.order_id}|${p.note}|${p.tender}|${p.currency}`; groups.set(k, [...(groups.get(k) ?? []), p]); }
+    const drop: string[] = [];
+    // the till's ids are time-ordered (version 7), the server's random (version 4): only a clear pair is touched
+    for (const g of groups.values()) { const server = g.filter(p => p.id[14] === '4'); if (g.length > 1 && server.length === 1) drop.push(...g.filter(p => p.id[14] === '7').map(p => p.id)); }
+    if (drop.length) { await this.db.payments.bulkDelete(drop); this.emit({ type: 'applied', rows: [] }); }
+    return drop.length;
+  }
+
   async sync(): Promise<void> {
-    if (!this.repaired) { this.repaired = true; await this.repairCents().catch(() => 0); }
+    if (!this.repaired) { this.repaired = true; await this.repairCents().catch(() => 0); await this.repairRefunds().catch(() => 0); }
     if (this.status.syncing) { this.wake?.(); return; }
     this.setStatus({ syncing: true });
     try {

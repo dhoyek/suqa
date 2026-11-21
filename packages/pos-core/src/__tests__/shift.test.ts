@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer } from '../sync/fake-server';
 import { makeDevice, wipeAll, RATE } from './helpers';
 import { addToDraft, commitSale, newDraft } from '../sale';
+import { commitReturn } from '../orders';
 import { cashMove, closeShift, currentShift, openShift, shiftSummary, todaySummary, tenderTotals } from '../shift';
 
 afterEach(wipeAll);
@@ -93,5 +94,27 @@ describe('catalog edits & stock moves (offline → sync)', () => {
     const row = (order_id: string, tender: string, amount: number, currency: 'usd' | 'lbp' = 'usd') => ({ id: order_id + tender + amount, order_id, tender, amount, currency, at: '' }) as unknown as Parameters<typeof tenderTotals>[0][number];
     const t = tenderTotals([row('a', 'cash_usd', 600), row('a', 'cash_lbp', -85000, 'lbp'), row('a', 'cash_lbp', 85000, 'lbp'), row('a', 'cash_usd', -600), row('a', 'cash_usd', 503), row('b', 'cash_usd', 200), row('c', 'card', 100), row('c', 'card', -100)]);
     expect(t).toEqual({ cash_usd: { usd: 703, lbp: 0, count: 2 } });
+  });
+
+  it("a return's refund counts once on the till that made it: the server's row replaces the till's own when it arrives", async () => {
+    const server = new FakeServer();
+    const p = server.addProduct({ id: 'p1', price_usd: 10, on_hand: 50 });
+    const a = await makeDevice(server, 'A');
+    const sh = await openShift(a.db, { float_usd_cents: 0, float_lbp: 0, opened_by: 'u1' });
+    const r = await commitSale(a.db, { draft: addToDraft(newDraft('walkin'), p, 1), rate: RATE, lbpStep: 5000, changeIn: 'usd', shift_id: sh.id, payments: [{ tender: 'cash_usd', amount: 1000, currency: 'usd' }] });
+    await a.engine.sync();
+    const order = (await a.db.orders.get(r.order.id))!; const line = (await a.db.orderLines.where('order_id').equals(order.id).first())!;
+    const ret = await commitReturn(a.db, order, [{ order_item_id: line.id, product_id: 'p1', qty: 1, destination: 'stock', amount_cents: 1000 }], { refund_currency: 'usd', refund_usd_cents: 1000, refund_lbp: 0, reason: 'x', approved_by: null, user_id: 'u1', shift_id: sh.id });
+    expect((await shiftSummary(a.db, sh)).expected_usd_cents).toBe(0);
+    // the server writes the refund under its own (random) id and feeds it back
+    const srv = { id: '11fd8894-0000-4000-8000-000000000001', order_id: order.id, tender: 'cash_usd', amount: -1000, currency: 'usd', note: `refund ${ret}`, shift_id: sh.id, at: new Date().toISOString() };
+    server.feed.push({ seq: ++server.seq, tbl: 'payments', row_id: srv.id, op: 'upsert', row: srv, origin_device: a.id });
+    await a.engine.sync();
+    expect((await a.db.payments.where('order_id').equals(order.id).toArray()).filter(x => x.note === `refund ${ret}`).map(x => x.id)).toEqual([srv.id]);
+    expect((await shiftSummary(a.db, sh)).expected_usd_cents).toBe(0);
+    // a till that already holds both rows (from before) is repaired at start
+    await a.db.payments.put({ id: '01a1fd66-f452-7000-8000-000000000001', order_id: order.id, tender: 'cash_usd', amount: -1000, currency: 'usd', note: `refund ${ret}`, at: srv.at, shift_id: sh.id } as never);
+    expect(await a.engine.repairRefunds()).toBe(1);
+    expect((await shiftSummary(a.db, sh)).expected_usd_cents).toBe(0);
   });
 });

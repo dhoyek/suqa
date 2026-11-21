@@ -96,7 +96,7 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, staf
   useEffect(() => { let on = true; void (async () => {
     if (sb && (typeof navigator === 'undefined' || navigator.onLine)) {
       const day = from ?? new Date().toISOString().slice(0, 10);
-      const { data, error } = await sb.rpc('pos_report_sales', { p_shop: boot.shop.id, p_from: day, p_to: to ?? day, p_filter: { ...(shiftId ? { shift_id: shiftId } : {}), ...(filter ?? {}) } });
+      const { data, error } = await sb.rpc('pos_report_sales', { p_shop: boot.shop.id, p_from: day, p_to: to ?? day, p_filter: { ...(shiftId ? { shift_id: shiftId } : {}), ...(filter?.channel ? { channel: filter.channel } : {}), ...(filter?.tender ? { tender: filter.tender } : {}), ...(filter?.productId != null ? { product_id: filter.productId } : {}), ...(filter?.section != null ? { section: filter.section } : {}) } });
       const r = data as { count: number; cents: number; rows: SaleRow[] } | null;
       if (!error && r?.rows) { if (on) { setRows(r.rows.map(x => ({ ...x, cents: num(x.cents), qty: x.qty == null ? null : num(x.qty) }))); setTotal({ count: num(r.count), cents: num(r.cents) }); setLocal(false); } return; }
     }

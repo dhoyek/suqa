@@ -2,6 +2,7 @@
 \set ON_ERROR_STOP on
 begin;
 \i supabase/schema/95_yorgo_whatsapp.sql
+\i supabase/schema/101_yorgo_wa_recent_history.sql
 do $$
 declare t uuid := (select id from suqa.tenants where slug = 'batroun'); g jsonb; c1 uuid; c2 uuid; d uuid; x jsonb; n int;
         msg jsonb := '[{"role":"user","content":[{"type":"text","text":"bade khebez"}]},{"role":"assistant","content":[{"type":"text","text":"ok"}],"model":"m","input_tokens":100,"output_tokens":10,"cost_usd":0.2}]';

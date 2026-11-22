@@ -8,7 +8,7 @@ import { getTenantOrNull } from '@/lib/tenant';
 import { createClient } from '@supabase/supabase-js';
 import { anthropicClient } from '@/lib/yorgo/model';
 import { yorgoConfig } from '@/lib/yorgo/config';
-import { waKind, waTextOnly, waTurn, waVoiceTurn, type Slim, type WaDeps } from '@/lib/yorgo/whatsapp';
+import { waKind, waTextOnly, waTurn, waVoiceTurn, WA_MEMORY_HOURS, type Slim, type WaDeps } from '@/lib/yorgo/whatsapp';
 import { loadRoute, ROUTE_COLUMNS } from '@/lib/ai/routes';
 import { googleKey } from '@/lib/ai/google';
 import { runVoice, VOICE_MAX_BYTES } from '@/lib/ai/voice';
@@ -177,7 +177,7 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
   const deps: WaDeps = {
     model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => pub.rpc(fn, args), from: t => pub.from(t) as never },
     drafts: {
-      latest: async conv => { const { data } = await admin.from('yorgo_drafts').select('draft').eq('conversation_id', conv).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(); return (data?.draft as Slim | undefined) ?? null; },
+      latest: async conv => { const { data } = await admin.from('yorgo_drafts').select('draft').eq('conversation_id', conv).gt('expires_at', new Date().toISOString()).gt('created_at', new Date(Date.now() - WA_MEMORY_HOURS * 3_600_000).toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(); return (data?.draft as Slim | undefined) ?? null; },
       save: async (conv, phone, draft) => { const { data, error } = await admin.rpc('yorgo_draft_save', { p_tenant: tenant!.id, p_conversation: conv, p_phone: phone, p_draft: draft }); return error || typeof data !== 'string' ? null : data; },
     },
   };

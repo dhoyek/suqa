@@ -218,3 +218,9 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - `withCacheMark` (`cache-mark.ts`, used by `model.ts`): the last block of the conversation is marked cacheable, so the second and third call of a message read what came before at the cache price.
 - Measured on dev, the same four messages in a new conversation: before $0.275 (12 calls, 119,030 input tokens at full price), after $0.111 (13 calls, 52 at full price, 94,800 read from cache, 30,597 written) — 60% less, $0.069 → $0.028 per message. The answers were the same kind (baskets with choices).
 - Not done: the first call of each message still writes the history again (the cache does not carry from one message to the next, because the history is rewritten short). An old WhatsApp conversation is never cut by age (yesterday's order is still re-read); that needs a script. The 40-message test set was not run.
+
+## WhatsApp: Yorgo re-reads the last 3 hours only (script 101) — 22 Nov 2026
+
+- `supabase/schema/101_yorgo_wa_recent_history.sql` + test: `yorgo_history_wa(…, p_hours default 3)`. A phone's WhatsApp conversation never ends, so yesterday's order was re-read (and paid for) on every message and leaked into today's. Nothing is deleted.
+- Webhook: a "zid …" joins the last basket only if it is from the last 3 hours too (`WA_MEMORY_HOURS`).
+- Drawback accepted by Dan: continuing yesterday's order the next day starts from an empty basket.

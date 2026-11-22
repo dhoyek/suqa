@@ -64,6 +64,9 @@ export type WaDeps = Deps & {
     save(conversationId: string, phone: string, draft: Slim): Promise<string | null>;
   };
 };
+/** How far back Yorgo looks on WhatsApp: the conversation it re-reads (script 101, the database's default) and the basket a "zid …" joins.
+ *  Older than this, a message starts a new order. Nothing is deleted. */
+export const WA_MEMORY_HOURS = 3;
 export type WaInput = { tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; phone: string; text: string; site: string; shops?: ShopHint[]; heard?: TurnInputHeard };
 type TurnInputHeard = { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;
 export type WaOutcome = { reply: string | null; as: 'yorgo' | 'paused' | 'off' | 'error'; draft_id?: string | null; cost_usd?: number; error?: string; turn: TurnResult };

@@ -165,7 +165,7 @@ const T = {
   shiftRequired: { ar: 'افتح وردية أولاً للبدء بالبيع', en: 'Open a shift to start selling' },
   closedAt: { ar: 'أُقفلت', en: 'Closed' }, pastShifts: { ar: 'ورديات سابقة', en: 'Past shifts' },
   // items / stock (M4)
-  newItem: { ar: 'صنف جديد', en: 'New item' }, editItem: { ar: 'تعديل الصنف', en: 'Edit item' }, nameAr: { ar: 'الاسم بالعربي', en: 'Name (Arabic)' }, nameEn: { ar: 'الاسم بالإنجليزي', en: 'Name (English)' },
+  newItem: { ar: 'صنف جديد', en: 'New item' }, editItem: { ar: 'تعديل الصنف', en: 'Edit item' }, copyItem: { ar: 'نسخ', en: 'Copy' }, copyOfItem: { ar: 'صنف جديد (نسخة)', en: 'New item (copy)' }, nameAr: { ar: 'الاسم بالعربي', en: 'Name (Arabic)' }, nameEn: { ar: 'الاسم بالإنجليزي', en: 'Name (English)' },
   category: { ar: 'الفئة', en: 'Category' }, noCategory: { ar: 'بدون فئة', en: 'No category' }, priceCurrency: { ar: 'عملة السعر', en: 'Price currency' }, cost: { ar: 'الكلفة', en: 'Cost' },
   sku: { ar: 'رمز الصنف (SKU)', en: 'SKU' }, barcodes: { ar: 'الباركود', en: 'Barcodes' }, addBarcode: { ar: 'أضف باركود (امسح أو اكتب)', en: 'Add barcode (scan or type)' },
   unit: { ar: 'الوحدة', en: 'Unit' }, piece: { ar: 'قطعة', en: 'piece' }, kg: { ar: 'كغ', en: 'kg' }, g: { ar: 'غرام', en: 'g' }, l: { ar: 'لتر', en: 'litre' }, ml: { ar: 'مل', en: 'ml' }, pack: { ar: 'عبوة', en: 'pack' },

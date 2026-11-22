@@ -47,8 +47,8 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
               </span>
             </div>
             {s.lines.map(l => (
-              <div className="product" key={l.product_id}>
-                <div style={{ flex: 1 }}>
+              <div className="product cart-line" key={l.product_id}>
+                <div className="info">
                   <div className="name">{tr(l.name, L)}</div>
                   <div className="muted" style={{ fontSize: 13 }}>{money(l.price_usd)}{l.unit ? ` / ${l.unit}` : ''}</div>
                 </div>
@@ -57,7 +57,7 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
                   <span className="qty">{l.qty}</span>
                   <button className="btn" onClick={() => setQty(s.id, l.product_id, l.qty + 1)}>+</button>
                 </div>
-                <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(l.price_usd * l.qty)}</strong>
+                <strong className="total">{money(l.price_usd * l.qty)}</strong>
                 <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />
               </div>
             ))}

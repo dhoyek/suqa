@@ -191,6 +191,17 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 /* storefront cart: per-item note; checkout: fixed order bar on phones */
 .line-note { flex-basis: 100%; min-height: 34px; font-size: 13px; margin-top: 4px; }
 .product { flex-wrap: wrap; }
+/* a cart line: on a phone the item's name gets the whole width, then quantity and line total share the next row, then the note
+   (the name used to share one row with the buttons and wrapped one word a line — Dan, 22 Nov 2026) */
+.product.cart-line { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px 12px; }
+.cart-line .info { min-width: 0; }
+.cart-line .total { text-align: end; white-space: nowrap; }
+.cart-line .line-note { grid-column: 1 / -1; margin-top: 0; }
+@media (max-width: 640px) {
+  .product.cart-line { grid-template-columns: auto 1fr; }
+  .cart-line .info { grid-column: 1 / -1; }
+  .cart-line .stepper { justify-self: start; }
+}
 .checkout-bar { display: none; }
 @media (max-width: 640px) { .checkout-bar { display: block; } .checkout-inline { display: none; } .stack:has(> .checkout-bar) { padding-bottom: 80px; } }
 /* phones: the top tabs scroll sideways instead of stacking; checkout/cart cards breathe */

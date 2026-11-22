@@ -224,3 +224,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - `supabase/schema/101_yorgo_wa_recent_history.sql` + test: `yorgo_history_wa(…, p_hours default 3)`. A phone's WhatsApp conversation never ends, so yesterday's order was re-read (and paid for) on every message and leaked into today's. Nothing is deleted.
 - Webhook: a "zid …" joins the last basket only if it is from the last 3 hours too (`WA_MEMORY_HOURS`).
 - Drawback accepted by Dan: continuing yesterday's order the next day starts from an empty basket.
+
+## Spoken orders read by sound; "asde"; short Arabizi — 22 Nov 2026 (no script)
+
+- Prod, 23:30: a voice order "وحدة طاووق بلا توم … وحدة دجاج بالعجين … وحدة طاووق بالعجين" was written down as "طوق …"; Yorgo dropped the first item and turned the third into chicken in dough, though "صحن طاووق" was among the search results.
+- `VOICE_NOTE` (`core.ts`): when the message came from a voice note the model is told so for that call: read by sound ("طوق" = طاووق), search the corrected word too, every "وحدة …" is its own item, an unmatched word goes to not_found instead of becoming another dish.
+- Prompt: "asde / 2asde / قصدي" = "I mean" (a correction), not a price question ("asde tawouk bil 3ajin" was answered with a price).
+- `detectScript`: more Arabizi markers (zid, zedle, shil, asde, we7de, sa7en…): "zedle pepsi" was answered in English.
+- Not built: giving the transcription model the shops' item words (`custom_vocabulary`), which attacks the mishearing itself.

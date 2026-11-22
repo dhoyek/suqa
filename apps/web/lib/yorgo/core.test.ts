@@ -76,6 +76,20 @@ describe('yorgo core', () => {
     expect(withCacheMark(msgs.slice(0, 2))[1]).toBe(msgs[1]);      // a tool call cannot carry it: left alone
   });
 
+  it('a spoken message says so to the model for this call only (words may be misheard, every item is kept); a typed one does not', async () => {
+    const heard = { model: 'g', cost_usd: 0.001, input_tokens: 10, output_tokens: 2 };
+    const a = rig({ replies: [say('ok')] }); await runTurn(a.deps, { ...base, heard });
+    expect(JSON.stringify(a.calls.model[0].messages.at(-1))).toContain('SPOKEN');
+    const rec = a.calls.adminRpc.find(c => c[0] === 'yorgo_record')![1] as { p_messages: { content: unknown }[] };
+    expect(JSON.stringify(rec.p_messages[0].content)).not.toContain('SPOKEN');
+    const b = rig({ replies: [say('ok')] }); await runTurn(b.deps, base);
+    expect(JSON.stringify(b.calls.model[0].messages.at(-1))).not.toContain('SPOKEN');
+  });
+  it('short Arabizi orders are recognised as Arabizi ("zedle pepsi" was answered in English)', () => {
+    for (const t of ['zedle pepsi', 'zid sa7en batata', 'we7de sanita', 'shil el pepsi', 'asde tawouk']) expect(detectScript(t)).toBe('arabizi');
+    for (const t of ['add a pepsi', 'two bread please']) expect(detectScript(t)).toBeNull();
+  });
+
   it('does not call the model when the gate is closed', async () => {
     for (const reason of ['off', 'rate', 'cap_shop', 'cap_global'] as const) {
       const { deps, calls } = rig({ gate: { ok: false, reason }, replies: [say('x')] });

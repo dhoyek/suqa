@@ -15,29 +15,33 @@ const UNITS = ['piece', 'kg', 'g', 'l', 'ml', 'pack'] as const;
  * Create / edit an item. Works offline: the row is written locally and a product.patch op is queued.
  * Cashiers need an owner PIN (server enforces it too); owner / stock role edit freely. Cost is owner-only.
  */
-export default function ItemEditor({ boot, locale, index, product, presetBarcode, staff, me, onDone, onClose }: {
-  boot: Booted; locale: L; index: CatalogIndex; product: Product | null; presetBarcode?: string; staff: Staff[]; me: Staff; onDone: (p: Product) => void; onClose: () => void;
+// `template` + no product = a NEW item that starts as a copy of another one (same category, price, unit, stock settings, description,
+// picture…): only the name is left to change. Barcodes and the code are never copied — they belong to one item. `onCopy` shows the
+// "copy" button on an existing item.
+export default function ItemEditor({ boot, locale, index, product, template, presetBarcode, staff, me, onDone, onClose, onCopy }: {
+  boot: Booted; locale: L; index: CatalogIndex; product: Product | null; template?: Product | null; presetBarcode?: string; staff: Staff[]; me: Staff; onDone: (p: Product) => void; onClose: () => void; onCopy?: (p: Product) => void;
 }) {
+  const src = product ?? template ?? null;      // where the form's first values come from
   const owner = boot.role === 'owner';
-  const [ar, setAr] = useState(product?.name?.ar ?? ''); const [en, setEn] = useState(product?.name?.en ?? '');
-  const [cat, setCat] = useState<string>(product?.section ?? '');
-  const [cur, setCur] = useState<'usd' | 'lbp'>(product?.price_currency ?? 'usd');
-  const [price, setPrice] = useState(product ? (product.price_currency === 'lbp' ? String(product.price_lbp) : String(Number(product.price_usd))) : '');
-  const [cost, setCost] = useState(product?.cost_cents != null ? (product.cost_cents / 100).toString() : '');
+  const [ar, setAr] = useState(src?.name?.ar ?? ''); const [en, setEn] = useState(src?.name?.en ?? '');
+  const [cat, setCat] = useState<string>(src?.section ?? '');
+  const [cur, setCur] = useState<'usd' | 'lbp'>(src?.price_currency ?? 'usd');
+  const [price, setPrice] = useState(src ? (src.price_currency === 'lbp' ? String(src.price_lbp) : String(Number(src.price_usd))) : '');
+  const [cost, setCost] = useState(src?.cost_cents != null ? (src.cost_cents / 100).toString() : '');
   const [sku, setSku] = useState(product?.sku ?? '');
-  const [dAr, setDAr] = useState(product?.description?.ar ?? ''); const [dEn, setDEn] = useState(product?.description?.en ?? ''); const [img, setImg] = useState<string | null>(product?.image_url ?? null);
+  const [dAr, setDAr] = useState(src?.description?.ar ?? ''); const [dEn, setDEn] = useState(src?.description?.en ?? ''); const [img, setImg] = useState<string | null>(src?.image_url ?? null);
   const online = typeof navigator === 'undefined' ? true : navigator.onLine;
   type Bc = { barcode: string; pack_qty: number; pack_price_usd: number | null };
   const [bcs, setBcs] = useState<Bc[]>(() => (product ? index.barcodes(product.id).map(b => { const r = index.barcodeRows.get(b); return { barcode: b, pack_qty: Number(r?.pack_qty ?? 1) || 1, pack_price_usd: r?.pack_price_usd != null && r.pack_price_usd !== '' ? Number(r.pack_price_usd) : null }; }) : presetBarcode ? [{ barcode: normBarcode(presetBarcode), pack_qty: 1, pack_price_usd: null }] : []));
   const marginPct = Number(boot.shop.default_margin_pct) || 0;
   const priceFromMargin = () => { const c = Number(cost); if (!c || !marginPct) return; setCur('usd'); setPrice((Math.ceil((c / (1 - marginPct / 100)) * 4) / 4).toFixed(2).replace(/\.00$/, '')); };
   const [bcInput, setBcInput] = useState(''); const [bcErr, setBcErr] = useState<string | null>(null);
-  const [unit, setUnit] = useState<string>(product?.unit_kind ?? 'piece'); const [dec, setDec] = useState(!!product?.decimal_qty); const [vat, setVat] = useState(!!product?.vat);
-  const [track, setTrack] = useState(!!product?.track_stock); const [min, setMin] = useState(String(Number(product?.min_stock ?? 0)));
-  const [supplierId, setSupplierId] = useState(product?.supplier_id ?? ''); const [margin, setMargin] = useState(product?.margin_pct != null ? String(Number(product.margin_pct)) : ''); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [unit, setUnit] = useState<string>(src?.unit_kind ?? 'piece'); const [dec, setDec] = useState(!!src?.decimal_qty); const [vat, setVat] = useState(!!src?.vat);
+  const [track, setTrack] = useState(!!src?.track_stock); const [min, setMin] = useState(String(Number(src?.min_stock ?? 0)));
+  const [supplierId, setSupplierId] = useState(src?.supplier_id ?? ''); const [margin, setMargin] = useState(src?.margin_pct != null ? String(Number(src.margin_pct)) : ''); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   useEffect(() => { boot.db.suppliers.toArray().then(ss => setSuppliers(ss.filter(x => x.active).sort((a, b) => a.name.localeCompare(b.name)))); }, [boot]);
-  const [vis, setVis] = useState(product?.visible_online ?? true); const [avail, setAvail] = useState(product?.is_available ?? true); const [active, setActive] = useState(product?.is_active ?? true);
-  const [days, setDays] = useState<number[]>(product?.available_days ?? []);   // empty = every day
+  const [vis, setVis] = useState(src?.visible_online ?? true); const [avail, setAvail] = useState(src?.is_available ?? true); const [active, setActive] = useState(src?.is_active ?? true);
+  const [days, setDays] = useState<number[]>(src?.available_days ?? []);   // empty = every day
   const [gate, setGate] = useState(false); const [err, setErr] = useState<string | null>(null);
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index]);
   const original = useMemo(() => (product ? index.barcodes(product.id) : []), [product, index]);
@@ -55,7 +59,7 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
     const priceNum = Number(price) || 0;
     const fields: Partial<Product> = {
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
-      price_usd: cur === 'usd' ? priceNum : Number(product?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(product?.price_lbp ?? 0),
+      price_usd: cur === 'usd' ? priceNum : Number(src?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(src?.price_lbp ?? 0),
       sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
       visible_online: vis, is_available: avail, is_active: active, image_url: img, available_days: days.length && days.length < 7 ? [...days].sort() : null,
       description: { ar: dAr.trim(), en: dEn.trim() },
@@ -78,8 +82,8 @@ export default function ItemEditor({ boot, locale, index, product, presetBarcode
 
   return (
     <>
-      <Modal open onClose={onClose} title={product ? pt('editItem', locale) : pt('newItem', locale)} wide
-        actions={<button className="btn icon primary" disabled={!valid} onClick={submit} aria-label={pt('save', locale)} title={pt('save', locale)}>✓</button>}
+      <Modal open onClose={onClose} title={product ? pt('editItem', locale) : template ? pt('copyOfItem', locale) : pt('newItem', locale)} wide
+        actions={<>{product && onCopy && <button type="button" className="btn" onClick={() => onCopy(product)} title={pt('copyItem', locale)}>⧉ {pt('copyItem', locale)}</button>}<button className="btn icon primary" disabled={!valid} onClick={submit} aria-label={pt('save', locale)} title={pt('save', locale)}>✓</button></>}
         footer={err ? <span className="bad">{err}</span> : undefined}>
         <div className="item-form">
           <label className="label">{pt('nameAr', locale)}<input className="input" value={ar} onChange={e => setAr(e.target.value)} autoFocus /></label>

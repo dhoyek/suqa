@@ -64,7 +64,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }], ...(i.heard ? { model: i.heard.model, cost_usd: i.heard.cost_usd, input_tokens: i.heard.input_tokens, output_tokens: i.heard.output_tokens } : {}) }];
   // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
   // The note travels with this call only; what is stored is the person's own words.
-  const note = [languageNote(text, history), cardNote(i.card)].filter(Boolean).join('\n') || null;
+  const note = [languageNote(text, history), cardNote(i.card), i.heard ? VOICE_NOTE : null].filter(Boolean).join('\n') || null;
   const model = i.mode === 'shopper' ? d.cfg.modelShopper : d.cfg.modelDefault;      // customers get the stronger model (config.ts)
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
   let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false; const missed: string[] = [];
@@ -132,6 +132,12 @@ export function cardNote(card: TurnInput['card']): string | null {
   if (card === 'added') return '(App note — follow it, never mention it: your last suggestion was already added to their cart. A new draft holds only what THIS message asks for; do not repeat items that were in it unless they ask for more of them, and do not set add.)';
   return null;
 }
+/** The message was spoken and written down by a machine. Lebanese food words come out wrong ("طاووق" was written "طوق", and a
+ *  taouk plate became chicken in dough — prod, 22 Nov 2026), and a spoken list is easy to merge. Travels with this call only. */
+const VOICE_NOTE = '(App note — follow it, never mention it: this message was SPOKEN and written down by a machine, so words may be misheard or misspelt. '
+  + 'Read it by sound, as a Lebanese shopper would say it: "طوق" is طاووق (taouk), and so on for any word that is not a real item but sounds like one. Search with the corrected word as well as the written one. '
+  + 'Each "واحد / وحدة / tnen …" starts a new item: count them and keep every one — never merge two into one, never drop one; what follows an item ("بلا توم", "مع كولسلو") is that item\'s note. '
+  + 'If a word cannot be matched to anything by sound, list it in not_found as it was written rather than replacing it with a different dish.)';
 const GARBLED_NOTE = '(App note — follow it, never mention it: your last reply came out as broken characters. Write the same answer again in clean text, with no apology.)';
 /** Arabic that came out as mojibake ("Ø§Ù„Ø³Ù„Ø©" for "السلة"): UTF-8 bytes shown as Latin-1. Seen from the model itself (prod, 2026-11-20). */
 const MOJIBAKE = /[ØŲ]|[ÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;   // Ø / Ų lead almost every broken Arabic letter, whatever the code page
@@ -187,7 +193,7 @@ export function detectScript(text: string): 'ar' | 'arabizi' | null {
   if (arabic && arabic >= latin) return 'ar';
   const t = ` ${text.toLowerCase()} `;
   const digitInWord = /[a-z][2357]|[2357][a-z]/.test(t.replace(/\b\d+(?:[.,]\d+)?\s?(?:kg|g|gr|l|ml|x|pcs?)\b/g, ' '));
-  const marker = /[^a-z](w|bade|badde|baddi|bede|bdi|badna|shu|chou|shou|kifak|kifik|yalla|hayda|hek|mish|ma fi|3al|khebez|kbire?|zghire?|adde|addeh|law sama7t|iza|kamen|ktir|shway|ya3ne|3ande|3anna|3andak|3andkon|fi|mafi|3endo|3ende|3endak|3endkon|3andon|3endon|bade|baddo|eza|hayde|hayk|la2|tayeb|tayyeb|taybe|akid|addesh|2adde|2addesh|bkam|halla2|3am|kif|mnih|ma3|minno|menno)[^a-z]/.test(t);
+  const marker = /[^a-z](w|bade|badde|baddi|bede|bdi|badna|shu|chou|shou|kifak|kifik|yalla|hayda|hek|mish|ma fi|3al|khebez|kbire?|zghire?|adde|addeh|law sama7t|iza|kamen|ktir|shway|ya3ne|3ande|3anna|3andak|3andkon|fi|mafi|3endo|3ende|3endak|3endkon|3andon|3endon|bade|baddo|eza|hayde|hayk|la2|tayeb|tayyeb|taybe|akid|addesh|2adde|2addesh|bkam|halla2|3am|kif|mnih|ma3|minno|menno|zid|zed|zidle|zedle|zidli|zedli|shil|chil|shilo|chilo|shile|chile|asde|2asde|2asdi|asdi|we7de|wa7de|wa7ad|tnen|tlete|sa7en|bala|bass|chefle|shefle|3ende|ma7al)[^a-z]/.test(t);
   if (latin && (digitInWord || marker)) return 'arabizi';
   if (arabic) return 'ar';
   return null;

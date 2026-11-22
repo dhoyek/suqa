@@ -14,7 +14,7 @@ import BulkDialog from '../components/BulkDialog';
 /** Catalog: list + editor, quick buttons (owner, online), conflict review (owner). Bulk tools + import live in a separate dialog (M4-c). */
 export default function ItemsView({ boot, sb, locale, index, tick, staff, reindex }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
   const [q, setQ] = useState(''); const [cat, setCat] = useState<Set<string>>(new Set()); const [showArchived, setShowArchived] = useState(false);
-  const [edit, setEdit] = useState<{ p: Product | null } | null>(null);
+  const [edit, setEdit] = useState<{ p: Product | null; from?: Product } | null>(null);      // from = a new item started as a copy of this one
   const [members, setMembers] = useState<Staff[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [archived, setArchived] = useState<Product[]>([]);
@@ -58,7 +58,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         })}
         {!list.length && <tr><td className="muted">{pt('noResults', locale)}</td></tr>}
       </tbody></table>
-      {edit && <ItemEditor boot={boot} locale={locale} index={index} product={edit.p} staff={members} me={staff} onDone={() => { setEdit(null); reindex(); }} onClose={() => setEdit(null)} />}
+      {edit && <ItemEditor key={edit.p?.id ?? `new-${edit.from?.id ?? ''}`} boot={boot} locale={locale} index={index} product={edit.p} template={edit.from ?? null} staff={members} me={staff} onDone={() => { setEdit(null); reindex(); }} onClose={() => setEdit(null)} onCopy={p => setEdit({ p: null, from: p })} />}
       {importOpen && <ImportDialog boot={boot} locale={locale} onDone={reindex} onClose={() => setImportOpen(false)} />}
       {bulkOpen && <BulkDialog boot={boot} sb={sb} locale={locale} index={index} onDone={reindex} onClose={() => setBulkOpen(false)} />}
       {quickOpen && <QuickButtonsEditor boot={boot} sb={sb} locale={locale} index={index} onClose={() => { setQuickOpen(false); boot.engine.poke(); }} />}

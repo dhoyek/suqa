@@ -129,4 +129,11 @@ describe('yorgo on whatsapp', () => {
     expect(heardLine('two bread', 'en')).toBe('🎤 I heard: "two bread"');
     const long = heardLine('ا'.repeat(400), 'ar'); expect(long.length).toBeLessThan(220); expect(long).toContain('…');
   });
+
+  it('what the customer said about an item is kept when Yorgo offers options: stored with the group, and with the item when only one option is left', async () => {
+    const { deps, saved } = rig({ gate: { ok: true, first: false }, replies: [call('draft_basket', { lines: [{ product_id: P1, quantity: 1, note: 'm2atta3' }], choices: [{ phrase: 'pepsi', quantity: 2, options: [P3, P4], note: 'bered' }, { phrase: 'labne', quantity: 1, options: [P2, '00000000-0000-4000-8000-0000000000ff'], note: 'bala zeit' }] }), say('tfaddal.')] });
+    await waTurn(deps, { ...input, text: 'khebez m2atta3 w 2 pepsi bered w labne bala zeit' });
+    expect(saved[0].draft.choices).toEqual([{ phrase: 'pepsi', quantity: 2, options: [P3, P4], note: 'bered' }]);
+    expect(saved[0].draft.lines).toEqual([{ product_id: P1, quantity: 1, note: 'm2atta3' }, { product_id: P2, quantity: 1, note: 'bala zeit' }]);
+  });
 });

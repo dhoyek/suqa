@@ -184,3 +184,8 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 **Not done from the plan:** `lib/yorgo/model.ts` was not moved under `lib/ai/` (no behaviour to gain; chat on another provider is step B2). Audit = `updated_at` / `updated_by` on the route, set by the database.
 
 **Tested:** database test (who reads and writes, no switch without prices, voice provider); 17 new unit tests (cost, Ogg length, limits, fallback, adapter request and answer, the voice turn: paused, too long, silence, provider down). **Not tested:** anything live — no Google key yet, no real voice note, the admin page in a browser, the quality on Lebanese speech (step 6 needs real recordings).
+
+## Item details kept through option groups — 22 Nov 2026 (no script)
+
+- A detail said about an item ("bered", "bala basal") was lost when Yorgo offered options instead of one sure line: `choices` had no note. Now a choices entry carries `note` (tool schema, `runDraft`, `hydrateBasket`, `slimBasket`), the group shows it with 📝, and the picked item takes it into the cart — customer basket card (app chat and the WhatsApp basket link) and the POS panel. When only one option is still on sale, the line that replaces the group keeps the note too.
+- Prompt: one sentence saying what is said about an item is its note, on the line or on the choices entry, never part of the search words.

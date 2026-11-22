@@ -8,9 +8,9 @@ import Modal from './Modal';
 // The assistant never sells: a draft carries item ids and quantities only — names, prices and stock shown here come from the catalog on
 // this device, and the sale itself goes through the cart and the pay dialog like any other. Needs internet; the till works without it.
 export type YorgoCartLine = { product: Product; quantity: number; note?: string };
-type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[] }[]; not_found?: string[] };
+type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[]; note?: string }[]; not_found?: string[] };
 type Line = { key: string; product: Product; quantity: number; note?: string };
-type Choice = { key: string; phrase: string; quantity: number; options: Product[]; picked?: number };
+type Choice = { key: string; phrase: string; quantity: number; options: Product[]; picked?: number; note?: string };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
 type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
 type Sb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>; from: (t: string) => any };   // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -39,8 +39,8 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     (d.lines ?? []).forEach((l, i) => { const p = sellable(l.product_id); if (p) lines.push({ key: `l${i}`, product: p, quantity: l.quantity, note: l.note }); });
     (d.choices ?? []).forEach((c, i) => {
       const options = c.options.map(sellable).filter((p): p is Product => !!p);
-      if (options.length > 1) choices.push({ key: `c${i}`, phrase: c.phrase, quantity: c.quantity, options });
-      else if (options.length === 1) lines.push({ key: `c${i}`, product: options[0], quantity: c.quantity });
+      if (options.length > 1) choices.push({ key: `c${i}`, phrase: c.phrase, quantity: c.quantity, options, note: c.note });      // what the customer said about the item stays with it
+      else if (options.length === 1) lines.push({ key: `c${i}`, product: options[0], quantity: c.quantity, note: c.note });
       else notFound.push(c.phrase);
     });
     return lines.length || choices.length || notFound.length ? { lines, choices, notFound, state: 'open' } : undefined;
@@ -89,8 +89,8 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
   // a pick joins the draft and the OTHER suggestions stay, so a second and a third can be picked from the same group;
   // the group goes when it is empty or closed
   const pickOption = (d: Draft, c: Choice, p: Product): Draft => {
-    const i = d.lines.findIndex(x => x.product.id === p.id && !x.note);
-    const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { key: `${c.key}-${p.id}`, product: p, quantity: c.quantity }];
+    const i = d.lines.findIndex(x => x.product.id === p.id && (x.note ?? '') === (c.note ?? ''));
+    const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { key: `${c.key}-${p.id}`, product: p, quantity: c.quantity, note: c.note }];
     return { ...d, lines, choices: d.choices.map(x => (x.key === c.key ? { ...x, picked: (x.picked ?? 0) + 1, options: x.options.filter(y => y.id !== p.id) } : x)).filter(x => x.options.length) };
   };
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
@@ -169,7 +169,7 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
             ))}
             {m.draft.state === 'open' && m.draft.choices.map(c => (
               <div key={c.key} className="yorgo-choice">
-                <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {pt('yorgoPick', locale)}</span></div>
+                <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity}{c.note ? <> · 📝 <span dir="auto">{c.note}</span></> : null} · {pt('yorgoPick', locale)}</span></div>
                 <div className="yorgo-options">
                   {c.options.map(p => <button key={p.id} className="btn" onClick={() => { learn(p, c.phrase); patch(m.id, d => pickOption(d, c, p)); }}>{text(p.name, locale)} <small className="muted num">{price(p, locale)}</small></button>)}
                   <button className="btn ghost" onClick={() => patch(m.id, d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>{c.picked ? `✓ ${pt('ok', locale)}` : `✕ ${pt('yorgoSkip', locale)}`}</button>

@@ -9,9 +9,9 @@ import { useConfirm } from '@/components/ConfirmProvider';
 type L = 'ar' | 'en';
 export type Item = { product_id: string; name: Record<string, string>; unit: string | null; price_usd: number; days: number[] | null; shop: ShopRef };
 export type Line = Item & { key: string; quantity: number; note?: string };
-export type Choice = { key: string; phrase: string; quantity: number; options: Item[]; picked?: number };
+export type Choice = { key: string; phrase: string; quantity: number; options: Item[]; picked?: number; note?: string };
 export type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
-export type DraftIn = { kind?: string; add?: boolean; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[] }[]; not_found?: string[] };
+export type DraftIn = { kind?: string; add?: boolean; lines?: (Item & { quantity: number; note?: string })[]; choices?: { phrase: string; quantity: number; options: Item[]; note?: string }[]; not_found?: string[] };
 
 const T = {
   draft: { ar: 'سلة مقترحة', en: 'Suggested basket' }, toCart: { ar: 'أضف إلى السلة', en: 'Add to cart' }, discard: { ar: 'تجاهل', en: 'Discard' },
@@ -33,8 +33,8 @@ export function toDraft(d: DraftIn): Draft | undefined {
 // a pick joins the basket and the OTHER suggestions stay, so a second and a third can be picked from the same group
 // (several drinks, several kinds of chips); the group goes when it is empty or closed with "done" / "skip"
 export function pickOption(d: Draft, c: Choice, o: Item): Draft {
-  const i = d.lines.findIndex(x => x.product_id === o.product_id && !x.note);
-  const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { ...o, key: `${c.key}-${o.product_id}`, quantity: c.quantity }];
+  const i = d.lines.findIndex(x => x.product_id === o.product_id && (x.note ?? '') === (c.note ?? ''));      // what was said about the item ("bala basal") goes with the pick
+  const lines = i >= 0 ? d.lines.map((x, n) => (n === i ? { ...x, quantity: x.quantity + c.quantity } : x)) : [...d.lines, { ...o, key: `${c.key}-${o.product_id}`, quantity: c.quantity, ...(c.note ? { note: c.note } : {}) }];
   return { ...d, lines, choices: d.choices.map(x => (x.key === c.key ? { ...x, picked: (x.picked ?? 0) + 1, options: x.options.filter(y => y.product_id !== o.product_id) } : x)).filter(x => x.options.length) };
 }
 
@@ -83,7 +83,7 @@ export default function YorgoBasketCard({ locale, draft, onPatch, onAccept, onLe
       ))}
       {draft.state === 'open' && draft.choices.map(c => (
         <div key={c.key} className="yorgo-choice">
-          <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity} · {t('pick')}</span></div>
+          <div>❓ <strong dir="auto">{c.phrase}</strong> <span className="muted">× {c.quantity}{c.note ? <> · 📝 <span dir="auto">{c.note}</span></> : null} · {t('pick')}</span></div>
           <div className="yorgo-options">
             {c.options.map(o => <button key={o.product_id} className="btn" onClick={() => { onLearn?.(o, c.phrase); onPatch(d => pickOption(d, c, o)); }}>{name(o.name)} <small className="muted">{money(o.price_usd)} · {name(o.shop.name)}</small></button>)}
             <button className="btn ghost" onClick={() => onPatch(d => ({ ...d, choices: d.choices.filter(x => x.key !== c.key) }))}>{c.picked ? `✓ ${t('done')}` : `✕ ${t('skip')}`}</button>

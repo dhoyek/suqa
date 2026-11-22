@@ -56,7 +56,7 @@ const matchItems: Tool = {
 
 // A draft is a proposal, nothing more: it carries item ids and quantities only. Names, prices and stock are filled in by the till from
 // its own catalog, an id the till does not know is dropped there, and nothing is sold until a person confirms it in the cart.
-export type OrderDraft = { lines: { product_id: string; quantity: number; note?: string }[]; choices: { phrase: string; quantity: number; options: string[] }[]; not_found: string[]; add?: boolean };
+export type OrderDraft = { lines: { product_id: string; quantity: number; note?: string }[]; choices: { phrase: string; quantity: number; options: string[]; note?: string }[]; not_found: string[]; add?: boolean };
 const qty = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(999, Math.round(n * 1000) / 1000) : 1; };
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -66,7 +66,7 @@ function runDraft(input: Record<string, unknown>, maxOptions: number): { draft: 
       .filter(l => typeof l.product_id === 'string' && UUID.test(l.product_id))
       .map(l => ({ product_id: (l.product_id as string).toLowerCase(), quantity: qty(l.quantity), ...(str(l.note, 120) ? { note: str(l.note, 120) } : {}) }));
     const choices = (Array.isArray(input.choices) ? input.choices : []).slice(0, 20).map(c => c as Record<string, unknown>)
-      .map(c => ({ phrase: str(c.phrase, 80), quantity: qty(c.quantity), options: [...new Set((Array.isArray(c.options) ? c.options : []).filter((o): o is string => typeof o === 'string' && UUID.test(o)).map(o => o.toLowerCase()))].slice(0, maxOptions) }))
+      .map(c => ({ phrase: str(c.phrase, 80), quantity: qty(c.quantity), options: [...new Set((Array.isArray(c.options) ? c.options : []).filter((o): o is string => typeof o === 'string' && UUID.test(o)).map(o => o.toLowerCase()))].slice(0, maxOptions), ...(str(c.note, 120) ? { note: str(c.note, 120) } : {}) }))
       .filter(c => c.phrase && c.options.length);
     const not_found = (Array.isArray(input.not_found) ? input.not_found : []).map(n => str(n, 80)).filter(Boolean).slice(0, 20);
     if (!lines.length && !choices.length && !not_found.length) throw new Error('empty_draft');
@@ -84,7 +84,7 @@ const draftOrder: Tool = {
       lines: { type: 'array', maxItems: 40, items: { type: 'object', additionalProperties: false, required: ['product_id', 'quantity'], properties: {
         product_id: { type: 'string' }, quantity: { type: 'number', description: 'As the customer asked; 1 when not said.' }, note: { type: 'string', maxLength: 120, description: 'Only what the customer said about this item (sliced, cold…).' } } } },
       choices: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['phrase', 'options'], properties: {
-        phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
+        phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, note: { type: 'string', maxLength: 120, description: 'What the customer said about this item (sliced, cold, no onions…), so it is kept whichever option is picked.' }, options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
       not_found: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
       add: { type: 'boolean', description: 'true = add these items to the draft already open on screen ("zid", "kamen", "add", "also"). Omit for a new order or to replace the draft.' },
     },
@@ -100,7 +100,7 @@ const draftOrder: Tool = {
 // caller's own client, i.e. exactly what the public catalog shows them. An id that is not on sale online is dropped.
 type ShopOut = { id: string; slug: string; name: Record<string, string>; whatsapp: string | null; min_order_usd: number; pickup_enabled: boolean };
 type ItemOut = { product_id: string; name: Record<string, string>; unit: string | null; price_usd: number; days: number[] | null; shop: ShopOut };
-export type BasketDraft = { lines: (ItemOut & { quantity: number; note?: string })[]; choices: { phrase: string; quantity: number; options: ItemOut[] }[]; not_found: string[]; add?: boolean };
+export type BasketDraft = { lines: (ItemOut & { quantity: number; note?: string })[]; choices: { phrase: string; quantity: number; options: ItemOut[]; note?: string }[]; not_found: string[]; add?: boolean };
 
 const draftBasket: Tool = {
   name: 'draft_basket',
@@ -109,7 +109,7 @@ const draftBasket: Tool = {
     + 'Use only product_id values returned by match_items. This does not order anything.',
   input_schema: { ...draftOrder.input_schema, properties: { ...(draftOrder.input_schema.properties as Record<string, unknown>),
     choices: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['phrase', 'options'], properties: {
-      phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, options: { type: 'array', minItems: 2, maxItems: 6, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
+      phrase: { type: 'string', maxLength: 80, description: 'The customer\'s own words for the item.' }, quantity: { type: 'number' }, note: { type: 'string', maxLength: 120, description: 'What the customer said about this item (sliced, cold, no onions…), so it is kept whichever option is picked.' }, options: { type: 'array', minItems: 2, maxItems: 6, items: { type: 'string' }, description: 'Candidate product_id values, best first.' } } } },
   } },
   modes: ['shopper'],
   async run(input, ctx) {
@@ -149,8 +149,9 @@ export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx'>
     const choices: BasketDraft['choices'] = [];
     for (const c of slim.choices) {
       const options = c.options.map(o => found.get(o)).filter((o): o is ItemOut => !!o);
-      if (options.length > 1) choices.push({ phrase: c.phrase, quantity: c.quantity, options });
-      else if (options.length === 1) lines.push({ ...options[0], quantity: c.quantity });
+      const note = c.note ? { note: c.note } : {};                                    // what was said about the item stays with it, whichever option is picked
+      if (options.length > 1) choices.push({ phrase: c.phrase, quantity: c.quantity, options, ...note });
+      else if (options.length === 1) lines.push({ ...options[0], quantity: c.quantity, ...note });
       else not_found.push(c.phrase);
     }
     return { lines, choices, not_found, soldOut: [...soldOut.values()] };
@@ -158,7 +159,7 @@ export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx'>
 
 /** the reverse: what is kept of a basket draft (ids, quantities, notes, the customer's own words) — no names, no prices */
 export function slimBasket(d: Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>): Pick<OrderDraft, 'lines' | 'choices' | 'not_found'> {
-  return { lines: d.lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) })), choices: d.choices.map(c => ({ phrase: c.phrase, quantity: c.quantity, options: c.options.map(o => o.product_id) })), not_found: [...d.not_found] };
+  return { lines: d.lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, ...(l.note ? { note: l.note } : {}) })), choices: d.choices.map(c => ({ phrase: c.phrase, quantity: c.quantity, options: c.options.map(o => o.product_id), ...(c.note ? { note: c.note } : {}) })), not_found: [...d.not_found] };
 }
 
 // Takes the open draft off the screen ("remove the options", "start over"). A new draft_order / draft_basket replaces it anyway.

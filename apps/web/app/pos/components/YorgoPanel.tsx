@@ -46,12 +46,14 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     return lines.length || choices.length || notFound.length ? { lines, choices, notFound, state: 'open' } : undefined;
   };
 
+  // what became of the last suggestion on screen: Yorgo is told, so a discarded (or already added) one does not come back in the next
+  const lastCard = () => [...msgs].reverse().find(x => x.draft)?.draft?.state ?? null;
   const send = async () => {
     const message = input.trim(); if (!message || busy) return;
     if (!online) { push({ from: 'note', text: pt('yorgoOffline', locale) }); return; }
     setInput(''); push({ from: 'me', text: message }); setBusy(true);
     try {
-      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'seller', shop_id: shopId, conversation_id: conv.current, message }) });
+      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'seller', shop_id: shopId, conversation_id: conv.current, message, card: lastCard() }) });
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
       if (r.status === 'ok') {
         conv.current = r.conversation_id;

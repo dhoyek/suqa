@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { askedLanguage, cleanReply, detectScript, isGarbled, isShortNeutral, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { askedLanguage, cardNote, cleanReply, detectScript, isGarbled, isShortNeutral, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
 import { toolsFor } from './tools';
 import { systemPrompt } from './prompts';
@@ -41,6 +41,19 @@ describe('yorgo core', () => {
     expect((r as { cost_usd: number }).cost_usd).toBeCloseTo(each * 2, 6);
     // the second call carries the tool result back, as a user turn
     expect(calls.model[1].messages.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1' }, { type: 'text' }] });   // + the language note
+  });
+
+  it('a discarded or already added suggestion is said to the model for this call only; an open one is not', async () => {
+    for (const [card, word] of [['discarded', 'DISCARDED'], ['added', 'already added'], ['open', null], [null, null]] as const) {
+      const { deps, calls } = rig({ replies: [say('ok')] });
+      await runTurn(deps, { ...base, card });
+      const sent = JSON.stringify(calls.model[0].messages.at(-1));
+      if (word) expect(sent).toContain(word); else expect(sent).not.toContain('suggestion');
+      // what is stored is the person's own words, never the note
+      const rec = calls.adminRpc.find(c => c[0] === 'yorgo_record')![1] as { p_messages: { content: unknown }[] };
+      expect(JSON.stringify(rec.p_messages[0].content)).toBe(JSON.stringify([{ type: 'text', text: base.message }]));
+    }
+    expect(cardNote('open')).toBeNull(); expect(cardNote(undefined)).toBeNull();
   });
 
   it('does not call the model when the gate is closed', async () => {

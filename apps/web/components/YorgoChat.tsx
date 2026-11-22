@@ -38,12 +38,14 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
   if (/^\/(checkout|login|signup)/.test(path)) return null;                 // never in the way of paying or signing in
 
   const push = (m: Omit<Msg, 'id'>) => setMsgs(ms => [...ms, { ...m, id: ++seq.current }]);
+  // what became of the last suggestion on screen: Yorgo is told, so a discarded (or already added) one does not come back in the next
+  const lastCard = () => [...msgs].reverse().find(x => x.draft)?.draft?.state ?? null;
   const send = async () => {
     const message = input.trim(); if (!message || busy) return;
     setInput(''); push({ from: 'me', text: message }); setBusy(true);
     try {
       const slug = path.match(/^\/s\/([^/?#]+)/)?.[1];
-      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'shopper', conversation_id: conv.current, message, ...(slug ? { shop_slug: decodeURIComponent(slug) } : {}) }) });
+      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'shopper', conversation_id: conv.current, message, card: lastCard(), ...(slug ? { shop_slug: decodeURIComponent(slug) } : {}) }) });
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
       if (r.status === 'ok') {
         conv.current = r.conversation_id;

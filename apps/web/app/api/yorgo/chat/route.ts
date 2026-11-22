@@ -18,7 +18,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const body = await req.json().catch(() => ({})) as { mode?: string; shop_id?: string; shop_slug?: string; conversation_id?: string; message?: string };
+  const body = await req.json().catch(() => ({})) as { mode?: string; shop_id?: string; shop_slug?: string; conversation_id?: string; message?: string; card?: string };
   const mode = body.mode === 'seller' ? 'seller' : body.mode === 'shopper' ? 'shopper' : null as Mode | null;
   if (!mode || typeof body.message !== 'string') return NextResponse.json({ error: 'bad_request' }, { status: 400 });
 
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop, shops },
+    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop, shops, card: body.card === 'open' || body.card === 'added' || body.card === 'discarded' ? body.card : null },
   );
   if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 

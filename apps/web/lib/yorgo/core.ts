@@ -18,6 +18,7 @@ export type TurnInput = {
   shopId: string | null; shopName?: string | null; role: Role | null; conversationId: string | null; message: string;
   focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
   shops?: ShopHint[];                                   // shopper mode: the open shops (public), so "min 3end el mir" finds its shop
+  card?: 'open' | 'added' | 'discarded' | null;          // what became of the last suggestion on the person's screen (the app says so): a discarded or added one must not come back
   heard?: { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;      // the message came from a voice note: what turning it into text cost, stored on the person's own line so the caps count it
 };
 export type TurnResult =
@@ -63,7 +64,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }], ...(i.heard ? { model: i.heard.model, cost_usd: i.heard.cost_usd, input_tokens: i.heard.input_tokens, output_tokens: i.heard.output_tokens } : {}) }];
   // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
   // The note travels with this call only; what is stored is the person's own words.
-  const note = languageNote(text, history);
+  const note = [languageNote(text, history), cardNote(i.card)].filter(Boolean).join('\n') || null;
   const model = i.mode === 'shopper' ? d.cfg.modelShopper : d.cfg.modelDefault;      // customers get the stronger model (config.ts)
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
   let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false; const missed: string[] = [];
@@ -124,6 +125,13 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
 }
 
 const MISS_BELOW = 0.45;      // best candidate under this = the person asked for something no shop lists (yorgo_misses)
+/** What became of the last suggestion card. Without this the model only sees its own earlier drafts in the history and keeps
+ *  carrying their items into the next one — also the ones the person threw away (Dan, 22 Nov). Travels with this call only. */
+export function cardNote(card: TurnInput['card']): string | null {
+  if (card === 'discarded') return '(App note — follow it, never mention it: the person DISCARDED your last suggestion. It is gone. Start from nothing: this draft holds only what THIS message asks for. Do not bring back any earlier item unless they name it again now, and do not set add.)';
+  if (card === 'added') return '(App note — follow it, never mention it: your last suggestion was already added to their cart. A new draft holds only what THIS message asks for; do not repeat items that were in it unless they ask for more of them, and do not set add.)';
+  return null;
+}
 const GARBLED_NOTE = '(App note — follow it, never mention it: your last reply came out as broken characters. Write the same answer again in clean text, with no apology.)';
 /** Arabic that came out as mojibake ("Ø§Ù„Ø³Ù„Ø©" for "السلة"): UTF-8 bytes shown as Latin-1. Seen from the model itself (prod, 2026-11-20). */
 const MOJIBAKE = /[ØŲ]|[ÙÚÛ][\u0080-\u00BF\u0152-\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/g;   // Ø / Ų lead almost every broken Arabic letter, whatever the code page

@@ -19,8 +19,8 @@ export function oggSeconds(b: Uint8Array): number | null {
 }
 
 export type VoiceResult =
-  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number }
-  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number }      // silence, noise, music: paid for, nothing to draft
+  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused' }
+  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused' }      // silence, noise, music: paid for, nothing to draft
   | { status: 'too_long' }
   | { status: 'failed'; error: string };
 
@@ -37,7 +37,7 @@ export async function runVoice(route: Route, key: string, audio: Uint8Array, mim
   for (const t of tries) {
     try {
       const h = await transcribe({ key, model: t.model, audio, mime });
-      const cost = voiceCost(route, h.usage); const base = { model: t.model, cost_usd: cost, ...h.usage, ms: now() - t0 };
+      const cost = voiceCost(route, h.usage); const base = { model: t.model, cost_usd: cost, ...h.usage, ms: now() - t0, ...(h.hint ? { hint: h.hint } : {}) };
       // the provider's own count is the last word on length (32 audio tokens a second)
       if (h.usage.audio_tokens > (VOICE_MAX_SECONDS + 10) * 32) return { status: 'too_long' };
       const text = h.text.replace(/\s+/g, ' ').trim();

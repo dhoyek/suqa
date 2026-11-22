@@ -89,6 +89,8 @@ describe('google adapter', () => {
     expect(bodies).toEqual([{ model: 'gemini-3.5-transcribe', store: false, input: [{ type: 'audio', data: 'AA==', mime_type: 'audio/ogg' }], generation_config: { transcription_config: { language_codes: ['ar-EG', 'en-US'] } } }]);
     bodies.length = 0; expect((await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe@ar-EG', fetch: f(true) as never })).text).toBe('بدي سندويش دجاج');
     expect(bodies.map(b => !!b.generation_config)).toEqual([true, false]);
+    expect((await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe@ar-EG', fetch: f(true) as never })).hint).toBe('refused');
+    expect((await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe@ar-EG', fetch: f(false) as never })).hint).toBe('used');
   });
   it('helpers', () => {
     expect(bareMime('audio/ogg; codecs=opus')).toBe('audio/ogg'); expect(bareMime('')).toBe('audio/ogg');

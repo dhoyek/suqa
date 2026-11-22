@@ -203,3 +203,10 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Dev route: `gemini-3.5-transcribe`, fallback `gemini-3.5-flash-lite`, prices 2.00 / 2.00 / 12.00 (route still off on dev). Checked on dev with the Test endpoint and a 2-second tone: answered by the transcription model in 0.7 s, "nothing heard", as it should.
 - Not known yet: its quality on Lebanese speech. Google's transcription page lists Egyptian Arabic (`ar-EG`) as its only Arabic locale. It has a `custom_vocabulary` setting (up to 1,000 terms) that could later carry item and brand names.
 - Prod still runs `gemini-3.5-flash-lite` until this code is released and the route is changed there.
+
+## Voice: language hint for the transcription model — 22 Nov 2026 (no script; on dev, not released)
+
+- Prod, 17:25: two short notes asking for "sandwich djej" came back as French ("Il m'a dit ça touche déjà.", "sans vous juger"); a longer third note was heard right. The dedicated model guesses the language when none is given, and a short note with a French loan word tipped it to French. The long order at 16:28 was heard well by the same model.
+- `lib/ai/google.ts`: the model name on the AI providers page may carry language codes, `gemini-3.5-transcribe@ar-EG,en-US` → `transcription_config.language_codes`. A refused hint is retried without it, and the Test shows "language hint used / refused".
+- Dev (tone test): `@ar-EG` and `@ar-EG,en-US` are both accepted by the provider. Whether the hint fixes short Lebanese notes is NOT verified: no recording here.
+- Seen while reading the conversation: WhatsApp turns cost about $0.04 per model call (16–21k input tokens each, 2–3 calls per message), about $0.06 per message — five times the $0.011 measured in the app. Not looked into yet.

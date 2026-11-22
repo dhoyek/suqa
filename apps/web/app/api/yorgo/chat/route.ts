@@ -5,7 +5,10 @@ import { supabaseServer } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { anthropicClient } from '@/lib/yorgo/model';
 import { yorgoConfig } from '@/lib/yorgo/config';
-import { runTurn } from '@/lib/yorgo/core';
+import { runTurn, type HeardVoice } from '@/lib/yorgo/core';
+import { loadRoute, ROUTE_COLUMNS } from '@/lib/ai/routes';
+import { googleKey } from '@/lib/ai/google';
+import { runVoice, VOICE_MAX_BYTES } from '@/lib/ai/voice';
 import type { Mode, Role } from '@/lib/yorgo/tools';
 import type { ShopHint } from '@/lib/yorgo/prompts';
 
@@ -18,7 +21,16 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const body = await req.json().catch(() => ({})) as { mode?: string; shop_id?: string; shop_slug?: string; conversation_id?: string; message?: string; card?: string };
+  // a voice message from the app arrives as a form (the recording + the same fields); a typed one as JSON
+  type Body = { mode?: string; shop_id?: string; shop_slug?: string; conversation_id?: string; message?: string; card?: string };
+  let body: Body; let clip: Blob | null = null;
+  if ((req.headers.get('content-type') ?? '').startsWith('multipart/form-data')) {
+    const form = await req.formData().catch(() => null);
+    const f = (k: string) => { const v = form?.get(k); return typeof v === 'string' && v ? v : undefined; };
+    body = { mode: f('mode'), shop_id: f('shop_id'), shop_slug: f('shop_slug'), conversation_id: f('conversation_id'), card: f('card'), message: '' };
+    const a = form?.get('audio'); clip = a instanceof Blob && a.size > 0 ? a : null;
+    if (!clip) return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+  } else body = await req.json().catch(() => ({})) as Body;
   const mode = body.mode === 'seller' ? 'seller' : body.mode === 'shopper' ? 'shopper' : null as Mode | null;
   if (!mode || typeof body.message !== 'string') return NextResponse.json({ error: 'bad_request' }, { status: 400 });
 
@@ -49,9 +61,20 @@ export async function POST(req: Request) {
     shops = ((sh as S[] | null) ?? []).map(x => ({ id: x.id, name_ar: x.name?.ar ?? null, name_en: x.name?.en ?? null, known_as: x.known_as, known_as_en: x.known_as_en, about: x.description?.en || x.description?.ar || null }));
   }
 
+  // voice: heard only when the platform switched the 'voice' route on and its key is there (script 100). The recording is read
+  // in memory, sent to be written down after the caps are checked, and dropped: it is never stored.
+  let hear: (() => Promise<HeardVoice>) | undefined;
+  if (clip) {
+    const route = await loadRoute('voice', async t => (await admin.from('yorgo_ai_routes').select(ROUTE_COLUMNS).eq('task', t).maybeSingle()).data as Record<string, unknown> | null);
+    const key = googleKey();
+    if (!route?.enabled || !key) return NextResponse.json({ status: 'voice', reason: 'off' });
+    const audio = clip;
+    hear = async () => (audio.size > VOICE_MAX_BYTES ? { status: 'too_long' } : runVoice(route, key, new Uint8Array(await audio.arrayBuffer()), audio.type || 'audio/webm'));
+  }
+
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, focusShop, shops, card: body.card === 'open' || body.card === 'added' || body.card === 'discarded' ? body.card : null },
+    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, hear, focusShop, shops, card: body.card === 'open' || body.card === 'added' || body.card === 'discarded' ? body.card : null },
   );
   if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 

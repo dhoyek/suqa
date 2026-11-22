@@ -399,3 +399,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 .yorgo-bar { height: 8px; border-radius: 999px; background: #eef0f3; overflow: hidden; }
 .yorgo-bar > div { height: 100%; border-radius: 999px; min-width: 2px; }
+
+/* Yorgo: a voice message being recorded */
+.yorgo-rec { flex: 1; color: #b91c1c; font-size: 14px; animation: pulse 1.6s ease-in-out infinite; }

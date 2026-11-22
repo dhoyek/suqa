@@ -10,7 +10,7 @@ import YorgoBasketCard, { toDraft, useAddBasket, type Draft, type DraftIn, type 
 // public catalog's, filled in on the server with the customer's own access.
 type L = 'ar' | 'en';
 type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
-type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
+type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null; heard?: string } | { status: 'voice'; reason: 'off' | 'too_long' | 'unclear' | 'failed'; conversation_id?: string } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
 
 const T = {
   open: { ar: 'اسأل يورغو', en: 'Ask Yorgo' }, ai: { ar: 'مساعد ذكاء اصطناعي', en: 'AI assistant' },
@@ -22,6 +22,12 @@ const T = {
   off: { ar: 'يورغو غير متاح حالياً.', en: 'Yorgo is not available right now.' }, cap: { ar: 'وصلتَ إلى حدّ يورغو لهذا الشهر. التسوّق يعمل كالعادة.', en: 'You reached Yorgo\'s limit for this month. Shopping works as usual.' },
   rate: { ar: 'رسائل كثيرة بسرعة. انتظر دقيقة ثم جرّب.', en: 'Too many messages too quickly. Wait a minute and try again.' },
   error: { ar: 'لم أستطع الإجابة الآن. جرّب مرة ثانية.', en: 'I could not answer just now. Please try again.' },
+  mic: { ar: 'سجّل طلبك بصوتك', en: 'Say your order' }, stop: { ar: 'إيقاف وإرسال', en: 'Stop and send' }, cancel: { ar: 'إلغاء', en: 'Cancel' },
+  recording: { ar: 'أسجّل… قل طلبك ثم اضغط إرسال', en: 'Recording… say your order, then tap send' },
+  micDenied: { ar: 'لا إذن لاستخدام الميكروفون. اسمح به من إعدادات المتصفح، أو اكتب طلبك.', en: 'The microphone is not allowed. Allow it in the browser settings, or type your order.' },
+  voiceOff: { ar: 'الرسائل الصوتية غير متاحة الآن. اكتب طلبك.', en: 'Voice messages are not available right now. Please type your order.' },
+  voiceLong: { ar: 'الرسالة الصوتية طويلة. سجّل رسالة أقصر (حتى دقيقتين) أو اكتب طلبك.', en: 'That voice message is too long. Record a shorter one (up to 2 minutes) or type your order.' },
+  voiceUnclear: { ar: 'لم أسمع طلباً. جرّب مرة أخرى أو اكتب طلبك.', en: 'I could not hear an order. Try again or type it.' },
   disclaimer: { ar: 'يورغو ذكاء اصطناعي وقد يخطئ. راجِع السلة قبل الطلب؛ الأسماء والأسعار من المتاجر نفسها.', en: 'Yorgo is an AI and can be wrong. Check the basket before ordering; names and prices come from the shops themselves.' },
 } as const;
 
@@ -33,6 +39,10 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState(''); const [busy, setBusy] = useState(false);
   const conv = useRef<string | null>(null); const seq = useRef(0); const endRef = useRef<HTMLDivElement>(null);
+  const [recording, setRecording] = useState(false); const [canRecord, setCanRecord] = useState(false);
+  const rec = useRef<{ mr: MediaRecorder; send: boolean; timer: ReturnType<typeof setTimeout> | null } | null>(null);
+  useEffect(() => { setCanRecord(typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'); }, []);
+  useEffect(() => () => { const r = rec.current; if (r) { r.send = false; try { r.mr.stop(); } catch { /* gone */ } } }, []);      // leaving the page drops a recording in progress
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ block: 'end' }); }, [msgs, busy, open]);
   useEffect(() => { if (!open) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [open]);
   if (/^\/(checkout|login|signup)/.test(path)) return null;                 // never in the way of paying or signing in
@@ -40,15 +50,32 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
   const push = (m: Omit<Msg, 'id'>) => setMsgs(ms => [...ms, { ...m, id: ++seq.current }]);
   // what became of the last suggestion on screen: Yorgo is told, so a discarded (or already added) one does not come back in the next
   const lastCard = () => [...msgs].reverse().find(x => x.draft)?.draft?.state ?? null;
+  const shopSlug = () => { const slug = path.match(/^\/s\/([^/?#]+)/)?.[1]; return slug ? decodeURIComponent(slug) : null; };
   const send = async () => {
     const message = input.trim(); if (!message || busy) return;
     setInput(''); push({ from: 'me', text: message }); setBusy(true);
+    const slug = shopSlug();
+    await deliver(() => fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'shopper', conversation_id: conv.current, message, card: lastCard(), ...(slug ? { shop_slug: slug } : {}) }) }));
+    setBusy(false);
+  };
+  // a voice message: the recording goes with the same fields; the answer comes back with what was heard, shown as the person's own line
+  const sendVoice = async (clip: Blob) => {
+    if (busy) return; setBusy(true);
+    const form = new FormData(); form.append('audio', clip, 'voice'); form.append('mode', 'shopper');
+    if (conv.current) form.append('conversation_id', conv.current);
+    const card = lastCard(); if (card) form.append('card', card);
+    const slug = shopSlug(); if (slug) form.append('shop_slug', slug);
+    await deliver(() => fetch('/api/yorgo/chat', { method: 'POST', body: form }));
+    setBusy(false);
+  };
+  const deliver = async (ask: () => Promise<Response>) => {
     try {
-      const slug = path.match(/^\/s\/([^/?#]+)/)?.[1];
-      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'shopper', conversation_id: conv.current, message, card: lastCard(), ...(slug ? { shop_slug: decodeURIComponent(slug) } : {}) }) });
+      const res = await ask();
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
+      if (r.status === 'voice') { if (r.conversation_id) conv.current = r.conversation_id; push({ from: 'note', text: t(r.reason === 'too_long' ? 'voiceLong' : r.reason === 'unclear' ? 'voiceUnclear' : r.reason === 'off' ? 'voiceOff' : 'error') }); return; }
       if (r.status === 'ok') {
         conv.current = r.conversation_id;
+        if (r.heard) push({ from: 'me', text: `🎤 ${r.heard}` });
         const baskets = (r.drafts ?? []).filter(d => d.kind === 'draft_basket');
         // "add" (zid, kamen): the new items join the basket still open on screen — the card moves down, under the answer
         const stamp = `a${Date.now()}`;
@@ -73,7 +100,26 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
       } else if (r.status === 'paused') push({ from: 'note', text: t(r.reason === 'rate' ? 'rate' : r.reason === 'off' ? 'off' : 'cap') });
       else { if (r.conversation_id) conv.current = r.conversation_id; push({ from: 'note', text: t(r.error === 'unauthorized' ? 'signIn' : 'error') }); }
     } catch { push({ from: 'note', text: t('error') }); }
-    setBusy(false);
+  };
+
+  // recording: the browser's own recorder, kept small (speech does not need more) and stopped by itself at two minutes
+  const stopRec = (sendIt: boolean) => { const r = rec.current; if (!r) return; r.send = sendIt; if (r.timer) clearTimeout(r.timer); try { r.mr.stop(); } catch { /* already stopped */ } };
+  const startRec = async () => {
+    if (busy || rec.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m));
+      const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32000 });
+      const chunks: Blob[] = []; const cur: { mr: MediaRecorder; send: boolean; timer: ReturnType<typeof setTimeout> | null } = { mr, send: false, timer: null };
+      mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(tr => tr.stop()); rec.current = null; setRecording(false);
+        const clip = new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' });
+        if (cur.send && clip.size > 800) void sendVoice(clip);
+      };
+      cur.timer = setTimeout(() => stopRec(true), 120_000);
+      rec.current = cur; mr.start(); setRecording(true);
+    } catch { push({ from: 'note', text: t('micDenied') }); }
   };
 
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
@@ -109,10 +155,16 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
             {busy && <div className="yorgo-msg yorgo typing">…</div>}
             <div ref={endRef} />
           </div>
-          {signedIn && <div className="yorgo-input">
+          {signedIn && recording && <div className="yorgo-input" style={{ alignItems: 'center' }}>
+            <span className="yorgo-rec" aria-live="polite">● {t('recording')}</span>
+            <button className="btn" onClick={() => stopRec(false)} aria-label={t('cancel')}>✕</button>
+            <button className="btn primary" onClick={() => stopRec(true)} aria-label={t('stop')}>↑</button>
+          </div>}
+          {signedIn && !recording && <div className="yorgo-input">
             <textarea className="input" rows={2} dir="auto" maxLength={2000} placeholder={t('placeholder')} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
-            <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={t('send')}>↑</button>
+            {canRecord && !input.trim() ? <button className="btn primary" disabled={busy} onClick={() => void startRec()} aria-label={t('mic')} title={t('mic')}>🎤</button>
+              : <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={t('send')}>↑</button>}
           </div>}
           <p className="yorgo-foot muted">{t('disclaimer')} <a href="/legal/privacy">{locale === 'ar' ? 'الخصوصية' : 'Privacy'}</a></p>
         </div>

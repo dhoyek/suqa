@@ -3,7 +3,7 @@
 // catalog. Nothing is ordered from WhatsApp — the link opens the basket in the app, where the customer orders the usual way.
 // Pure on purpose (no provider, no database client, no network): everything it needs is passed in, so it is tested as is.
 import { toLbp } from '@suqa/shared';
-import { runTurn, type Deps, type Lang, type TurnResult } from './core';
+import { runTurn, type Deps, type HeardVoice, type Lang, type TurnResult } from './core';
 import type { ShopHint } from './prompts';
 import { hydrateBasket, slimBasket, type BasketDraft, type OrderDraft } from './tools';
 
@@ -81,7 +81,7 @@ export async function waTurn(d: WaDeps, i: WaInput): Promise<WaOutcome> {
     if (turn.reason === 'off') return { reply: null, as: 'off', turn };
     return { reply: fill(WA_TEXT[turn.reason === 'rate' ? 'rate' : 'paused'][guess], { site }), as: 'paused', turn };
   }
-  if (turn.status === 'error') return { reply: fill(WA_TEXT.failed[guess], { site }), as: 'error', error: turn.error, turn };
+  if (turn.status === 'error' || turn.status === 'voice') return { reply: fill(WA_TEXT.failed[guess], { site }), as: 'error', error: turn.status === 'error' ? turn.error : turn.reason, turn };      // ('voice' cannot happen here: WhatsApp hears before the turn)
 
   const lang = two(turn.lang); const fx = Number(i.tenant.fx_lbp_rate ?? 0) || null;
   const parts: string[] = []; if (turn.reply) parts.push(turn.reply);
@@ -118,10 +118,7 @@ function joinFull<T extends Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>
 // A voice note is turned into the customer's own words by a second provider, then handled exactly like a typed message.
 // The gate is asked first, so a phone that is paused or over its cap costs nothing. The audio never reaches this file:
 // `hear` is given by the webhook and returns words and cost only. What was heard is shown back, so a mishearing is caught.
-export type HeardVoice =
-  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
-  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
-  | { status: 'too_long' } | { status: 'failed'; error: string };
+export type { HeardVoice } from './core';
 export type WaVoiceOutcome = Omit<WaOutcome, 'turn' | 'as'> & { as: WaOutcome['as'] | 'voice_long' | 'voice_unclear' | 'voice_failed'; heard?: string; turn?: TurnResult };
 const both = (k: 'voiceLong' | 'voiceUnclear' | 'rate' | 'paused', v: Record<string, string> = {}) => `${fill(WA_TEXT[k].ar, v)}\n\n${fill(WA_TEXT[k].en, v)}`;
 /** One line of what was heard, shortened: enough to catch a mishearing, not a transcript to read. */

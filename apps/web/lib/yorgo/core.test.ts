@@ -90,6 +90,34 @@ describe('yorgo core', () => {
     for (const t of ['add a pepsi', 'two bread please']) expect(detectScript(t)).toBeNull();
   });
 
+  it('a voice message from the app: heard only after the caps pass, its words become the message, its cost sits on the person\'s line', async () => {
+    const ok = { status: 'ok' as const, text: ' بدي ربطتين خبز ', model: 'g-voice', cost_usd: 0.002, audio_tokens: 600, text_tokens: 1, output_tokens: 20 };
+    const a = rig({ replies: [say('tfaddal')] }); let n = 0;
+    const r = await runTurn(a.deps, { ...base, message: '', hear: async () => { n++; return ok; } });
+    expect(r).toMatchObject({ status: 'ok', heard: 'بدي ربطتين خبز' }); expect(n).toBe(1);
+    expect(JSON.stringify(a.calls.model[0].messages.at(-1))).toContain('بدي ربطتين خبز'); expect(JSON.stringify(a.calls.model[0].messages.at(-1))).toContain('SPOKEN');
+    const rec = a.calls.adminRpc.find(c => c[0] === 'yorgo_record')![1] as { p_messages: Record<string, unknown>[] };
+    expect(rec.p_messages[0]).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'بدي ربطتين خبز' }], model: 'g-voice', cost_usd: 0.002, input_tokens: 601, output_tokens: 20 });
+    // paused: never heard, nothing spent
+    const b = rig({ gate: { ok: false, reason: 'cap_user' }, replies: [] }); let m = 0;
+    expect(await runTurn(b.deps, { ...base, message: '', hear: async () => { m++; return ok; } })).toEqual({ status: 'paused', reason: 'cap_user' }); expect(m).toBe(0);
+  });
+  it('a voice message that cannot be used: too long and failed cost nothing and draft nothing; silence is recorded with its cost; no model call in any of them', async () => {
+    for (const [h, reason] of [[{ status: 'too_long' as const }, 'too_long'], [{ status: 'failed' as const, error: 'x' }, 'failed']] as const) {
+      const a = rig({ replies: [] });
+      expect(await runTurn(a.deps, { ...base, message: '', hear: async () => h })).toEqual({ status: 'voice', reason });
+      expect(a.calls.model).toHaveLength(0); expect(a.calls.adminRpc.map(c => c[0])).toEqual(['yorgo_gate']);
+    }
+    const s = rig({ replies: [] });
+    const r = await runTurn(s.deps, { ...base, message: '', hear: async () => ({ status: 'nothing', model: 'g-voice', cost_usd: 0.0004, audio_tokens: 100, text_tokens: 1, output_tokens: 0 }) });
+    expect(r).toMatchObject({ status: 'voice', reason: 'unclear' }); expect(s.calls.model).toHaveLength(0);
+    const rec = s.calls.adminRpc.find(c => c[0] === 'yorgo_record')![1] as { p_messages: Record<string, unknown>[] };
+    expect(rec.p_messages).toHaveLength(1); expect(rec.p_messages[0]).toMatchObject({ role: 'user', cost_usd: 0.0004, model: 'g-voice' });
+    const t = rig({ replies: [] });
+    expect(await runTurn(t.deps, { ...base, message: '', hear: async () => { throw new Error('boom'); } })).toEqual({ status: 'voice', reason: 'failed' });
+    expect(await runTurn(rig({ replies: [] }).deps, { ...base, message: '  ' })).toEqual({ status: 'error', error: 'empty_message' });
+  });
+
   it('does not call the model when the gate is closed', async () => {
     for (const reason of ['off', 'rate', 'cap_shop', 'cap_global'] as const) {
       const { deps, calls } = rig({ gate: { ok: false, reason }, replies: [say('x')] });

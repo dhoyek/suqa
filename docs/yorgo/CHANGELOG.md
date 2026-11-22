@@ -232,3 +232,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Prompt: "asde / 2asde / قصدي" = "I mean" (a correction), not a price question ("asde tawouk bil 3ajin" was answered with a price).
 - `detectScript`: more Arabizi markers (zid, zedle, shil, asde, we7de, sa7en…): "zedle pepsi" was answered in English.
 - Not built: giving the transcription model the shops' item words (`custom_vocabulary`), which attacks the mishearing itself.
+
+## Voice messages in the app chat — 23 Nov 2026 (no script)
+
+- Customer chat: when the box is empty the send button is a 🎤. Recording uses the browser's own recorder (32 kbit/s, stops by itself at 2 minutes), then the clip goes to `/api/yorgo/chat` as a form; the answer comes back with what was heard, shown as the customer's own line ("🎤 …"), then the usual reply and basket card.
+- Server: `runTurn` takes `hear()` and calls it AFTER the switches and caps, so a paused customer costs nothing; the words become the message and the transcription's cost sits on the customer's line. Same voice route and key as WhatsApp (script 100); when the route is off the chat says voice is not available. The audio is never stored.
+- Formats: Chrome records WebM/Opus, Safari MP4. Both were sent from a real browser on dev to the transcription model through the Test endpoint (a 2-second tone) and accepted.
+- Not tested: a real voice on a real phone (microphone permission, iPhone Safari), and the whole chat path with audio.
+- Prod data (Dan's approval): Furn El Dayaa's "Pepsi / Mirinda / 7UP" is now three items (the old one renamed Pepsi; Mirinda and 7UP added at the same price).

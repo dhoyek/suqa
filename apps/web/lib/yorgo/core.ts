@@ -19,18 +19,26 @@ export type TurnInput = {
   focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
   shops?: ShopHint[];                                   // shopper mode: the open shops (public), so "min 3end el mir" finds its shop
   card?: 'open' | 'added' | 'discarded' | null;          // what became of the last suggestion on the person's screen (the app says so): a discarded or added one must not come back
+  hear?: () => Promise<HeardVoice>;                       // a voice message from the app: called AFTER the switches and caps, so a paused person costs nothing; its words become the message
   heard?: { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;      // the message came from a voice note: what turning it into text cost, stored on the person's own line so the caps count it
 };
 export type TurnResult =
-  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[]; first?: boolean; lang: Lang }
+  | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[]; first?: boolean; lang: Lang; heard?: string }
   | { status: 'paused'; reason: 'off' | 'rate' | 'cap_global' | 'cap_shop' | 'cap_user' }
+  | { status: 'voice'; reason: 'too_long' | 'unclear' | 'failed'; conversation_id?: string }      // a voice message that could not be used: nothing was drafted
   | { status: 'error'; error: string; conversation_id?: string };
+
+/** What turning a voice message into words gave: the words and what it cost, or why there are none. The audio never comes here. */
+export type HeardVoice =
+  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
+  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
+  | { status: 'too_long' } | { status: 'failed'; error: string };
 
 type Stored = { role: 'user' | 'assistant' | 'tool'; content: Block[]; model?: string; cost_usd?: number } & Partial<Usage>;
 
 export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
-  const text = i.message.trim().slice(0, d.cfg.maxMessageChars);
-  if (!text) return { status: 'error', error: 'empty_message' };
+  let text = i.message.trim().slice(0, d.cfg.maxMessageChars);
+  if (!text && !i.hear) return { status: 'error', error: 'empty_message' };
   if (i.mode === 'seller' && (!i.shopId || !i.role)) return { status: 'error', error: 'not_staff' };
 
   // 1. switches, rate, caps — before a single token is spent
@@ -41,6 +49,24 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const g = (gate.data ?? {}) as { ok?: boolean; reason?: string; history_turns?: number; conversation_id?: string | null; first?: boolean };
   if (gate.error) return { status: 'error', error: 'gate_failed' };
   if (!g.ok) return { status: 'paused', reason: (g.reason as 'off') ?? 'off' };
+
+  // 1b. a voice message: its words, now that we know the person may talk to Yorgo
+  let heard = i.heard ?? null;
+  if (i.hear) {
+    const h = await i.hear().catch(e => ({ status: 'failed' as const, error: (e as Error).message }));
+    if (h.status === 'too_long') return { status: 'voice', reason: 'too_long' };
+    if (h.status === 'failed') return { status: 'voice', reason: 'failed' };
+    const paid = { model: h.model, cost_usd: h.cost_usd, input_tokens: h.audio_tokens + h.text_tokens, output_tokens: h.output_tokens };
+    if (h.status === 'nothing') {
+      // nothing to draft, but it was paid for: one line in the person's conversation so the caps count it
+      const line = [{ role: 'user', content: [{ type: 'text', text: '🎤 (voice note: no words heard)' }], ...paid }];
+      const r = wa ? await d.admin.rpc('yorgo_record_wa', { p_conversation: g.conversation_id ?? null, p_tenant: i.tenant.id, p_phone: wa, p_messages: line })
+        : await d.admin.rpc('yorgo_record', { p_conversation: i.conversationId, p_tenant: i.tenant.id, p_user: i.userId, p_mode: i.mode, p_shop: i.shopId, p_channel: i.channel, p_messages: line, p_summary: null });
+      return { status: 'voice', reason: 'unclear', ...(typeof r.data === 'string' ? { conversation_id: r.data } : {}) };
+    }
+    text = h.text.trim().slice(0, d.cfg.maxMessageChars); heard = paid;
+    if (!text) return { status: 'voice', reason: 'unclear' };
+  }
 
   // 2. history, read with the caller's own token: a conversation that is not theirs simply comes back empty and a new one starts
   let conversationId = wa ? (g.conversation_id ?? null) : i.conversationId;      // WhatsApp: the phone's latest conversation, as the gate found it
@@ -61,10 +87,10 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const tools = toolsFor(i.mode, i.role);
   const ctx: ToolCtx = { sb: d.sb, tenantId: i.tenant.id, mode: i.mode, shopId: i.shopId, role: i.role, fx: Number(i.tenant.fx_lbp_rate ?? 0) || null };
   const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null, shops: i.mode === 'shopper' ? i.shops : undefined });
-  const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }], ...(i.heard ? { model: i.heard.model, cost_usd: i.heard.cost_usd, input_tokens: i.heard.input_tokens, output_tokens: i.heard.output_tokens } : {}) }];
+  const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }], ...(heard ? { model: heard.model, cost_usd: heard.cost_usd, input_tokens: heard.input_tokens, output_tokens: heard.output_tokens } : {}) }];
   // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
   // The note travels with this call only; what is stored is the person's own words.
-  const note = [languageNote(text, history), cardNote(i.card), i.heard ? VOICE_NOTE : null].filter(Boolean).join('\n') || null;
+  const note = [languageNote(text, history), cardNote(i.card), heard ? VOICE_NOTE : null].filter(Boolean).join('\n') || null;
   const model = i.mode === 'shopper' ? d.cfg.modelShopper : d.cfg.modelDefault;      // customers get the stronger model (config.ts)
   const messages: Turn[] = [...history, { role: 'user', content: [{ type: 'text', text }, ...(note ? [{ type: 'text' as const, text: note }] : [])] }];
   let reply = ''; let failure: string | null = null; let cost = 0; const drafts: unknown[] = []; let retried = false; const missed: string[] = [];
@@ -121,7 +147,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const id = typeof rec.data === 'string' ? rec.data : conversationId;
   if (rec.error || !id) return { status: 'error', error: 'record_failed' };
   if (failure || (!reply && !drafts.length)) return { status: 'error', error: failure ?? 'no_reply', conversation_id: id };
-  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6, missed, lang: replyLanguage(text, history), ...(wa ? { first: g.first === true } : {}) };
+  return { status: 'ok', conversation_id: id, reply, drafts, cost_usd: Math.round(cost * 1e6) / 1e6, missed, lang: replyLanguage(text, history), ...(wa ? { first: g.first === true } : {}), ...(i.hear ? { heard: text } : {}) };
 }
 
 const MISS_BELOW = 0.45;      // best candidate under this = the person asked for something no shop lists (yorgo_misses)

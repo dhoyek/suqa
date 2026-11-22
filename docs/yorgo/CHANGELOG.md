@@ -195,3 +195,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Dan's report: after "tajehol" (discard) on a suggested basket, the next request brought the discarded items back. Cause: the model sees its own earlier drafts in the conversation and did not know the card was thrown away, so it carried their items into the next draft.
 - Fix: the app chat and the POS panel send what became of the last card (`open` / `added` / `discarded`); for a discarded or added card the model gets a note for that call only (`cardNote` in `core.ts`): start from nothing, only what this message asks for, no `add`. Nothing of the note is stored.
 - Not covered: the WhatsApp basket link. "Discard" on that page is not known to the server, so a later "zid …" on WhatsApp still joins the last basket sent. Needs a small script (a `discarded_at` on `yorgo_drafts`).
+
+## Voice: trying the dedicated transcription model — 22 Nov 2026 (no script)
+
+- First real voice notes on prod (Dan, `gemini-3.5-flash-lite`): heard and answered, about $0.0004 each, but uneven on Lebanese speech — the same order sent twice came out as "أربع أواق لحمة … اثنين Laban Up دايت" and as "أروبة لحمة … وتناسين آب دايت".
+- `gemini-3.5-transcribe` needs a different request: the audio alone. It answered 400 to a thinking level, then to the instruction ("Developer instruction is not enabled for this model"). `lib/ai/google.ts` now sends a model whose name contains "transcribe" only `{ model, store:false, input:[audio] }`; a general model keeps the instruction, and a refused thinking level is retried lower (minimal → low → none).
+- Dev route: `gemini-3.5-transcribe`, fallback `gemini-3.5-flash-lite`, prices 2.00 / 2.00 / 12.00 (route still off on dev). Checked on dev with the Test endpoint and a 2-second tone: answered by the transcription model in 0.7 s, "nothing heard", as it should.
+- Not known yet: its quality on Lebanese speech. Google's transcription page lists Egyptian Arabic (`ar-EG`) as its only Arabic locale. It has a `custom_vocabulary` setting (up to 1,000 terms) that could later carry item and brand names.
+- Prod still runs `gemini-3.5-flash-lite` until this code is released and the route is changed there.

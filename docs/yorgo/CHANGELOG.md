@@ -167,3 +167,20 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Storefront: the home search and a shop's search box record the words 2 s after typing stops (`lib/search-note.ts`); words carried from the home page into a shop are not counted twice.
 - Privacy page: the association now sees the items asked for or searched, with the person — still not the text of messages. Decided by Dan (names / phone numbers, searches counted).
 - Not tested in a browser. The AI providers table moves to script 100.
+
+## Step B1 + W2 — AI providers table and voice notes on WhatsApp (script 100) — 22 Nov 2026
+
+**Built (on dev; script 100 not applied until approved; voice is OFF until the route is priced and switched on)**
+
+- `supabase/schema/100_yorgo_ai_routes.sql` + test: `yorgo_ai_routes`, platform admins only.
+- `apps/web/lib/ai/`: `routes.ts` (route, cost from the route's prices, 60 s cache), `google.ts` (Gemini **Interactions API**, `store:false`, audio inline, key in the header — as documented on 22 Nov 2026), `voice.ts` (`runVoice`: 2 min / 2 MB limit read from the Ogg file itself, fallback model once, silence = "nothing").
+- `lib/yorgo/whatsapp.ts`: `waVoiceTurn` — gate first (a paused phone costs nothing), then hear, then the same turn as a typed message; the reply starts with "🎤 I heard: …". The transcription's cost is stored on the customer's own line (`TurnInput.heard`), so the caps count it. Silence is recorded as one costed line and answered without drafting.
+- Webhook: an `audio` message is heard when the `voice` route is on and `GOOGLE_AI_API_KEY` is set; otherwise the "text only" line as before. `waDownloadMedia` reads the file from Meta into memory (our token only goes to Meta's hosts). The audio is never stored.
+- Admin → Yorgo → "AI providers" (platform admin only): model, fallback, prices, on/off, and a Test that runs a clip on the saved model and shows the words, the time and the cost.
+- Privacy page: voice notes go to Google only to be turned into text; the recording is not kept.
+
+**Decisions taken as proposed in the plan:** voice on Google, chat stays on Claude (the `chat` row is a record only); 2 minutes; "what I heard" shown; audio never stored; providers page for the platform admin only. Wording of the three new lines is in `WA_TEXT` (`voiceLong`, `voiceUnclear`, `heard`).
+
+**Not done from the plan:** `lib/yorgo/model.ts` was not moved under `lib/ai/` (no behaviour to gain; chat on another provider is step B2). Audit = `updated_at` / `updated_by` on the route, set by the database.
+
+**Tested:** database test (who reads and writes, no switch without prices, voice provider); 17 new unit tests (cost, Ogg length, limits, fallback, adapter request and answer, the voice turn: paused, too long, silence, provider down). **Not tested:** anything live — no Google key yet, no real voice note, the admin page in a browser, the quality on Lebanese speech (step 6 needs real recordings).

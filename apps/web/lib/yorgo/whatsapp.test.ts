@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { yorgoConfig } from './config';
 import type { ModelResponse } from './model';
-import { mergeSlim, waKind, waSummary, waTextOnly, waTurn, WA_TEXT, type Slim, type WaDeps } from './whatsapp';
+import { heardLine, mergeSlim, waKind, waSummary, waTextOnly, waTurn, waVoiceTurn, WA_TEXT, type HeardVoice, type Slim, type WaDeps } from './whatsapp';
 
 const usage = { input_tokens: 1000, output_tokens: 100, cache_read_tokens: 0, cache_write_tokens: 0 };
 const say = (text: string): ModelResponse => ({ content: [{ type: 'text', text }], stop: 'end', usage });
@@ -78,11 +78,55 @@ describe('yorgo on whatsapp', () => {
   });
 
   it('kinds, the text-only line, the merge and the summary on their own', () => {
-    expect([waKind('text'), waKind('audio'), waKind('image'), waKind('sticker'), waKind('reaction'), waKind('interactive'), waKind('location')]).toEqual(['text', 'unsupported', 'unsupported', 'unsupported', 'silent', 'silent', 'silent']);
+    expect([waKind('text'), waKind('audio'), waKind('image'), waKind('sticker'), waKind('reaction'), waKind('interactive'), waKind('location')]).toEqual(['text', 'voice', 'unsupported', 'unsupported', 'silent', 'silent', 'silent']);
     expect(waTextOnly()).toContain('text messages only'); expect(waTextOnly()).toContain('الرسائل المكتوبة');
     expect(mergeSlim({ lines: [{ product_id: 'a', quantity: 1, note: 'x' }], choices: [], not_found: [] }, { lines: [{ product_id: 'a', quantity: 1 }], choices: [], not_found: [] }).lines).toHaveLength(2);   // a note makes it its own line
     const it = (id: string, s: string, usd: number, q: number) => ({ product_id: id, name: { ar: id }, unit: null, price_usd: usd, days: null, quantity: q, shop: { id: s, slug: s, name: { ar: s, en: s }, whatsapp: null, min_order_usd: 0, pickup_enabled: true } });
     expect(waSummary({ lines: [it('a', 's1', 1, 2), it('b', 's2', 2.5, 1)], choices: [], not_found: [] }, 'en', null)).toBe('2 shops · 2 items · $4.50');
     expect(waSummary({ lines: [], choices: [{ phrase: 'x', quantity: 1, options: [] }], not_found: [] }, 'arabizi', 90000)).toBe('1 للاختيار');
+  });
+
+  // ── voice notes (W2) ──
+  const vin = { tenant: input.tenant, phone: input.phone, site: input.site };
+  const ok = (text: string): HeardVoice => ({ status: 'ok', text, model: 'g-voice', cost_usd: 0.0012, audio_tokens: 640, text_tokens: 120, output_tokens: 30 });
+  it('a voice note is heard, then handled as a typed message: what was heard comes first, and its cost sits on the customer\'s line', async () => {
+    const { deps, admin, saved } = rig({ replies: [call('draft_basket', { lines: [{ product_id: P1, quantity: 2 }] }), say('جهّزت لك السلة.')] });
+    const r = await waVoiceTurn({ ...deps, hear: async () => ok('بدي ربطتين خبز') }, vin);
+    expect(r.as).toBe('yorgo'); expect(r.heard).toBe('بدي ربطتين خبز'); expect(saved).toHaveLength(1);
+    expect(r.reply!.startsWith('🎤 سمعت: «بدي ربطتين خبز»\n\nجهّزت لك السلة.')).toBe(true);
+    expect(admin.map(c => c[0])).toEqual(['yorgo_gate_wa', 'yorgo_gate_wa', 'yorgo_record_wa']);
+    const first = (admin[2][1].p_messages as Record<string, unknown>[])[0];
+    expect(first).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'بدي ربطتين خبز' }], model: 'g-voice', cost_usd: 0.0012, input_tokens: 760, output_tokens: 30 });
+    expect(r.cost_usd).toBeGreaterThan(0.0012);
+  });
+  it('paused, over the cap or off: nothing is heard, nothing is spent', async () => {
+    for (const [reason, as] of [['cap_user', 'paused'], ['rate', 'paused'], ['off', 'off']] as const) {
+      let heard = 0; const { deps, admin } = rig({ gate: { ok: false, reason }, replies: [] });
+      const r = await waVoiceTurn({ ...deps, hear: async () => { heard++; return ok('x'); } }, vin);
+      expect(r.as).toBe(as); expect(heard).toBe(0); expect(admin.map(c => c[0])).toEqual(['yorgo_gate_wa']);
+      if (reason === 'off') expect(r.reply).toBeNull(); else expect(r.reply).toContain(reason === 'rate' ? WA_TEXT.rate.en : 'https://m.example');
+    }
+  });
+  it('too long: asked for a shorter one, in both languages, and no drafting', async () => {
+    const { deps, admin } = rig({ replies: [] });
+    const r = await waVoiceTurn({ ...deps, hear: async () => ({ status: 'too_long' }) }, vin);
+    expect(r.as).toBe('voice_long'); expect(r.reply).toBe(`${WA_TEXT.voiceLong.ar}\n\n${WA_TEXT.voiceLong.en}`); expect(admin.map(c => c[0])).toEqual(['yorgo_gate_wa']);
+  });
+  it('silence or noise: said so, no drafting, and the transcription that was paid for is recorded', async () => {
+    const { deps, admin } = rig({ gate: { ok: true, conversation_id: 'conv-0', first: false }, replies: [] });
+    const r = await waVoiceTurn({ ...deps, hear: async () => ({ status: 'nothing', model: 'g-voice', cost_usd: 0.0004, audio_tokens: 300, text_tokens: 120, output_tokens: 4 }) }, vin);
+    expect(r.as).toBe('voice_unclear'); expect(r.reply).toContain(WA_TEXT.voiceUnclear.ar);
+    expect(admin.map(c => c[0])).toEqual(['yorgo_gate_wa', 'yorgo_record_wa']);
+    expect(admin[1][1]).toMatchObject({ p_conversation: 'conv-0', p_phone: '+96170000001' });
+    expect((admin[1][1].p_messages as Record<string, unknown>[])[0]).toMatchObject({ role: 'user', cost_usd: 0.0004, model: 'g-voice' });
+  });
+  it('the provider is down: the "text only" line, nothing recorded', async () => {
+    const { deps, admin } = rig({ replies: [] });
+    const r = await waVoiceTurn({ ...deps, hear: async () => { throw new Error('voice_http_503'); } }, vin);
+    expect(r.as).toBe('voice_failed'); expect(r.reply).toBe(waTextOnly()); expect(r.error).toBe('voice_http_503'); expect(admin.map(c => c[0])).toEqual(['yorgo_gate_wa']);
+  });
+  it('what was heard is one line: a long note is shortened; English gets the English line', () => {
+    expect(heardLine('two bread', 'en')).toBe('🎤 I heard: "two bread"');
+    const long = heardLine('ا'.repeat(400), 'ar'); expect(long.length).toBeLessThan(220); expect(long).toContain('…');
   });
 });

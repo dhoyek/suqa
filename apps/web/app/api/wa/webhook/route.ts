@@ -1,5 +1,5 @@
 import { NextResponse, after } from 'next/server';
-import { waVerifySignature, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
+import { waVerifySignature, waSendText, waSendTemplate, waDownloadMedia } from '@/lib/server/whatsapp';
 import { orderMessageTpl, tplComponents } from '@/lib/server/wa-messages';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
@@ -8,7 +8,10 @@ import { getTenantOrNull } from '@/lib/tenant';
 import { createClient } from '@supabase/supabase-js';
 import { anthropicClient } from '@/lib/yorgo/model';
 import { yorgoConfig } from '@/lib/yorgo/config';
-import { waKind, waTextOnly, waTurn, type Slim } from '@/lib/yorgo/whatsapp';
+import { waKind, waTextOnly, waTurn, waVoiceTurn, type Slim, type WaDeps } from '@/lib/yorgo/whatsapp';
+import { loadRoute, ROUTE_COLUMNS } from '@/lib/ai/routes';
+import { googleKey } from '@/lib/ai/google';
+import { runVoice, VOICE_MAX_BYTES } from '@/lib/ai/voice';
 import type { ShopHint } from '@/lib/yorgo/prompts';
 
 export const runtime = 'nodejs';
@@ -23,7 +26,7 @@ export async function GET(req: Request) {
 }
 
 type Status = { id: string; status: string; recipient_id: string; errors?: { code?: number; title?: string }[] };
-type Msg = { id: string; from: string; type: string; timestamp?: string; text?: { body: string }; context?: { id?: string }; button?: { text?: string }; location?: { latitude: number; longitude: number; name?: string; address?: string } };
+type Msg = { id: string; from: string; type: string; timestamp?: string; text?: { body: string }; context?: { id?: string }; button?: { text?: string }; location?: { latitude: number; longitude: number; name?: string; address?: string }; audio?: { id?: string; mime_type?: string; voice?: boolean } };
 
 // Incoming events: delivery statuses for our sends, and messages from customers / shops.
 // A message that quotes one of our order messages — or comes from a phone with exactly one open order — is attached to
@@ -151,8 +154,12 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
     await logWaMessage({ wamid: r.messages?.[0]?.id ?? `yorgo-${m.id}`, tenant_id: tenant!.id, direction: 'out', party: 'customer', phone: from, phone_number_id: phoneNumberId, body, status: 'sent' });
   };
 
-  if (kind === 'unsupported') {
-    // a voice note or a photo: one line saying text only — when Yorgo is on here, and at most once an hour per phone
+  // a voice note is heard when the platform switched the 'voice' route on (script 100) and its key is there; otherwise it gets the "text only" line
+  const voiceRoute = kind === 'voice' && m.audio?.id ? await loadRoute('voice', async t => (await admin.from('yorgo_ai_routes').select(ROUTE_COLUMNS).eq('task', t).maybeSingle()).data as Record<string, unknown> | null) : null;
+  const voiceKey = googleKey();
+  const hears = !!(voiceRoute?.enabled && voiceKey);
+  if (kind === 'unsupported' || (kind === 'voice' && !hears)) {
+    // a photo, or a voice note we cannot hear: one line saying text only — when Yorgo is on here, and at most once an hour per phone
     const { data: s } = await admin.from('yorgo_settings').select('enabled,shopper_enabled,whatsapp_enabled').eq('tenant_id', tenant.id).maybeSingle();
     if (!s?.enabled || !s.shopper_enabled || !s.whatsapp_enabled) return 'off';
     const { count } = await admin.from('wa_inbox').select('wamid', { count: 'exact', head: true }).eq('phone', from).eq('handled_as', 'unsupported').gt('handled_at', new Date(Date.now() - 3600_000).toISOString());
@@ -167,16 +174,25 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
   type S = { id: string; name: { ar?: string; en?: string } | null; known_as: string | null; known_as_en: string | null; description: { ar?: string; en?: string } | null };
   const shops: ShopHint[] = ((sh as S[] | null) ?? []).map(x => ({ id: x.id, name_ar: x.name?.ar ?? null, name_en: x.name?.en ?? null, known_as: x.known_as, known_as_en: x.known_as_en, about: x.description?.en || x.description?.ar || null }));
 
-  const out = await waTurn({
+  const deps: WaDeps = {
     model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => pub.rpc(fn, args), from: t => pub.from(t) as never },
     drafts: {
       latest: async conv => { const { data } = await admin.from('yorgo_drafts').select('draft').eq('conversation_id', conv).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(); return (data?.draft as Slim | undefined) ?? null; },
       save: async (conv, phone, draft) => { const { data, error } = await admin.rpc('yorgo_draft_save', { p_tenant: tenant!.id, p_conversation: conv, p_phone: phone, p_draft: draft }); return error || typeof data !== 'string' ? null : data; },
     },
-  }, { tenant, phone: from, text: m.text?.body ?? '', site: ctx.site, shops });
+  };
+  const out = kind === 'voice'
+    ? await waVoiceTurn({ ...deps, hear: async () => {
+        // the audio lives in memory for this call only: downloaded from Meta, sent to be written down, dropped
+        const media = await waDownloadMedia(m.audio!.id!, VOICE_MAX_BYTES, phoneNumberId ?? null);
+        if (!media) return { status: 'failed', error: 'media_unavailable' };
+        if ('tooBig' in media) return { status: 'too_long' };
+        return runVoice(voiceRoute!, voiceKey!, media.bytes, media.mime);
+      } }, { tenant, phone: from, site: ctx.site, shops })
+    : await waTurn(deps, { tenant, phone: from, text: m.text?.body ?? '', site: ctx.site, shops });
   if (out.reply) await say(out.reply);
   // asked for and not found, as counted phrases only (script 78), like the app chat
-  if (out.turn.status === 'ok') {
+  if (out.turn?.status === 'ok') {
     const missed = [...new Map([...(out.turn.drafts as { not_found?: string[] }[]).flatMap(d => d.not_found ?? []), ...out.turn.missed].map(x => [x.trim().toLowerCase(), x.trim()])).values()].filter(x => x && !x.endsWith('(غير متوفر الآن)')).slice(0, 20);
     if (missed.length) await admin.rpc('yorgo_miss', { p_tenant: tenant.id, p_shop: null, p_phrases: missed }).then(() => null, () => null);
   }

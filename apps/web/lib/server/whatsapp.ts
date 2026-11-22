@@ -31,6 +31,23 @@ async function waPost(payload: Record<string, unknown>, from?: string | null) {
   return json as { messages?: { id: string }[] };
 }
 
+/** An inbound media file (a voice note), read into memory: Meta gives a short-lived URL for the media id, then the bytes — both with our token.
+ *  Nothing is written anywhere. null when Meta has no such file; `tooBig` when it is larger than `maxBytes` (it is then not downloaded). */
+export async function waDownloadMedia(mediaId: string, maxBytes: number, from?: string | null): Promise<{ bytes: Uint8Array; mime: string } | { tooBig: true } | null> {
+  if (!waConfigured() || !/^[\w-]{1,120}$/.test(mediaId)) return null;
+  const auth = { authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` };
+  const meta = await fetch(`${GRAPH}/${mediaId}${from ? `?phone_number_id=${encodeURIComponent(from)}` : ''}`, { headers: auth, signal: AbortSignal.timeout(10_000) });
+  if (!meta.ok) return null;
+  const j = await meta.json().catch(() => ({})) as { url?: string; mime_type?: string; file_size?: number | string };
+  if (!j.url || !/^https:\/\/[\w.-]+\.(fbcdn\.net|facebook\.com|fbsbx\.com|whatsapp\.net)\//.test(j.url)) return null;      // our token only ever goes to Meta
+  if (Number(j.file_size ?? 0) > maxBytes) return { tooBig: true };
+  const res = await fetch(j.url, { headers: auth, signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > maxBytes) return { tooBig: true };
+  return { bytes, mime: j.mime_type || res.headers.get('content-type') || 'audio/ogg' };
+}
+
 /** Validate Meta's webhook signature. Returns true when no app secret is configured yet (dev), with a console warning. */
 export function waVerifySignature(rawBody: string, header: string | null): boolean {
   const secret = process.env.WHATSAPP_APP_SECRET;

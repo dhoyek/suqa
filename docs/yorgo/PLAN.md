@@ -374,6 +374,8 @@ audio message ─► webhook (once-only, as W1) ─► after Meta's 200:
 | 5 | Voice on WhatsApp | `lib/server/whatsapp.ts` (media download), `lib/yorgo/whatsapp.ts` (`waVoiceTurn`), webhook | unit tests (too long, empty, provider down, cap); end to end on dev needs **your voice notes** |
 | 6 | Quality report | `docs/yorgo/voice-cases/` (your recordings stay out of the repo; only transcripts and results) | at least 10 real Lebanese voice orders: transcript quality and correct-draft rate, in the CHANGELOG |
 
+> **22 Nov: steps 1, 3, 4 and 5 are built on dev (see CHANGELOG). The script as built is `supabase/schema/100_yorgo_ai_routes.sql` (the text below plus the who-changed-it stamp and the voice-provider check). Open: your key, the prices, the live test, step 6.**
+
 ## Database — script 100 (not applied until "approve 100"; 99 was taken by the demand report)
 
 ```sql

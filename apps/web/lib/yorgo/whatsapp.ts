@@ -18,6 +18,9 @@ export const WA_TEXT = {
   paused: { ar: 'المساعد متوقف مؤقتاً. يمكنك الطلب مباشرة من التطبيق: {site}', en: 'The assistant is paused for now. You can order directly in the app: {site}' },
   rate: { ar: 'لحظة من فضلك، ثم أرسل رسالتك من جديد.', en: 'One moment please, then send your message again.' },
   textOnly: { ar: 'حالياً أقرأ الرسائل المكتوبة فقط. اكتب لي ما تريد طلبه وأجهّز لك السلة.', en: "For now I read text messages only. Write what you would like to order and I'll prepare your basket." },
+  voiceLong: { ar: 'الرسالة الصوتية طويلة. أرسل رسالة أقصر (حتى دقيقتين) أو اكتب طلبك.', en: 'That voice note is too long. Send a shorter one (up to 2 minutes) or type your order.' },
+  voiceUnclear: { ar: 'لم أسمع طلباً في الرسالة الصوتية. جرّب مرة أخرى أو اكتب طلبك.', en: 'I could not hear an order in that voice note. Try again or type it.' },
+  heard: { ar: '🎤 سمعت: «{text}»', en: '🎤 I heard: "{text}"' },
   failed: { ar: 'عذراً، حصل خطأ. جرّب مرة أخرى، أو اطلب من التطبيق: {site}', en: 'Sorry, something went wrong. Try again, or order in the app: {site}' },
   items: { ar: 'صنف', en: 'items' }, choose: { ar: 'للاختيار', en: 'to choose' }, missing: { ar: 'غير موجود', en: 'not found' }, shops: { ar: 'متاجر', en: 'shops' },
 } as const;
@@ -26,10 +29,11 @@ const fill = (s: string, v: Record<string, string>) => s.replace(/\{(\w+)\}/g, (
 /** No text to tell the language from (a voice note, a photo): both, in one message. */
 export const waTextOnly = () => `${WA_TEXT.textOnly.ar}\n\n${WA_TEXT.textOnly.en}`;
 
-/** Message kinds: 'text' goes to Yorgo; these get the "text only" line; everything else (reactions, buttons, system…) stays silent. */
-export function waKind(type: string): 'text' | 'unsupported' | 'silent' {
+/** Message kinds: 'text' goes to Yorgo, 'voice' is turned into text first (W2); these get the "text only" line; everything else (reactions, buttons, system…) stays silent. */
+export function waKind(type: string): 'text' | 'voice' | 'unsupported' | 'silent' {
   if (type === 'text') return 'text';
-  return ['audio', 'voice', 'image', 'video', 'document', 'sticker', 'contacts'].includes(type) ? 'unsupported' : 'silent';
+  if (type === 'audio') return 'voice';            // a voice note (or an audio file): heard when the voice route is on, otherwise the "text only" line
+  return ['voice', 'image', 'video', 'document', 'sticker', 'contacts'].includes(type) ? 'unsupported' : 'silent';
 }
 
 /** "add to it": the new lines join the open draft (same item = quantities added), the groups to choose from and the misses are kept. */
@@ -60,13 +64,14 @@ export type WaDeps = Deps & {
     save(conversationId: string, phone: string, draft: Slim): Promise<string | null>;
   };
 };
-export type WaInput = { tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; phone: string; text: string; site: string; shops?: ShopHint[] };
+export type WaInput = { tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; phone: string; text: string; site: string; shops?: ShopHint[]; heard?: TurnInputHeard };
+type TurnInputHeard = { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;
 export type WaOutcome = { reply: string | null; as: 'yorgo' | 'paused' | 'off' | 'error'; draft_id?: string | null; cost_usd?: number; error?: string; turn: TurnResult };
 
 /** One customer text → what to send back (null = stay silent: Yorgo is off for this market). */
 export async function waTurn(d: WaDeps, i: WaInput): Promise<WaOutcome> {
   const site = i.site.replace(/\/+$/, '');
-  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops });
+  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops, heard: i.heard ?? null });
   // the language of our own lines: the turn's when it ran, otherwise from this message alone
   const guess: L2 = /[؀-ۿ]/.test(i.text) ? 'ar' : 'en';
   if (turn.status === 'paused') {
@@ -104,4 +109,38 @@ function joinFull<T extends Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>
   const lines = a.lines.map(l => ({ ...l }));
   for (const l of b.lines) { const i = lines.findIndex(x => x.product_id === l.product_id && (x.note ?? '') === (l.note ?? '')); if (i >= 0) lines[i].quantity += l.quantity; else lines.push({ ...l }); }
   return { lines, choices: [...a.choices, ...b.choices], not_found: [...new Set([...a.not_found, ...b.not_found])] };
+}
+
+// ── voice notes (step W2) ──────────────────────────────────────────────────────────────────────────────────────────────────
+// A voice note is turned into the customer's own words by a second provider, then handled exactly like a typed message.
+// The gate is asked first, so a phone that is paused or over its cap costs nothing. The audio never reaches this file:
+// `hear` is given by the webhook and returns words and cost only. What was heard is shown back, so a mishearing is caught.
+export type HeardVoice =
+  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
+  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
+  | { status: 'too_long' } | { status: 'failed'; error: string };
+export type WaVoiceOutcome = Omit<WaOutcome, 'turn' | 'as'> & { as: WaOutcome['as'] | 'voice_long' | 'voice_unclear' | 'voice_failed'; heard?: string; turn?: TurnResult };
+const both = (k: 'voiceLong' | 'voiceUnclear' | 'rate' | 'paused', v: Record<string, string> = {}) => `${fill(WA_TEXT[k].ar, v)}\n\n${fill(WA_TEXT[k].en, v)}`;
+/** One line of what was heard, shortened: enough to catch a mishearing, not a transcript to read. */
+export const heardLine = (text: string, lang: L2) => fill(WA_TEXT.heard[lang], { text: text.length > 200 ? `${text.slice(0, 197).trimEnd()}…` : text });
+
+export async function waVoiceTurn(d: WaDeps & { hear(): Promise<HeardVoice> }, i: Omit<WaInput, 'text' | 'heard'>): Promise<WaVoiceOutcome> {
+  const site = i.site.replace(/\/+$/, '');
+  const gate = await d.admin.rpc('yorgo_gate_wa', { p_tenant: i.tenant.id, p_phone: i.phone });
+  const g = (gate.data ?? {}) as { ok?: boolean; reason?: string; conversation_id?: string | null };
+  if (gate.error) return { reply: both('paused', { site }), as: 'error', error: 'gate_failed' };
+  if (!g.ok) return g.reason === 'off' || !g.reason ? { reply: null, as: 'off' } : { reply: both(g.reason === 'rate' ? 'rate' : 'paused', { site }), as: 'paused' };
+
+  const h = await d.hear().catch(e => ({ status: 'failed' as const, error: (e as Error).message }));
+  if (h.status === 'too_long') return { reply: both('voiceLong'), as: 'voice_long' };
+  if (h.status === 'failed') return { reply: waTextOnly(), as: 'voice_failed', error: h.error };
+  const paid = { model: h.model, cost_usd: h.cost_usd, input_tokens: h.audio_tokens + h.text_tokens, output_tokens: h.output_tokens };
+  if (h.status === 'nothing') {
+    // nothing to draft, but it was paid for: one line in the phone's conversation so the caps count it
+    await d.admin.rpc('yorgo_record_wa', { p_conversation: g.conversation_id ?? null, p_tenant: i.tenant.id, p_phone: i.phone, p_messages: [{ role: 'user', content: [{ type: 'text', text: '🎤 (voice note: no words heard)' }], ...paid }] }).then(() => null, () => null);
+    return { reply: both('voiceUnclear'), as: 'voice_unclear', cost_usd: h.cost_usd };
+  }
+  const out = await waTurn(d, { ...i, text: h.text, heard: paid });
+  const lang: L2 = out.turn.status === 'ok' ? two(out.turn.lang) : /[؀-ۿ]/.test(h.text) ? 'ar' : 'en';
+  return { ...out, reply: out.reply ? `${heardLine(h.text, lang)}\n\n${out.reply}` : out.reply, heard: h.text, cost_usd: (out.cost_usd ?? 0) + h.cost_usd };
 }

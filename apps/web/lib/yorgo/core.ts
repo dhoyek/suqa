@@ -18,6 +18,7 @@ export type TurnInput = {
   shopId: string | null; shopName?: string | null; role: Role | null; conversationId: string | null; message: string;
   focusShop?: { id: string; name: string } | null;      // shopper mode: the shop page they are on, as a hint for the model only
   shops?: ShopHint[];                                   // shopper mode: the open shops (public), so "min 3end el mir" finds its shop
+  heard?: { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;      // the message came from a voice note: what turning it into text cost, stored on the person's own line so the caps count it
 };
 export type TurnResult =
   | { status: 'ok'; conversation_id: string; reply: string; drafts: unknown[]; cost_usd: number; missed: string[]; first?: boolean; lang: Lang }
@@ -59,7 +60,7 @@ export async function runTurn(d: Deps, i: TurnInput): Promise<TurnResult> {
   const tools = toolsFor(i.mode, i.role);
   const ctx: ToolCtx = { sb: d.sb, tenantId: i.tenant.id, mode: i.mode, shopId: i.shopId, role: i.role, fx: Number(i.tenant.fx_lbp_rate ?? 0) || null };
   const system = systemPrompt({ brand: i.tenant.brand, mode: i.mode, role: i.role, shopName: i.shopName, focusShop: i.mode === 'shopper' ? i.focusShop : null, shops: i.mode === 'shopper' ? i.shops : undefined });
-  const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }] }];
+  const fresh: Stored[] = [{ role: 'user', content: [{ type: 'text', text }], ...(i.heard ? { model: i.heard.model, cost_usd: i.heard.cost_usd, input_tokens: i.heard.input_tokens, output_tokens: i.heard.output_tokens } : {}) }];
   // the reply language is decided here, not left to the model: small models answer Arabizi in English or in Arabic script.
   // The note travels with this call only; what is stored is the person's own words.
   const note = languageNote(text, history);

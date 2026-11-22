@@ -14,8 +14,8 @@ function Bar({ value, cap }: { value: number; cap: number }) {
   return <div className="yorgo-bar" title={`${pct.toFixed(0)}%`}><div style={{ width: `${pct}%`, background: pct >= 90 ? 'var(--bad)' : pct >= 60 ? 'var(--warn)' : 'var(--ok)' }} /></div>;
 }
 
-export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, shops, yshops, usage, misses }: {
-  tenantId: string; locale: 'ar' | 'en'; today: string; hasKey: boolean; settings: Settings | null;
+export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, shops, yshops, usage, misses, platformAdmin }: {
+  platformAdmin?: boolean; tenantId: string; locale: 'ar' | 'en'; today: string; hasKey: boolean; settings: Settings | null;
   shops: { id: string; name: string }[]; yshops: { shop_id: string; enabled: boolean; cap_usd: number | null }[]; usage: Usage[];
   misses: { id: string; shop_id: string | null; phrase: string; times: number }[];
 }) {
@@ -68,7 +68,10 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
     <div className="stack">
       <div className="row spread" style={{ alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>✨ Yorgo <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {T('المساعد الذكي', 'AI assistant')}</span></h2>
-        <Link href="/admin/yorgo/demand" className="btn">📊 {T('الطلب', 'Demand')}</Link>
+        <span className="row" style={{ gap: 8 }}>
+          {platformAdmin && <Link href="/admin/yorgo/providers" className="btn">🧠 {T('المزوّدون', 'AI providers')}</Link>}
+          <Link href="/admin/yorgo/demand" className="btn">📊 {T('الطلب', 'Demand')}</Link>
+        </span>
       </div>
       {!hasKey && <div className="card paused">{T('لا يوجد مفتاح API على هذا الموقع، فيورغو متوقف مهما كانت الإعدادات.', 'No API key is configured on this site, so Yorgo is off whatever the switches say.')}</div>}
 

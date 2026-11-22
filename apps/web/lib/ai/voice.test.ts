@@ -81,6 +81,15 @@ describe('google adapter', () => {
     levels.length = 0; expect((await googleTranscribe({ ...a, model: 'some-new-model', fetch: f([null]) as never })).text).toBe('ok'); expect(levels).toEqual(['minimal', 'low', null]);
     levels.length = 0; await expect(googleTranscribe({ ...a, model: 'm', fetch: reply('bad audio', 400) as never })).rejects.toThrow('voice_http_400');
   });
+  it('"model@ar-EG" sends the language hint to the dedicated model under its real name; a refused hint is sent again without it', async () => {
+    const done = { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'بدي سندويش دجاج' }] }], usage: { total_input_tokens: 10, total_output_tokens: 1 } };
+    const a = { key: 'K', audio: new Uint8Array(1), mime: 'audio/ogg' }; const bodies: Record<string, unknown>[] = [];
+    const f = (refuseHint: boolean) => async (_u: string, init: { body: string }) => { const b = JSON.parse(init.body); bodies.push(b); return refuseHint && b.generation_config ? reply({ error: { message: 'Unsupported language code' } }, 400)() : reply(done)(); };
+    await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe@ar-EG, en-US,<bad>', fetch: f(false) as never });
+    expect(bodies).toEqual([{ model: 'gemini-3.5-transcribe', store: false, input: [{ type: 'audio', data: 'AA==', mime_type: 'audio/ogg' }], generation_config: { transcription_config: { language_codes: ['ar-EG', 'en-US'] } } }]);
+    bodies.length = 0; expect((await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe@ar-EG', fetch: f(true) as never })).text).toBe('بدي سندويش دجاج');
+    expect(bodies.map(b => !!b.generation_config)).toEqual([true, false]);
+  });
   it('helpers', () => {
     expect(bareMime('audio/ogg; codecs=opus')).toBe('audio/ogg'); expect(bareMime('')).toBe('audio/ogg');
     expect(googleKey({ GOOGLE_AI_API_KEY: ' "abc" ' })).toBe('abc'); expect(googleKey({})).toBeNull();

@@ -29,12 +29,18 @@ export async function googleTranscribe(o: { key: string; model: string; audio: U
   //    thinking level itself the next setting is tried (minimal → low → none) — never anything else, never more than three calls.
   type Level = 'minimal' | 'low' | null;
   const clip = { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) };
-  const dedicated = /transcribe/i.test(o.model);
+  // "model@ar-EG" (or "model@ar-EG,en-US"): language hints for the dedicated model, set on the AI providers page with the model name.
+  // Left to itself it guesses the language, and on a short Lebanese note with a French word it guessed French and wrote nonsense
+  // ("sandwich djej" → "sans vous juger", prod, 22 Nov 2026). If the provider refuses the hint, the note is sent again without it.
+  const [modelId, hint = ''] = o.model.split('@');
+  const langs = hint.split(',').map(x => x.trim()).filter(x => /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(x)).slice(0, 5);
+  const dedicated = /transcribe/i.test(modelId);
+  let hinted = true;
   const call = (level: Level) => f('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
     headers: { 'x-goog-api-key': o.key, 'content-type': 'application/json' },
-    body: JSON.stringify(dedicated ? { model: o.model, store: false, input: [clip] } : {
-      model: o.model, store: false, system_instruction: VOICE_SYSTEM,
+    body: JSON.stringify(dedicated ? { model: modelId, store: false, input: [clip], ...(langs.length && hinted ? { generation_config: { transcription_config: { language_codes: langs } } } : {}) } : {
+      model: modelId, store: false, system_instruction: VOICE_SYSTEM,
       input: [{ type: 'text', text: 'Write down this voice note.' }, clip],
       generation_config: { max_output_tokens: o.maxTokens ?? 800, ...(level ? { thinking_level: level } : {}) },
     }),
@@ -42,6 +48,7 @@ export async function googleTranscribe(o: { key: string; model: string; audio: U
   });
   const levels: Level[] = dedicated ? [null] : ['minimal', 'low', null];
   let res = await call(levels[0]); let raw = await res.text();
+  if (dedicated && langs.length && !res.ok && res.status === 400) { hinted = false; res = await call(null); raw = await res.text(); }
   for (let n = 1; n < levels.length && !res.ok && res.status === 400 && /thinking.level/i.test(raw); n++) { res = await call(levels[n]); raw = await res.text(); }
   if (!res.ok) throw new Error(`voice_http_${res.status}: ${raw.slice(0, 200)}`);
   type Out = { status?: string; steps?: { type?: string; content?: { type?: string; text?: string }[] }[];

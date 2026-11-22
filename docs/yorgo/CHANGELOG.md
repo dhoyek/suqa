@@ -210,3 +210,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - `lib/ai/google.ts`: the model name on the AI providers page may carry language codes, `gemini-3.5-transcribe@ar-EG,en-US` → `transcription_config.language_codes`. A refused hint is retried without it, and the Test shows "language hint used / refused".
 - Dev (tone test): `@ar-EG` and `@ar-EG,en-US` are both accepted by the provider. Whether the hint fixes short Lebanese notes is NOT verified: no recording here.
 - Seen while reading the conversation: WhatsApp turns cost about $0.04 per model call (16–21k input tokens each, 2–3 calls per message), about $0.06 per message — five times the $0.011 measured in the app. Not looked into yet.
+
+## Yorgo costs: short history and caching between calls — 22 Nov 2026 (no script; on dev, not released)
+
+- Measured on prod: WhatsApp cost $0.84 for 14 messages ($0.06 each; 2.4 model calls per message, 11–21k input tokens per call, all at full price). The app chat averaged 2.3k per call only because its conversations are short. Cause: the last 36 stored rows are re-read on every call, and stored search results are 80% of them (one was 12,600 characters); only the system prompt and the tools were cached.
+- `slimOldResult` (`core.ts`, used by `toTurns`): a search result read back from HISTORY keeps three candidates per phrase with id, name, shop and price. The current message's result is untouched.
+- `withCacheMark` (`cache-mark.ts`, used by `model.ts`): the last block of the conversation is marked cacheable, so the second and third call of a message read what came before at the cache price.
+- Measured on dev, the same four messages in a new conversation: before $0.275 (12 calls, 119,030 input tokens at full price), after $0.111 (13 calls, 52 at full price, 94,800 read from cache, 30,597 written) — 60% less, $0.069 → $0.028 per message. The answers were the same kind (baskets with choices).
+- Not done: the first call of each message still writes the history again (the cache does not carry from one message to the next, because the history is rewritten short). An old WhatsApp conversation is never cut by age (yesterday's order is still re-read); that needs a script. The 40-message test set was not run.

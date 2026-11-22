@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { costOf, yorgoConfig } from './config';
-import { askedLanguage, cardNote, cleanReply, detectScript, isGarbled, isShortNeutral, languageNote, replyLanguage, runTurn, toTurns, type Deps, type TurnInput } from './core';
+import { askedLanguage, cardNote, cleanReply, detectScript, isGarbled, isShortNeutral, languageNote, replyLanguage, runTurn, slimOldResult, toTurns, type Deps, type TurnInput } from './core';
 import type { ModelRequest, ModelResponse } from './model';
+import { withCacheMark } from './cache-mark';
 import { toolsFor } from './tools';
 import { systemPrompt } from './prompts';
 
@@ -54,6 +55,25 @@ describe('yorgo core', () => {
       expect(JSON.stringify(rec.p_messages[0].content)).toBe(JSON.stringify([{ type: 'text', text: base.message }]));
     }
     expect(cardNote('open')).toBeNull(); expect(cardNote(undefined)).toBeNull();
+  });
+
+  it('an old search result is read back short: three candidates a phrase, id, name, shop and price only; anything else is untouched', () => {
+    const cand = (n: number) => ({ product_id: `p${n}`, name_ar: `صنف ${n}`, name_en: `Item ${n}`, category: 'Bread & Bakery', shop_id: 's1', shop: 'دكانة جدّي', price_usd: n, price_lbp: n * 90000, unit: 'bag', available: n !== 2, score: 0.9, matched_on: 'kind' });
+    const full = JSON.stringify([{ phrase: 'khebez', candidates: [1, 2, 3, 4, 5, 6, 7, 8].map(cand) }, { phrase: 'zaatar', candidates: [] }]);
+    const slim = JSON.parse(slimOldResult(full));
+    expect(slim).toEqual([{ phrase: 'khebez', more: 5, candidates: [{ product_id: 'p1', name: 'صنف 1', shop: 'دكانة جدّي', price_usd: 1 }, { product_id: 'p2', name: 'صنف 2', shop: 'دكانة جدّي', price_usd: 2, available: false }, { product_id: 'p3', name: 'صنف 3', shop: 'دكانة جدّي', price_usd: 3 }] }, { phrase: 'zaatar', candidates: [] }]);
+    expect(slimOldResult(full).length).toBeLessThan(full.length / 3);
+    for (const other of ['{"ok":true,"lines":1}', '[{"phrase":"x","candidates":[]}]', `[${'{"a":1},'.repeat(200)}{"a":1}]`, `[${'x'.repeat(700)}`]) expect(slimOldResult(other)).toBe(other);
+    // history only: a stored tool row is slimmed when read back, the person's and Yorgo's own lines are not
+    const turns = toTurns([{ role: 'user', content: [{ type: 'text', text: 'khebez' }] }, { role: 'tool', content: [{ type: 'tool_result', tool_use_id: 't', content: full }] }]);
+    expect((turns[1].content[0] as { content: string }).content).toBe(slimOldResult(full)); expect(turns[0].content).toEqual([{ type: 'text', text: 'khebez' }]);
+  });
+  it('the last block of the conversation carries the cache mark, so the next call of the same message re-reads it cheaply; nothing else changes', () => {
+    const msgs = [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'a' }] }, { role: 'assistant' as const, content: [{ type: 'tool_use' as const, id: 't', name: 'n', input: {} }] }, { role: 'user' as const, content: [{ type: 'tool_result' as const, tool_use_id: 't', content: 'r' }] }];
+    const out = withCacheMark(msgs) as typeof msgs;
+    expect(out[2].content[0]).toEqual({ type: 'tool_result', tool_use_id: 't', content: 'r', cache_control: { type: 'ephemeral' } });
+    expect(out[0]).toBe(msgs[0]); expect(out[1]).toBe(msgs[1]); expect(msgs[2].content[0]).not.toHaveProperty('cache_control');
+    expect(withCacheMark(msgs.slice(0, 2))[1]).toBe(msgs[1]);      // a tool call cannot carry it: left alone
   });
 
   it('does not call the model when the gate is closed', async () => {

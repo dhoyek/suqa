@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Usage } from './config';
+import { withCacheMark } from './cache-mark';
 
 // The one place that talks to the model provider. Everything else depends on the ModelClient interface, so tests run without a key.
 export type Block =
@@ -32,7 +33,7 @@ export function anthropicClient(): ModelClient | null {
           ...(/^claude-sonnet-5/.test(req.model) ? { thinking: { type: 'between_tools' }, output_config: { effort: 'low' } } : { thinking: { type: 'disabled' } }),
           system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
           ...(tools.length ? { tools } : {}),
-          messages: req.messages,
+          messages: withCacheMark(req.messages),
         }),
         signal: AbortSignal.timeout(25_000),
       });

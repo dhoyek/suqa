@@ -154,12 +154,31 @@ function storedBlocks(content: Block[]): Block[] {
   return out.length ? out : [{ type: 'text', text: '…' }];
 }
 
+/** An OLD search result, as it is read back from the conversation: the three best candidates per phrase, with only what is needed
+ *  to name them and to put them in a draft. A stored search result runs to thousands of characters (every candidate with its
+ *  category, both prices, unit, score…), and the last dozen exchanges are re-read on every model call: on prod (22 Nov 2026) tool
+ *  results were 80% of what was re-read and a WhatsApp message cost $0.06 instead of $0.011. The result of the CURRENT message is
+ *  never touched — this is applied to history only. Anything that is not a search result is returned as it is. */
+export function slimOldResult(content: string): string {
+  if (content.length < 600 || content[0] !== '[') return content;
+  try {
+    const rows = JSON.parse(content) as unknown;
+    if (!Array.isArray(rows) || !rows.every(r => r && typeof r === 'object' && 'phrase' in r && Array.isArray((r as { candidates?: unknown }).candidates))) return content;
+    return JSON.stringify((rows as { phrase: string; candidates: Record<string, unknown>[] }[]).map(r => ({
+      phrase: r.phrase,
+      candidates: r.candidates.slice(0, 3).map(c => ({ product_id: c.product_id, name: c.name_ar ?? c.name_en ?? c.name, shop: c.shop, price_usd: c.price_usd, ...(c.available === false ? { available: false } : {}) })),
+      ...(r.candidates.length > 3 ? { more: r.candidates.length - 3 } : {}),
+    })));
+  } catch { return content; }
+}
+
 /** Stored rows → what the model expects. Tool results travel as user turns; the window must open on a real user message,
  *  never in the middle of a tool exchange (a tool result without its call is rejected by the provider). */
 export function toTurns(rows: { role: Stored['role']; content: Block[] }[]): Turn[] {
   const start = rows.findIndex(r => r.role === 'user');
   if (start < 0) return [];
-  return rows.slice(start).map(r => ({ role: r.role === 'assistant' ? 'assistant' : 'user', content: r.content }));
+  return rows.slice(start).map(r => ({ role: r.role === 'assistant' ? 'assistant' : 'user',
+    content: r.role === 'tool' ? r.content.map(b => (b.type === 'tool_result' && typeof b.content === 'string' ? { ...b, content: slimOldResult(b.content) } : b)) : r.content }));
 }
 
 /** Which language and script the person wrote in: Arabic script, Lebanese Arabizi (Arabic in Latin letters), or neither (no note). */

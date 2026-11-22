@@ -22,21 +22,25 @@ export const bareMime = (mime: string) => (mime.split(';')[0].trim().toLowerCase
 
 export async function googleTranscribe(o: { key: string; model: string; audio: Uint8Array; mime: string; maxTokens?: number; timeoutMs?: number; fetch?: FetchLike }): Promise<Heard> {
   const f = o.fetch ?? (fetch as unknown as FetchLike);
-  // how little a model may think differs per model, and the provider's own messages disagree (22 Nov 2026: the flash models take
-  // "minimal"; the transcription model refused "minimal", then refused any level). So: the model's usual setting first, and while
-  // the provider refuses the thinking level itself, the next one — never more than three calls, and only on that refusal.
+  // Two kinds of model (Google's audio and transcription pages, read 22 Nov 2026):
+  //  · a dedicated transcription model ("gemini-3.5-transcribe") takes the audio and NOTHING else — no instruction, no text part,
+  //    no thinking level (it answered 400 to each of them). It writes down what it hears; silence comes back as empty text.
+  //  · a general model takes the instruction above. How little it may think differs per model, so while the provider refuses the
+  //    thinking level itself the next setting is tried (minimal → low → none) — never anything else, never more than three calls.
   type Level = 'minimal' | 'low' | null;
+  const audio = { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) };
+  const dedicated = /transcribe/i.test(o.model);
   const call = (level: Level) => f('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
     headers: { 'x-goog-api-key': o.key, 'content-type': 'application/json' },
-    body: JSON.stringify({
+    body: JSON.stringify(dedicated ? { model: o.model, store: false, input: [audio] } : {
       model: o.model, store: false, system_instruction: VOICE_SYSTEM,
-      input: [{ type: 'text', text: 'Write down this voice note.' }, { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) }],
+      input: [{ type: 'text', text: 'Write down this voice note.' }, audio],
       generation_config: { max_output_tokens: o.maxTokens ?? 800, ...(level ? { thinking_level: level } : {}) },
     }),
     signal: AbortSignal.timeout(o.timeoutMs ?? 30_000),
   });
-  const levels: Level[] = /transcribe/i.test(o.model) ? [null, 'low'] : ['minimal', 'low', null];
+  const levels: Level[] = dedicated ? [null] : ['minimal', 'low', null];
   let res = await call(levels[0]); let raw = await res.text();
   for (let n = 1; n < levels.length && !res.ok && res.status === 400 && /thinking.level/i.test(raw); n++) { res = await call(levels[n]); raw = await res.text(); }
   if (!res.ok) throw new Error(`voice_http_${res.status}: ${raw.slice(0, 200)}`);

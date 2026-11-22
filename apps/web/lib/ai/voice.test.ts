@@ -70,11 +70,13 @@ describe('google adapter', () => {
     await expect(googleTranscribe({ ...a, fetch: reply('<html>') as never })).rejects.toThrow('voice_bad_json');
     await expect(googleTranscribe({ ...a, fetch: reply({ status: 'failed' }) as never })).rejects.toThrow('voice_status_failed');
   });
-  it('thinking level: none for the transcription model, "minimal" otherwise; while the level itself is refused the next setting is tried (minimal → low → none), nothing else is retried', async () => {
+  it('the transcription model gets the audio alone; a general model starts at "minimal"; while the level itself is refused the next setting is tried (minimal → low → none), nothing else is retried', async () => {
     const done = { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'ok' }] }], usage: { total_input_tokens: 10, total_output_tokens: 1 } };
     const levels: (string | null)[] = []; const a = { key: 'K', audio: new Uint8Array(1), mime: 'audio/ogg' };
     const f = (accepts: (string | null)[]) => async (_u: string, init: { body: string }) => { const l = (JSON.parse(init.body).generation_config.thinking_level as string | undefined) ?? null; levels.push(l); return accepts.includes(l) ? reply(done)() : reply({ error: { message: 'Thinking level is not supported for this model.' } }, 400)(); };
-    await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe', fetch: f([null]) as never }); expect(levels).toEqual([null]);
+    let body: Record<string, unknown> = {};
+    await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe', fetch: (async (_u: string, init: { body: string }) => { body = JSON.parse(init.body); return reply(done)(); }) as never });
+    expect(body).toEqual({ model: 'gemini-3.5-transcribe', store: false, input: [{ type: 'audio', data: 'AA==', mime_type: 'audio/ogg' }] });      // the dedicated model: the audio and nothing else
     levels.length = 0; await googleTranscribe({ ...a, model: 'gemini-3.5-flash-lite', fetch: f(['minimal']) as never }); expect(levels).toEqual(['minimal']);
     levels.length = 0; expect((await googleTranscribe({ ...a, model: 'some-new-model', fetch: f([null]) as never })).text).toBe('ok'); expect(levels).toEqual(['minimal', 'low', null]);
     levels.length = 0; await expect(googleTranscribe({ ...a, model: 'm', fetch: reply('bad audio', 400) as never })).rejects.toThrow('voice_http_400');

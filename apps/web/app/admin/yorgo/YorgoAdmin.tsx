@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { useNotify } from '@/components/ConfirmProvider';
 
@@ -65,7 +66,10 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
 
   return (
     <div className="stack">
-      <h2 style={{ margin: 0 }}>✨ Yorgo <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {T('المساعد الذكي', 'AI assistant')}</span></h2>
+      <div className="row spread" style={{ alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>✨ Yorgo <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {T('المساعد الذكي', 'AI assistant')}</span></h2>
+        <Link href="/admin/yorgo/demand" className="btn">📊 {T('الطلب', 'Demand')}</Link>
+      </div>
       {!hasKey && <div className="card paused">{T('لا يوجد مفتاح API على هذا الموقع، فيورغو متوقف مهما كانت الإعدادات.', 'No API key is configured on this site, so Yorgo is off whatever the switches say.')}</div>}
 
       <div className="grid">

@@ -3,11 +3,12 @@ import { foldItem, makeMatcher, type Folded } from '@/lib/item-match';
 import FilterIcon from '@/components/FilterIcon';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type LocalizedText, type Product } from '@suqa/shared';
 import { waLink } from '@/lib/whatsapp';
+import { noteSearch } from '@/lib/search-note';
 
 type Labels = Record<'add' | 'soldOut' | 'replaceCart' | 'cart' | 'checkout' | 'items' | 'askOnWhatsapp' | 'waHello' | 'waAskItem' | 'waFrom' | 'searchItems' | 'noMatches' | 'all' | 'categories' | 'clearFilter' | 'typeToFilter' | 'showMore' | 'ok', string>;
 
@@ -30,7 +31,8 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   const [sheet, setSheet] = useState(false); const [secQ, setSecQ] = useState('');
   const [limit, setLimit] = useState(60);
   const [q, setQ] = useState('');
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) setQ(v); }, []);   // arriving from the home page's item search
+  const fromHome = useRef('');                                     // words carried over from the home page: already counted there
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) { fromHome.current = v.trim(); setQ(v); } }, []);   // arriving from the home page's item search
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   // every item folded once: names, description, its section's names and its aliases ("man2ouche", "mayy" …)
@@ -40,6 +42,13 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
     const hit = makeMatcher(q);                                  // Arabic, Arabizi, English, small typos, and the item's other names
     return products.filter(p => (secs.size === 0 || secs.has(p.section ?? '')) && (!hit || hit(folded.get(p.id)!)));
   }, [products, secs, q, folded]);
+  // what was searched in this shop, for the association's Demand page (99): once the person has stopped typing for 2 s
+  const hitCount = visible.length;
+  useEffect(() => {
+    const phrase = q.trim(); if (phrase.length < 2 || phrase === fromHome.current) return;
+    const timer = setTimeout(() => noteSearch(null, shop.id, phrase, hitCount > 0), 2000);
+    return () => clearTimeout(timer);
+  }, [q, hitCount, shop.id]);
   useEffect(() => setLimit(60), [q, secs]);                       // a new search/filter starts from the top again
   const shown = visible.slice(0, limit);
   const visibleSections = sections.filter(s => shown.some(p => (p.section ?? '') === s));

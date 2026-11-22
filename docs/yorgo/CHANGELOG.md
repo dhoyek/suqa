@@ -159,3 +159,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - **Script 97 applied on dev** (21 Nov). Checked on dev's catalog: "khebez" → bread, kaak, toast (no Panadol); "ahwe" → Coffee, Drinks;
   "may" → Water, Drinks; "chay" → tea categories; "sakaker" → sweets and chocolate; "jebne" → cheese, dairy, manakish (no chips);
   "tandif", "dekhen", "deo" unchanged. 8 phrases in one call: 0.39 s. Scripts 95, 96, 97 are on dev only.
+
+## Demand report (script 99) — 22 Nov 2026
+
+- `supabase/schema/99_demand.sql`, test `supabase/test/demand.sql`: `search_log` + `search_note`; `demand_report`, `demand_people` (association admins only). Yorgo's requests are read from the item searches already stored in `yorgo_messages` (shopper conversations: app and WhatsApp), so the report goes back to Yorgo's first day; the search boxes count from the day 99 is applied.
+- Admin → Yorgo → "Demand" (`/admin/yorgo/demand`): 7 / 30 / 90 days; most asked, asked and not found, Yorgo only, search box only; a phrase opens who asked (name, phone, how, how many times, last time). A visitor without an account has no name.
+- Storefront: the home search and a shop's search box record the words 2 s after typing stops (`lib/search-note.ts`); words carried from the home page into a shop are not counted twice.
+- Privacy page: the association now sees the items asked for or searched, with the person — still not the text of messages. Decided by Dan (names / phone numbers, searches counted).
+- Not tested in a browser. The AI providers table moves to script 100.

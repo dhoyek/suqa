@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
 import { supabaseBrowser } from '@/lib/supabase-browser';
+import { noteSearch } from '@/lib/search-note';
 import FilterIcon from '@/components/FilterIcon';
 import DoorIcon from '@/components/DoorIcon';
 import FavoriteButton from '@/components/FavoriteButton';
@@ -67,6 +68,13 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
     return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.known_as_en, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c, fav, st, shops, favs, q]);
+  // what was searched, for the association's Demand page (99): once the person has stopped typing for 2 s
+  const hits = items.length + (q.trim() ? list.length : 0);
+  useEffect(() => {
+    const phrase = q.trim(); if (phrase.length < 2) return;
+    const timer = setTimeout(() => noteSearch(tenantId, null, phrase, hits > 0), 2000);
+    return () => clearTimeout(timer);
+  }, [q, hits, tenantId]);
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
   return (
     <>

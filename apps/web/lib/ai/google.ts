@@ -28,14 +28,14 @@ export async function googleTranscribe(o: { key: string; model: string; audio: U
   //  · a general model takes the instruction above. How little it may think differs per model, so while the provider refuses the
   //    thinking level itself the next setting is tried (minimal → low → none) — never anything else, never more than three calls.
   type Level = 'minimal' | 'low' | null;
-  const audio = { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) };
+  const clip = { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) };
   const dedicated = /transcribe/i.test(o.model);
   const call = (level: Level) => f('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
     headers: { 'x-goog-api-key': o.key, 'content-type': 'application/json' },
-    body: JSON.stringify(dedicated ? { model: o.model, store: false, input: [audio] } : {
+    body: JSON.stringify(dedicated ? { model: o.model, store: false, input: [clip] } : {
       model: o.model, store: false, system_instruction: VOICE_SYSTEM,
-      input: [{ type: 'text', text: 'Write down this voice note.' }, audio],
+      input: [{ type: 'text', text: 'Write down this voice note.' }, clip],
       generation_config: { max_output_tokens: o.maxTokens ?? 800, ...(level ? { thinking_level: level } : {}) },
     }),
     signal: AbortSignal.timeout(o.timeoutMs ?? 30_000),

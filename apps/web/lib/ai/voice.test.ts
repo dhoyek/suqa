@@ -70,6 +70,14 @@ describe('google adapter', () => {
     await expect(googleTranscribe({ ...a, fetch: reply('<html>') as never })).rejects.toThrow('voice_bad_json');
     await expect(googleTranscribe({ ...a, fetch: reply({ status: 'failed' }) as never })).rejects.toThrow('voice_status_failed');
   });
+  it('the lowest thinking level is the model\'s own: "low" for the transcription model, "minimal" otherwise, and one more try with "low" if the level is refused', async () => {
+    const done = { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'ok' }] }], usage: { total_input_tokens: 10, total_output_tokens: 1 } };
+    const levels: string[] = []; const a = { key: 'K', audio: new Uint8Array(1), mime: 'audio/ogg' };
+    const f = (refuse: boolean) => async (_u: string, init: { body: string }) => { const l = JSON.parse(init.body).generation_config.thinking_level as string; levels.push(l); return refuse && l === 'minimal' ? reply({ error: { message: "'minimal' is not a supported thinking level for this model." } }, 400)() : reply(done)(); };
+    await googleTranscribe({ ...a, model: 'gemini-3.5-transcribe', fetch: f(false) as never }); expect(levels).toEqual(['low']);
+    levels.length = 0; await googleTranscribe({ ...a, model: 'gemini-3.5-flash-lite', fetch: f(false) as never }); expect(levels).toEqual(['minimal']);
+    levels.length = 0; expect((await googleTranscribe({ ...a, model: 'some-new-model', fetch: f(true) as never })).text).toBe('ok'); expect(levels).toEqual(['minimal', 'low']);
+  });
   it('helpers', () => {
     expect(bareMime('audio/ogg; codecs=opus')).toBe('audio/ogg'); expect(bareMime('')).toBe('audio/ogg');
     expect(googleKey({ GOOGLE_AI_API_KEY: ' "abc" ' })).toBe('abc'); expect(googleKey({})).toBeNull();

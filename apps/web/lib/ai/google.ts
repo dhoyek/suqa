@@ -22,17 +22,22 @@ export const bareMime = (mime: string) => (mime.split(';')[0].trim().toLowerCase
 
 export async function googleTranscribe(o: { key: string; model: string; audio: Uint8Array; mime: string; maxTokens?: number; timeoutMs?: number; fetch?: FetchLike }): Promise<Heard> {
   const f = o.fetch ?? (fetch as unknown as FetchLike);
-  const res = await f('https://generativelanguage.googleapis.com/v1beta/interactions', {
+  // the lowest thinking level differs per model ("minimal" on the flash models, "low" on the transcription model, seen 22 Nov 2026):
+  // start from the model's usual one and, if the provider refuses the level, ask once more with "low"
+  const call = (level: 'minimal' | 'low') => f('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
     headers: { 'x-goog-api-key': o.key, 'content-type': 'application/json' },
     body: JSON.stringify({
       model: o.model, store: false, system_instruction: VOICE_SYSTEM,
       input: [{ type: 'text', text: 'Write down this voice note.' }, { type: 'audio', data: Buffer.from(o.audio).toString('base64'), mime_type: bareMime(o.mime) }],
-      generation_config: { max_output_tokens: o.maxTokens ?? 800, thinking_level: 'minimal' },
+      generation_config: { max_output_tokens: o.maxTokens ?? 800, thinking_level: level },
     }),
     signal: AbortSignal.timeout(o.timeoutMs ?? 30_000),
   });
-  const raw = await res.text();
+  const first: 'minimal' | 'low' = /transcribe/i.test(o.model) ? 'low' : 'minimal';
+  let res = await call(first);
+  let raw = await res.text();
+  if (!res.ok && res.status === 400 && first === 'minimal' && /thinking level/i.test(raw)) { res = await call('low'); raw = await res.text(); }
   if (!res.ok) throw new Error(`voice_http_${res.status}: ${raw.slice(0, 200)}`);
   type Out = { status?: string; steps?: { type?: string; content?: { type?: string; text?: string }[] }[];
     usage?: { total_input_tokens?: number; total_output_tokens?: number; total_thought_tokens?: number; input_tokens_by_modality?: { modality?: string; tokens?: number }[] } };

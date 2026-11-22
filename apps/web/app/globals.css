@@ -196,11 +196,13 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .product.cart-line { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px 12px; }
 .cart-line .info { min-width: 0; }
 .cart-line .total { text-align: end; white-space: nowrap; }
+.cart-line .stepper { display: flex; padding: 0; gap: 4px; }      /* the order timeline further down is also called .stepper and made these buttons spread out */
 .cart-line .line-note { grid-column: 1 / -1; margin-top: 0; }
 @media (max-width: 640px) {
   .product.cart-line { grid-template-columns: auto 1fr; }
   .cart-line .info { grid-column: 1 / -1; }
   .cart-line .stepper { justify-self: start; }
+  .cart-line .total { white-space: normal; min-width: 0; }
 }
 .checkout-bar { display: none; }
 @media (max-width: 640px) { .checkout-bar { display: block; } .checkout-inline { display: none; } .stack:has(> .checkout-bar) { padding-bottom: 80px; } }

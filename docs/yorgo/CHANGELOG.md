@@ -240,3 +240,11 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - Formats: Chrome records WebM/Opus, Safari MP4. Both were sent from a real browser on dev to the transcription model through the Test endpoint (a 2-second tone) and accepted.
 - Not tested: a real voice on a real phone (microphone permission, iPhone Safari), and the whole chat path with audio.
 - Prod data (Dan's approval): Furn El Dayaa's "Pepsi / Mirinda / 7UP" is now three items (the old one renamed Pepsi; Mirinda and 7UP added at the same price).
+
+## Voice on Gemini 4 Hydrogen — 23 Nov 2026 (settings; one small code change on dev)
+
+- Dan: the Gemini app hears the same Lebanese sentence correctly. Voice route switched to `gemini-4-hydrogen` (prod and dev), fallback `gemini-3.5-flash-lite`, 1.50 / 1.50 / 7.50.
+- App, prod, 03:17 — "rabetein 5obez w pepsi kbire w labne": transcription model wrote "بدر رابطها الخبز وبيبسي كبير يا ولادني" (03:08); Hydrogen wrote "وبدي ربطتين خبز و Pepsi ولبنة" → 2 bread, labne, Pepsi options. Only "kbire" was lost. Transcription $0.0026 (266 output tokens for 6 words: the model thinks), whole message $0.029.
+- WhatsApp, prod, 03:18 and 03:20 (two long notes): the FALLBACK model did the hearing, not Hydrogen, and the reason was not recorded. Hydrogen accepts Ogg/Opus (checked on dev with a tone), so the format is not it. Most likely the answer limit: 800 output tokens must hold the model's thinking and the words, and a long note comes back unfinished.
+- On dev (`3463b9d`): the limit is 4,000, and when the fallback does the hearing the main model's error is kept with the message (`wa_inbox.error` = "voice fallback — …", the Test shows it, the app route logs it). Not confirmed with a long real note.
+- Both long notes were still handled well by the fallback plus the spoken-order note: three items kept, "طوق" read as طاووق.

@@ -22,9 +22,9 @@ export default async function YorgoDraftPage({ params }: { params: Promise<{ id:
   </div>;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return gone;
   const { data } = await sb.rpc('yorgo_draft_get', { p_id: id });
-  const row = data as { id: string; tenant_id: string; draft: Partial<OrderDraft>; added: boolean } | null;
+  const row = data as { id: string; tenant_id: string; draft: Partial<OrderDraft>; added: boolean; discarded?: boolean } | null;
   if (!row || row.tenant_id !== tenant.id) return gone;
   const slim = { lines: row.draft.lines ?? [], choices: row.draft.choices ?? [], not_found: row.draft.not_found ?? [] };
   const full = await hydrateBasket({ sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never }, tenantId: tenant.id, fx: Number(tenant.fx_lbp_rate ?? 0) || null }, slim);
-  return <DraftBasket id={row.id} locale={L} draft={{ lines: full.lines, choices: full.choices, not_found: full.not_found }} alreadyAdded={row.added} />;
+  return <DraftBasket id={row.id} locale={L} draft={{ lines: full.lines, choices: full.choices, not_found: full.not_found }} alreadyAdded={row.added} discarded={row.discarded === true} />;
 }

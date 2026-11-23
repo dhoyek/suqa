@@ -55,6 +55,16 @@ describe('yorgo on whatsapp', () => {
     expect(r.reply).toContain('🛒 دكان إيلي · 2 صنف · $7.25 (653,000 ل.ل.) · 1 للاختيار · 1 غير موجود');   // 3 bread + 1 labne: the whole basket, not only what was added
   });
 
+  it('a discarded basket (script 102): Yorgo is told, and a "zid" does not bring it back', async () => {
+    const seen: string[] = [];
+    const { deps, saved } = rig({ gate: { ok: true, conversation_id: 'conv-1', first: false }, open: null, replies: [call('draft_basket', { add: true, lines: [{ product_id: P2, quantity: 1 }] }), say('tamem.')] });
+    const model = deps.model; deps.model = { create: async a => { seen.push(JSON.stringify(a)); return model.create(a); } };
+    deps.drafts.lastState = async () => 'discarded';
+    await waTurn(deps, { ...input, text: 'zid labne' });
+    expect(seen[0]).toContain('DISCARDED your last suggestion');
+    expect(saved[0].draft.lines).toEqual([{ product_id: P2, quantity: 1 }]);      // only what this message asked for
+  });
+
   it('an answer without a draft is sent as it is, with no link', async () => {
     const { deps, saved } = rig({ gate: { ok: true, first: false }, replies: [say('فيه بيبسي 330 بـ $0.67.')] });
     const r = await waTurn(deps, { ...input, text: 'fi pepsi?' });

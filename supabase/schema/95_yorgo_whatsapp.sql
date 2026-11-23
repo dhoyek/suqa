@@ -74,7 +74,8 @@ create table if not exists suqa.yorgo_drafts (
   created_at      timestamptz not null default now(),
   expires_at      timestamptz not null default now() + interval '24 hours',
   opened_at       timestamptz,
-  added_at        timestamptz                                           -- "add to cart" tapped
+  added_at        timestamptz,                                          -- "add to cart" tapped
+  discarded_at    timestamptz                                           -- "discard" tapped (script 102)
 );
 create index if not exists yorgo_drafts_expiry on suqa.yorgo_drafts(expires_at);
 alter table suqa.yorgo_drafts enable row level security;                -- no policy: read only through yorgo_draft_get(id)

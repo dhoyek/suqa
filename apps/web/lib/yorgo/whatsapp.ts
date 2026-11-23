@@ -58,8 +58,11 @@ export function waSummary(d: Pick<BasketDraft, 'lines' | 'choices' | 'not_found'
 
 export type WaDeps = Deps & {
   drafts: {
-    /** the conversation's latest draft that has not expired, as stored (ids only) */
+    /** the conversation's latest draft that has not expired, as stored (ids only) — only while it is still OPEN: a basket the
+     *  customer discarded, or already added to the cart, is not joined by a later "zid" (script 102) */
     latest(conversationId: string): Promise<Slim | null>;
+    /** what became of the phone's latest basket (recent ones only): told to Yorgo like the app chat's card. Optional. */
+    lastState?(phone: string): Promise<'open' | 'added' | 'discarded' | null>;
     /** stores a draft, returns its id (the link), or null when it could not be stored */
     save(conversationId: string, phone: string, draft: Slim): Promise<string | null>;
   };
@@ -74,7 +77,8 @@ export type WaOutcome = { reply: string | null; as: 'yorgo' | 'paused' | 'off' |
 /** One customer text → what to send back (null = stay silent: Yorgo is off for this market). */
 export async function waTurn(d: WaDeps, i: WaInput): Promise<WaOutcome> {
   const site = i.site.replace(/\/+$/, '');
-  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops, heard: i.heard ?? null });
+  const card = d.drafts.lastState ? await d.drafts.lastState(i.phone).catch(() => null) : null;
+  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops, heard: i.heard ?? null, card });
   // the language of our own lines: the turn's when it ran, otherwise from this message alone
   const guess: L2 = /[؀-ۿ]/.test(i.text) ? 'ar' : 'en';
   if (turn.status === 'paused') {

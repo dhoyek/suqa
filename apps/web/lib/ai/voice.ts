@@ -19,8 +19,8 @@ export function oggSeconds(b: Uint8Array): number | null {
 }
 
 export type VoiceResult =
-  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused' }
-  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused' }      // silence, noise, music: paid for, nothing to draft
+  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused'; fallback_from?: string }
+  | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; ms: number; hint?: 'used' | 'refused'; fallback_from?: string }      // silence, noise, music: paid for, nothing to draft
   | { status: 'too_long' }
   | { status: 'failed'; error: string };
 
@@ -33,17 +33,17 @@ export async function runVoice(route: Route, key: string, audio: Uint8Array, mim
   const tries = [{ provider: route.provider, model: route.model }, ...(route.fallback_provider && route.fallback_model ? [{ provider: route.fallback_provider, model: route.fallback_model }] : [])]
     .filter(t => t.provider === 'google');                                                     // the only provider that takes sound today
   if (!tries.length) return { status: 'failed', error: 'no_voice_provider' };
-  let last = 'voice_failed'; const t0 = now();
+  let last = 'voice_failed'; const t0 = now(); let firstError: string | null = null;      // why the main model was not the one that answered, when it was not
   for (const t of tries) {
     try {
       const h = await transcribe({ key, model: t.model, audio, mime });
-      const cost = voiceCost(route, h.usage); const base = { model: t.model, cost_usd: cost, ...h.usage, ms: now() - t0, ...(h.hint ? { hint: h.hint } : {}) };
+      const cost = voiceCost(route, h.usage); const base = { model: t.model, cost_usd: cost, ...h.usage, ms: now() - t0, ...(h.hint ? { hint: h.hint } : {}), ...(firstError ? { fallback_from: firstError } : {}) };
       // the provider's own count is the last word on length (32 audio tokens a second)
       if (h.usage.audio_tokens > (VOICE_MAX_SECONDS + 10) * 32) return { status: 'too_long' };
       const text = h.text.replace(/\s+/g, ' ').trim();
       if (!text || text.toUpperCase().includes(VOICE_NONE) || !/[\p{L}\p{N}]/u.test(text)) return { status: 'nothing', ...base };
       return { status: 'ok', text: text.slice(0, 2000), ...base };
-    } catch (e) { last = (e as Error).message.slice(0, 160); }
+    } catch (e) { last = (e as Error).message.slice(0, 160); firstError ??= `${t.model}: ${last}`; }
   }
   return { status: 'failed', error: last };
 }

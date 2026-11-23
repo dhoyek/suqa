@@ -6,7 +6,7 @@ import { useNotify } from '@/components/ConfirmProvider';
 import type { Route } from '@/lib/ai/routes';
 
 type Row = Route & { updated_at: string | null };
-type Test = { hint?: 'used' | 'refused'; status?: 'ok' | 'nothing' | 'too_long' | 'failed'; text?: string; model?: string; cost_usd?: number; ms?: number; seconds?: number | null; audio_tokens?: number; error?: string; priced?: boolean };
+type Test = { fallback_from?: string; hint?: 'used' | 'refused'; status?: 'ok' | 'nothing' | 'too_long' | 'failed'; text?: string; model?: string; cost_usd?: number; ms?: number; seconds?: number | null; audio_tokens?: number; error?: string; priced?: boolean };
 const TASKS: Record<string, { ar: string; en: string }> = {
   chat: { ar: 'المحادثة (يورغو)', en: 'Chat (Yorgo)' }, voice: { ar: 'الرسائل الصوتية ← نص', en: 'Voice notes → text' },
   photo_read: { ar: 'قراءة الصور', en: 'Photo reading' }, image_generate: { ar: 'توليد الصور', en: 'Image generation' }, image_cleanup: { ar: 'تنظيف الصور', en: 'Image clean-up' }, bulk_cleanup: { ar: 'تنظيف بالجملة', en: 'Bulk clean-up' },
@@ -97,7 +97,7 @@ export default function Providers({ locale, keys, routes }: { locale: 'ar' | 'en
             </div>
             {test && <div className="card" style={{ background: 'var(--bg)' }}>
               {test.status === 'ok' && <><div dir="auto" style={{ fontSize: 16 }}>🎤 {test.text}</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 6 }} dir="ltr">{test.model} · {((test.ms ?? 0) / 1000).toFixed(1)} s{test.seconds != null ? ` · ${test.seconds} s audio` : ''} · {test.audio_tokens} audio tokens · {test.priced ? `$${(test.cost_usd ?? 0).toFixed(5)}` : T('بلا أسعار بعد', 'no prices yet')}{test.hint === 'refused' ? ' · language hint refused' : test.hint === 'used' ? ' · language hint used' : ''}</div></>}
+                <div className="muted" style={{ fontSize: 13, marginTop: 6 }} dir="ltr">{test.model} · {((test.ms ?? 0) / 1000).toFixed(1)} s{test.seconds != null ? ` · ${test.seconds} s audio` : ''} · {test.audio_tokens} audio tokens · {test.priced ? `$${(test.cost_usd ?? 0).toFixed(5)}` : T('بلا أسعار بعد', 'no prices yet')}{test.hint === 'refused' ? ' · language hint refused' : test.hint === 'used' ? ' · language hint used' : ''}{test.fallback_from ? ` · FALLBACK (${test.fallback_from})` : ''}</div></>}
               {test.status === 'nothing' && <span>{T('لم يُسمع كلام في التسجيل.', 'No speech was heard in the clip.')}</span>}
               {test.status === 'too_long' && <span>{T('التسجيل أطول من دقيقتين أو أكبر من 2 ميغابايت.', 'The clip is longer than 2 minutes or larger than 2 MB.')}</span>}
               {test.status === 'failed' && <span dir="ltr">{test.error === 'no_key' ? T('لا يوجد مفتاح Google على هذا الموقع.', 'There is no Google key on this site.') : `✗ ${test.error}`}</span>}

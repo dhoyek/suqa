@@ -43,6 +43,7 @@ describe('voice: route, cost, length', () => {
     const seen: string[] = []; const t = async (o: { model: string }) => { seen.push(o.model); if (o.model === 'g-main') throw new Error('voice_http_503: busy'); return { text: 'labne', usage: { audio_tokens: 100, text_tokens: 10, output_tokens: 5 } }; };
     expect(await runVoice({ ...route, fallback_provider: 'google', fallback_model: 'g-back' }, 'k', ogg(4), 'audio/ogg', t)).toMatchObject({ status: 'ok', text: 'labne', model: 'g-back' });
     expect(seen).toEqual(['g-main', 'g-back']);
+    expect(await runVoice({ ...route, fallback_provider: 'google', fallback_model: 'g-back' }, 'k', ogg(4), 'audio/ogg', t)).toMatchObject({ fallback_from: 'g-main: voice_http_503: busy' });      // why the main model did not answer is kept
     expect(await runVoice(route, 'k', ogg(4), 'audio/ogg', t)).toEqual({ status: 'failed', error: 'voice_http_503: busy' });
     expect(await runVoice({ ...route, provider: 'anthropic' }, 'k', ogg(4), 'audio/ogg', t)).toEqual({ status: 'failed', error: 'no_voice_provider' });
   });

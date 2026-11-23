@@ -74,7 +74,7 @@ async function inbound(m: Msg, phoneNumberId: string | undefined, ctx: Ctx, late
   try {
     const r = await handleInbound(m, phoneNumberId, ctx);
     if (typeof r === 'string') { await done(r, null); return; }
-    later.push(async () => { try { await done(await r.later(), null); } catch (e) { console.error('[wa yorgo]', (e as Error).message); await done('error', (e as Error).message); } });
+    later.push(async () => { try { const [as, ...why] = (await r.later()).split('|'); await done(as, why.join('|') || null); } catch (e) { console.error('[wa yorgo]', (e as Error).message); await done('error', (e as Error).message); } });
   } catch (e) { console.error('[wa inbound]', (e as Error).message); await done('error', (e as Error).message); }
 }
 
@@ -197,5 +197,5 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
     if (missed.length) await admin.rpc('yorgo_miss', { p_tenant: tenant.id, p_shop: null, p_phrases: missed }).then(() => null, () => null);
   }
   if (out.as === 'error') throw new Error(out.error ?? 'yorgo_error');
-  return out.as;
+  return out.error ? `${out.as}|${out.error}` : out.as;      // handled, with a remark worth keeping (the fallback model did the hearing, and why)
 }

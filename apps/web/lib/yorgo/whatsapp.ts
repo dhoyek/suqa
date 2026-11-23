@@ -142,5 +142,6 @@ export async function waVoiceTurn(d: WaDeps & { hear(): Promise<HeardVoice> }, i
   }
   const out = await waTurn(d, { ...i, text: h.text, heard: paid });
   const lang: L2 = out.turn.status === 'ok' ? two(out.turn.lang) : /[؀-ۿ]/.test(h.text) ? 'ar' : 'en';
-  return { ...out, reply: out.reply ? `${heardLine(h.text, lang)}\n\n${out.reply}` : out.reply, heard: h.text, cost_usd: (out.cost_usd ?? 0) + h.cost_usd };
+  // (when the fallback model did the hearing, why the main one did not is kept with the message: it is the only place that shows it)
+  return { ...out, reply: out.reply ? `${heardLine(h.text, lang)}\n\n${out.reply}` : out.reply, heard: h.text, cost_usd: (out.cost_usd ?? 0) + h.cost_usd, ...(h.fallback_from && !out.error ? { error: `voice fallback — ${h.fallback_from}` } : {}) };
 }

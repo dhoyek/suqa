@@ -69,7 +69,12 @@ export async function POST(req: Request) {
     const key = googleKey();
     if (!route?.enabled || !key) return NextResponse.json({ status: 'voice', reason: 'off' });
     const audio = clip;
-    hear = async () => (audio.size > VOICE_MAX_BYTES ? { status: 'too_long' } : runVoice(route, key, new Uint8Array(await audio.arrayBuffer()), audio.type || 'audio/webm'));
+    hear = async () => {
+      if (audio.size > VOICE_MAX_BYTES) return { status: 'too_long' };
+      const h = await runVoice(route, key, new Uint8Array(await audio.arrayBuffer()), audio.type || 'audio/webm');
+      if ('fallback_from' in h && h.fallback_from) console.warn('[yorgo voice] fallback —', h.fallback_from);
+      return h;
+    };
   }
 
   const result = await runTurn(

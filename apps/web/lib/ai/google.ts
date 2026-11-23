@@ -42,7 +42,8 @@ export async function googleTranscribe(o: { key: string; model: string; audio: U
     body: JSON.stringify(dedicated ? { model: modelId, store: false, input: [clip], ...(langs.length && hinted ? { generation_config: { transcription_config: { language_codes: langs } } } : {}) } : {
       model: modelId, store: false, system_instruction: VOICE_SYSTEM,
       input: [{ type: 'text', text: 'Write down this voice note.' }, clip],
-      generation_config: { max_output_tokens: o.maxTokens ?? 800, ...(level ? { thinking_level: level } : {}) },
+      generation_config: { max_output_tokens: o.maxTokens ?? 4000,      // room for the model's own thinking as well as the words: at 800 a long note can come back unfinished
+         ...(level ? { thinking_level: level } : {}) },
     }),
     signal: AbortSignal.timeout(o.timeoutMs ?? 30_000),
   });

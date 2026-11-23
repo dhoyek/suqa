@@ -30,7 +30,7 @@ export type TurnResult =
 
 /** What turning a voice message into words gave: the words and what it cost, or why there are none. The audio never comes here. */
 export type HeardVoice =
-  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
+  | { status: 'ok'; text: string; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number; fallback_from?: string }
   | { status: 'nothing'; model: string; cost_usd: number; audio_tokens: number; text_tokens: number; output_tokens: number }
   | { status: 'too_long' } | { status: 'failed'; error: string };
 

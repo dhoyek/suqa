@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fmtLbp, fmtUsd, num, text, type CatalogIndex, type Product } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
+import { MicIcon, useVoiceRecorder } from '@/components/useVoiceRecorder';
 
 // Yorgo in the till: the staff member pastes a customer's message, Yorgo proposes a draft, a person checks it and sends it to the cart.
 // The assistant never sells: a draft carries item ids and quantities only — names, prices and stock shown here come from the catalog on
@@ -16,7 +17,7 @@ type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Dr
 type Sb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>; from: (t: string) => any };   // eslint-disable-line @typescript-eslint/no-explicit-any
 type Suggestion = { id: string; phrase: string; picks: number; product_id: string };
 type Miss = { id: string; phrase: string; times: number };
-type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
+type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: DraftIn[]; message_id?: number | null; heard?: string } | { status: 'voice'; reason: 'off' | 'too_long' | 'unclear' | 'failed'; conversation_id?: string } | { status: 'paused'; reason: string } | { status: 'error'; error: string; conversation_id?: string };
 
 const price = (p: Product, locale: L) => (p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100)));
 
@@ -52,11 +53,32 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     const message = input.trim(); if (!message || busy) return;
     if (!online) { push({ from: 'note', text: pt('yorgoOffline', locale) }); return; }
     setInput(''); push({ from: 'me', text: message }); setBusy(true);
+    await deliver(() => fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'seller', shop_id: shopId, conversation_id: conv.current, message, card: lastCard() }) }));
+    setBusy(false);
+  };
+  // a voice message (the staff member says the order, or plays the customer's voice note next to the phone): the same fields go
+  // with the recording, and what was heard comes back as the person's own line
+  const sendVoice = async (clip: Blob) => {
+    if (busy) return;
+    if (!online) { push({ from: 'note', text: pt('yorgoOffline', locale) }); return; }
+    setBusy(true);
+    const form = new FormData(); form.append('audio', clip, 'voice'); form.append('mode', 'seller'); form.append('shop_id', shopId);
+    if (conv.current) form.append('conversation_id', conv.current);
+    const card = lastCard(); if (card) form.append('card', card);
+    await deliver(() => fetch('/api/yorgo/chat', { method: 'POST', body: form }));
+    setBusy(false);
+  };
+  const { recording, canRecord, start: startRec, stop: stopRec } = useVoiceRecorder(clip => void sendVoice(clip), () => push({ from: 'note', text: pt('yorgoMicDenied', locale) }));
+  const deliver = async (ask: () => Promise<Response>) => {
     try {
-      const res = await fetch('/api/yorgo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'seller', shop_id: shopId, conversation_id: conv.current, message, card: lastCard() }) });
+      const res = await ask();
       const r = (res.status === 401 ? { status: 'error', error: 'unauthorized' } : await res.json()) as Reply;
-      if (r.status === 'ok') {
+      if (r.status === 'voice') {
+        if (r.conversation_id) conv.current = r.conversation_id;
+        push({ from: 'note', text: pt(r.reason === 'too_long' ? 'yorgoVoiceLong' : r.reason === 'unclear' ? 'yorgoVoiceUnclear' : r.reason === 'off' ? 'yorgoVoiceOff' : 'yorgoError', locale) });
+      } else if (r.status === 'ok') {
         conv.current = r.conversation_id;
+        if (r.heard) push({ from: 'me', text: `🎤 ${r.heard}` });
         const orders = (r.drafts ?? []).filter(d => d.kind === 'draft_order');
         // "add" (zid, kamen): the new items join the draft still open on screen — the card moves down, under the answer
         const stamp = `a${Date.now()}`;
@@ -85,7 +107,6 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
         push({ from: 'note', text: pt(r.error === 'unauthorized' ? 'yorgoSignIn' : 'yorgoError', locale) });
       }
     } catch { push({ from: 'note', text: pt('yorgoOffline', locale) }); }
-    setBusy(false);
   };
 
   // a pick joins the draft and the OTHER suggestions stay, so a second and a third can be picked from the same group;
@@ -128,10 +149,17 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
         {canReview && <button className={`btn icon${review ? ' primary' : ''}`} title={pt('yorgoNames', locale)} onClick={() => setReview(v => !v)}>💡</button>}
         {!!msgs.length && !review && <button className="btn icon" title={pt('yorgoNew', locale)} onClick={reset}>↺</button>}
       </>}
-      footer={<div className="yorgo-input">
-        <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt(sells ? 'yorgoPlaceholder' : 'yorgoPlaceholderItems', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
-        <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>↑</button>
+      footer={<div className="yorgo-input" style={recording ? { alignItems: 'center' } : undefined}>
+        {recording ? <>
+          <span className="yorgo-rec" aria-live="polite">● {pt('yorgoRecording', locale)}</span>
+          <button className="btn" onClick={() => stopRec(false)} aria-label={pt('cancel', locale)}>✕</button>
+          <button className="btn primary" onClick={() => stopRec(true)} aria-label={pt('yorgoSend', locale)}>↑</button>
+        </> : <>
+          <textarea ref={boxRef} className="input" rows={2} dir="auto" placeholder={pt(sells ? 'yorgoPlaceholder' : 'yorgoPlaceholderItems', locale)} value={input} maxLength={2000} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
+          {canRecord && !input.trim() ? <button className="btn primary" disabled={busy} onClick={() => { if (!busy) void startRec(); }} aria-label={pt('yorgoMic', locale)} title={pt('yorgoMic', locale)}><MicIcon /></button>
+            : <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={pt('yorgoSend', locale)}>↑</button>}
+        </>}
         <p className="yorgo-foot muted">{pt('yorgoDisclaimer', locale)}</p>
       </div>}>
       {review ? <div className="yorgo-chat">

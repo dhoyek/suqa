@@ -248,3 +248,9 @@ Dan: asking for a product that several shops sell brought suggestions from one s
 - WhatsApp, prod, 03:18 and 03:20 (two long notes): the FALLBACK model did the hearing, not Hydrogen, and the reason was not recorded. Hydrogen accepts Ogg/Opus (checked on dev with a tone), so the format is not it. Most likely the answer limit: 800 output tokens must hold the model's thinking and the words, and a long note comes back unfinished.
 - On dev (`3463b9d`): the limit is 4,000, and when the fallback does the hearing the main model's error is kept with the message (`wa_inbox.error` = "voice fallback — …", the Test shows it, the app route logs it). Not confirmed with a long real note.
 - Both long notes were still handled well by the fallback plus the spoken-order note: three items kept, "طوق" read as طاووق.
+
+## Voice in the till, and the microphone icon (23 Nov)
+
+- The Yorgo panel in the POS has the microphone: the staff member says the order (or plays a customer's voice note next to the phone), Yorgo hears it and proposes the draft as with a typed message. Same route (`/api/yorgo/chat`, `mode=seller`), same limits (2 minutes), needs internet.
+- The recorder is shared (`components/useVoiceRecorder.tsx`) by the storefront chat and the till.
+- The microphone button is a drawn icon (capsule, cradle, stand) instead of the emoji, as in the chat apps people know.

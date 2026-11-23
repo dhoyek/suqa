@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { MicIcon, useVoiceRecorder } from '@/components/useVoiceRecorder';
 import YorgoBasketCard, { toDraft, useAddBasket, type Draft, type DraftIn, type Item } from '@/components/YorgoBasketCard';
 
 // Yorgo on the storefront: the customer writes what they want (Arabic, Arabizi or English), Yorgo proposes a basket, the customer
@@ -39,12 +40,9 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState(''); const [busy, setBusy] = useState(false);
   const conv = useRef<string | null>(null); const seq = useRef(0); const endRef = useRef<HTMLDivElement>(null);
-  const [recording, setRecording] = useState(false); const [canRecord, setCanRecord] = useState(false);
-  const rec = useRef<{ mr: MediaRecorder; send: boolean; timer: ReturnType<typeof setTimeout> | null } | null>(null);
-  useEffect(() => { setCanRecord(typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'); }, []);
-  useEffect(() => () => { const r = rec.current; if (r) { r.send = false; try { r.mr.stop(); } catch { /* gone */ } } }, []);      // leaving the page drops a recording in progress
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ block: 'end' }); }, [msgs, busy, open]);
   useEffect(() => { if (!open) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [open]);
+  const { recording, canRecord, start: startRec, stop: stopRec } = useVoiceRecorder(clip => void sendVoice(clip), () => push({ from: 'note', text: t('micDenied') }));      // before the early return: hooks keep their order
   if (/^\/(checkout|login|signup)/.test(path)) return null;                 // never in the way of paying or signing in
 
   const push = (m: Omit<Msg, 'id'>) => setMsgs(ms => [...ms, { ...m, id: ++seq.current }]);
@@ -102,25 +100,6 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
     } catch { push({ from: 'note', text: t('error') }); }
   };
 
-  // recording: the browser's own recorder, kept small (speech does not need more) and stopped by itself at two minutes
-  const stopRec = (sendIt: boolean) => { const r = rec.current; if (!r) return; r.send = sendIt; if (r.timer) clearTimeout(r.timer); try { r.mr.stop(); } catch { /* already stopped */ } };
-  const startRec = async () => {
-    if (busy || rec.current) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m));
-      const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32000 });
-      const chunks: Blob[] = []; const cur: { mr: MediaRecorder; send: boolean; timer: ReturnType<typeof setTimeout> | null } = { mr, send: false, timer: null };
-      mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-      mr.onstop = () => {
-        stream.getTracks().forEach(tr => tr.stop()); rec.current = null; setRecording(false);
-        const clip = new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' });
-        if (cur.send && clip.size > 800) void sendVoice(clip);
-      };
-      cur.timer = setTimeout(() => stopRec(true), 120_000);
-      rec.current = cur; mr.start(); setRecording(true);
-    } catch { push({ from: 'note', text: t('micDenied') }); }
-  };
 
   const patch = (id: number, f: (d: Draft) => Draft) => setMsgs(ms => ms.map(m => (m.id === id && m.draft ? { ...m, draft: f(m.draft) } : m)));
   const addBasket = useAddBasket(locale, text => push({ from: 'note', text }));
@@ -163,7 +142,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
           {signedIn && !recording && <div className="yorgo-input">
             <textarea className="input" rows={2} dir="auto" maxLength={2000} placeholder={t('placeholder')} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
-            {canRecord && !input.trim() ? <button className="btn primary" disabled={busy} onClick={() => void startRec()} aria-label={t('mic')} title={t('mic')}>🎤</button>
+            {canRecord && !input.trim() ? <button className="btn primary" disabled={busy} onClick={() => void startRec()} aria-label={t('mic')} title={t('mic')}><MicIcon /></button>
               : <button className="btn primary" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={t('send')}>↑</button>}
           </div>}
           <p className="yorgo-foot muted">{t('disclaimer')} <a href="/legal/privacy">{locale === 'ar' ? 'الخصوصية' : 'Privacy'}</a></p>

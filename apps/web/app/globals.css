@@ -245,6 +245,8 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .dlg-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
 .dlg { width: 100%; max-width: 560px; max-height: 85vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; border-radius: 16px 16px 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; }
 @media (min-width: 640px) { .dlg-backdrop { align-items: center; padding: 16px; } .dlg { border-radius: 14px; } }
+/* an item's details on the shop page: the picture large, whole, never cropped */
+.item-detail-img { width: 100%; max-height: 55vh; object-fit: contain; border-radius: 12px; background: #f1f3f5; }
 .dlg .cat-list { overflow: auto; display: flex; flex-direction: column; gap: 2px; }
 .dlg .cat-row { display: flex; gap: 10px; align-items: center; padding: 10px 8px; border-radius: 8px; cursor: pointer; }
 .dlg .cat-row.active { background: #eef6f5; }

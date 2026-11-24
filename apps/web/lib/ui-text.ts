@@ -270,6 +270,7 @@ const T = {
   removeFavorite: { en: 'Remove from favourites', ar: 'إزالة من المفضلة' },
   noFavorites: { en: 'No favourites yet — tap ☆ on a shop', ar: 'لا مفضلة بعد — اضغط ☆ على متجر' },
   searchItems: { en: 'Search items…', ar: 'ابحث عن صنف…' },
+  details: { en: 'details', ar: 'التفاصيل' },
   noMatches: { en: 'Nothing matches', ar: 'لا نتائج' },
   err_pickup_unavailable: { en: 'This shop does not offer pickup', ar: 'هذا المتجر لا يوفّر الاستلام' },
   err_out_of_stock: { en: 'Not enough stock for', ar: 'الكمية غير متوفرة حالياً لـ' },

@@ -1,3 +1,4 @@
+import { getShopRates } from '@/lib/public-data';
 import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
 import { requireUser } from '@/lib/auth';
@@ -26,7 +27,7 @@ export default async function CheckoutPage() {
     'oneFeeCourier', 'feePerShop', 'deliveredTogether', 'contactPhone', 'phoneRequired', 'editAddress', 'deleteAddress', 'pinHint', 'confirm', 'fulfillment', 'deliveryOption', 'pickup', 'pickupNotOffered', 'changePhone', 'suggestedFromShop'] as const;
   const labels = Object.fromEntries(keys.map(k => [k, ui(k, L)])) as Record<typeof keys[number], string>;
 
-  return <Checkout tenantId={tenant.id} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency}
+  return <Checkout tenantId={tenant.id} locale={L} fx={tenant.fx_lbp_rate} rates={await getShopRates(tenant.id)} displayCurrency={tenant.display_currency}
     addresses={addrs} defaultPhone={(profile as any)?.phone ?? ''} center={center} labels={labels} suggested={suggested}
     deliveryMode={tenant.settings.delivery_mode ?? 'per_shop'} courierFee={tenant.settings.courier_fee_usd != null ? Number(tenant.settings.courier_fee_usd) : null} />;
 }

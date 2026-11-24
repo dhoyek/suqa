@@ -6,6 +6,7 @@ import { useConfirm, useNotify } from '@/components/ConfirmProvider';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
 import { waLink, telLink } from '@/lib/whatsapp';
+import { formatMoneySum } from '@/lib/shop-money';
 import { formatMoney, t as tr, type Basket, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
 
 type Part = Order & { items: OrderItem[]; shop: { name: any; slug: string; phone: string | null; whatsapp: string | null } };
@@ -18,7 +19,9 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
   const sb = useMemo(() => supabaseBrowser(), []);
   const notify = useNotify();
   const [parts, setParts] = useState<Part[]>(props.initial);
-  const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
+  // each order of the basket shows its lira at the rate it was placed at (its shop's, 103); the basket's totals add them up
+  const rateOfPart = (p: Part) => Number((p as { fx_lbp_rate?: number | string | null }).fx_lbp_rate) || Number(fx);
+  const sumMoney = (parts: { usd: number; rate: number }[]) => formatMoneySum(parts, displayCurrency, L);
 
   useEffect(() => {
     const refresh = async () => {
@@ -41,6 +44,10 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
   const live = parts.filter(p => !['rejected', 'cancelled'].includes(p.status));
   const subtotal = live.reduce((s, p) => s + Number(p.subtotal_usd), 0);
   const fee = b.delivery_mode === 'courier' ? (live.length ? Number(b.delivery_fee_usd) : 0) : live.reduce((s, p) => s + Number(p.delivery_fee_usd), 0);
+  const courierMode = b.delivery_mode === 'courier';
+  const subParts = live.map(p => ({ usd: Number(p.subtotal_usd), rate: rateOfPart(p) }));
+  const feeParts = courierMode ? [{ usd: fee, rate: Number(b.fx_lbp_rate) || Number(fx) }] : live.map(p => ({ usd: Number(p.delivery_fee_usd), rate: rateOfPart(p) }));
+  const totalParts = courierMode ? [...subParts, ...feeParts] : live.map(p => ({ usd: Number(p.subtotal_usd) + Number(p.delivery_fee_usd), rate: rateOfPart(p) }));
 
   return (
     <div className="stack">
@@ -52,6 +59,7 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
       <div className="muted" style={{ fontSize: 13 }}>🚚 {b.delivery_mode === 'courier' ? labels.deliveredTogether : labels.deliveredSeparately}</div>
 
       {parts.map(p => {
+        const money = (v: number) => formatMoney(Number(v), rateOfPart(p), displayCurrency, L);
         const bad = p.status === 'rejected' || p.status === 'cancelled';
         const wa = waLink(p.shop?.whatsapp ?? p.shop?.phone, `${p.number}`); const tel = telLink(p.shop?.phone ?? p.shop?.whatsapp);
         return (
@@ -77,9 +85,9 @@ export default function BasketTracker(props: { basket: Basket; initial: Part[]; 
       })}
 
       <section className="card stack">
-        <div className="row spread"><span>{labels.subtotal}</span><span>{money(subtotal)}</span></div>
-        <div className="row spread muted" style={{ fontSize: 13 }}><span>{labels.deliveryFee}</span><span>{money(fee)}</span></div>
-        <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{money(subtotal + fee)}</strong></div>
+        <div className="row spread"><span>{labels.subtotal}</span><span>{sumMoney(subParts)}</span></div>
+        <div className="row spread muted" style={{ fontSize: 13 }}><span>{labels.deliveryFee}</span><span>{sumMoney(feeParts)}</span></div>
+        <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{sumMoney(totalParts)}</strong></div>
         <div className="muted" style={{ fontSize: 13 }}>{(b.address as any)?.line1}{(b.address as any)?.line2 ? `, ${(b.address as any).line2}` : ''}</div>
         {b.customer_notes && <div style={{ fontSize: 13 }}><span className="muted">{labels.notes}:</span> {b.customer_notes}</div>}
       </section>

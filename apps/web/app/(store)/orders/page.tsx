@@ -6,6 +6,7 @@ import { supabaseServer } from '@/lib/supabase-server';
 import { ui, STATUS_LABEL } from '@/lib/ui-text';
 import OrdersList, { type OrderCard } from './OrdersList';
 import { formatMoney, t as tr, type OrderStatus } from '@suqa/shared';
+import { formatMoneySum } from '@/lib/shop-money';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function OrdersPage() {
   const ar = L === 'ar';
   // one query: the orders with their lines and shop (the baskets' own numbers/totals come from their parts)
   const { data } = await sb.from('orders')
-    .select('id,number,status,fulfillment,total_usd,placed_at,accepted_at,delivered_at,eta_minutes,basket_id,shop:shops(name,slug),items:order_items(name,quantity)')
+    .select('id,number,status,fulfillment,total_usd,fx_lbp_rate,placed_at,accepted_at,delivered_at,eta_minutes,basket_id,shop:shops(name,slug),items:order_items(name,quantity)')
     .eq('customer_id', user.id).order('placed_at', { ascending: false }).limit(100);
   const rows = ((data as unknown) as Row[]) ?? [];
 
@@ -62,7 +63,7 @@ export default async function OrdersPage() {
       key: c.key, href: c.href, basket: c.basket, open, number: c.number, pickup: o.fulfillment === 'pickup',
       shops: c.parts.map(p => tr(p.shop?.name, L)), parts: c.parts.map(p => ({ id: p.id, status: p.status, label: label(p.status) })),
       summary: summary(items), search: [c.number, ...c.parts.map(p => `${p.shop?.name?.ar ?? ''} ${p.shop?.name?.en ?? ''}`), ...items.map(i => `${i.name?.ar ?? ''} ${i.name?.en ?? ''}`)].join(' ').toLowerCase(),
-      itemCount: items.length, when: when(c.placed_at), eta: open && !c.basket ? eta(o) : null, total: c.total, totalLabel: money(c.total),
+      itemCount: items.length, when: when(c.placed_at), eta: open && !c.basket ? eta(o) : null, total: c.total, totalLabel: formatMoneySum(c.parts.map(p => ({ usd: Number(p.total_usd), rate: Number((p as { fx_lbp_rate?: number | string | null }).fx_lbp_rate) || Number(tenant.fx_lbp_rate) })), tenant.display_currency, L),      // each order at the rate it was placed at
       delivered: c.parts.some(p => p.status === 'delivered'), status: o.status,
       month: d.toLocaleDateString('en-CA', { timeZone: tenant.timezone }).slice(0, 7), monthLabel: d.toLocaleDateString(loc, { timeZone: tenant.timezone, month: 'long', year: 'numeric' }),
     };

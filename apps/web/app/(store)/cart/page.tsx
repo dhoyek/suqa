@@ -1,3 +1,4 @@
+import { getShopRates } from '@/lib/public-data';
 import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
 import { getUser } from '@/lib/auth';
@@ -10,7 +11,7 @@ export default async function CartPage() {
   const tenant = await getTenant();
   const user = await getUser();
   const L = await getLocale(tenant);
-  return <CartView locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} signedIn={!!user} deliveryMode={tenant.settings.delivery_mode ?? 'per_shop'}
+  return <CartView locale={L} fx={tenant.fx_lbp_rate} rates={await getShopRates(tenant.id)} displayCurrency={tenant.display_currency} signedIn={!!user} deliveryMode={tenant.settings.delivery_mode ?? 'per_shop'}
     labels={{ cart: ui('cart', L), emptyCart: ui('emptyCart', L), browseShops: ui('browseShops', L), subtotal: ui('subtotal', L),
       deliveryFee: ui('deliveryFee', L), checkout: ui('checkout', L), from: ui('from', L), remove: ui('remove', L),
       sendCartWhatsapp: ui('sendCartWhatsapp', L), waHello: ui('waHello', L), waOrderIntro: ui('waOrderIntro', L), total: ui('total', L), notes: ui('notes', L),

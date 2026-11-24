@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
 import { getTenant } from '@/lib/tenant';
+import { getShopRates } from '@/lib/public-data';
 import { supabaseServer } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/server/supabase-admin';
 import { anthropicClient } from '@/lib/yorgo/model';
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
 
   const result = await runTurn(
     { model, cfg: yorgoConfig(), admin: { rpc: (fn, args) => admin.rpc(fn, args) }, sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never } },
-    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, hear, focusShop, shops, card: body.card === 'open' || body.card === 'added' || body.card === 'discarded' ? body.card : null },
+    { tenant: { id: tenant.id, brand: tenant.brand_name, fx_lbp_rate: tenant.fx_lbp_rate }, rates: mode === 'shopper' ? await getShopRates(tenant.id).catch(() => ({})) : null, userId: user.id, mode, channel: mode === 'seller' ? 'pos' : 'app', shopId, shopName, role, conversationId: body.conversation_id ?? null, message: body.message, hear, focusShop, shops, card: body.card === 'open' || body.card === 'added' || body.card === 'discarded' ? body.card : null },
   );
   if (result.status !== 'ok') return NextResponse.json(result, { status: result.status === 'error' && result.error === 'not_staff' ? 403 : 200 });
 

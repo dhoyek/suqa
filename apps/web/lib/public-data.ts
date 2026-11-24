@@ -2,6 +2,7 @@ import { usdPrice } from '@/lib/price';
 import { unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import type { Category, Product, Shop } from '@suqa/shared';
+import { rateOf, type Rates } from '@/lib/shop-money';
 
 // Public storefront reads. Everyone sees the same data, so cache it server-side for a few seconds instead of
 // hitting the database on every visit. Uses the anon key (no cookies) — RLS still applies (active shops/products only).
@@ -21,6 +22,17 @@ export const getHomeData = unstable_cache(async (tenantId: string) => {
   return { cats: (cats as Category[] | null) ?? [], shops: (shops as Shop[] | null) ?? [] };
 }, ['home-data'], { revalidate: 60, tags: ['home'] });
 
+/** Each shop's own lira rate (script 103), for the shops that set one. Read with the public key; empty until 103 is applied,
+ *  so every shop then falls back to the association's rate, as before. */
+async function loadRates(sb: ReturnType<typeof anon>, tenantId: string): Promise<Rates> {
+  try {
+    const { data, error } = await sb.rpc('shop_rates', { p_tenant: tenantId });
+    if (error || !data || typeof data !== 'object') return {};
+    return Object.fromEntries(Object.entries(data as Record<string, unknown>).map(([k, v]) => [k, Number(v)]).filter(([, v]) => Number(v) > 0)) as Rates;
+  } catch { return {}; }
+}
+export const getShopRates = unstable_cache(async (tenantId: string) => loadRates(anon(), tenantId), ['shop-rates'], { revalidate: 15, tags: ['shop'] });
+
 // The public key may read these item columns only (schema 71): cost, margin and supplier are the shop's own business.
 const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_currency,price_lbp,unit,unit_kind,decimal_qty,image_url,is_available,is_active,sort_order,section,sku,vat,track_stock,visible_online,on_hand,reserved,available_days,aliases,created_at,updated_at';
 
@@ -33,6 +45,7 @@ async function loadShop(sb: Db, tenantId: string, slug: string, fx: number | str
   const { data } = await q.maybeSingle();
   if (!data) return null;
   const shop = data as Shop & { hide_online_when_zero?: boolean };
+  const rate = rateOf(await loadRates(anon(), tenantId), shop.id, fx);      // the shop's own lira rate; the association's when it has none
   // The database API answers at most 1,000 rows per request: a shop with more items (Dekanet Jadde has 1,159) lost the rest —
   // they were neither shown nor found by the search. Read them page by page.
   type Row = Product & { visible_online?: boolean; track_stock?: boolean; on_hand?: number | string; reserved?: number | string };
@@ -46,12 +59,12 @@ async function loadShop(sb: Db, tenantId: string, slug: string, fx: number | str
   }
   // POS stock (21_pos): tracked items show live availability (on hand − reserved); the shop may hide items at zero.
   // a lira-priced item is shown and charged at its own lira price (lib/price.ts)
-  const list = (products ?? []).filter(p => p.visible_online !== false).map(p => ({ ...p, price_usd: usdPrice(p, fx) })).map(p => {
+  const list = (products ?? []).filter(p => p.visible_online !== false).map(p => ({ ...p, price_usd: usdPrice(p, rate) })).map(p => {
     if (!p.track_stock) return { ...p, available: null as number | null };
     const available = Math.max(0, Number(p.on_hand ?? 0) - Number(p.reserved ?? 0));
     return { ...p, available, is_available: p.is_available && available > 0 };
   }).filter(p => !(shop.hide_online_when_zero && p.available === 0));
-  return { shop: shop as Shop, products: list };
+  return { shop: shop as Shop, products: list, rate };
 }
 
 export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => loadShop(anon(), tenantId, slug, fx),

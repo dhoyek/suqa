@@ -1,3 +1,4 @@
+import { getShopRates } from '@/lib/public-data';
 import { NextResponse, after } from 'next/server';
 import { waVerifySignature, waSendText, waSendTemplate, waDownloadMedia } from '@/lib/server/whatsapp';
 import { orderMessageTpl, tplComponents } from '@/lib/server/wa-messages';
@@ -193,6 +194,7 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
       save: async (conv, phone, draft) => { const { data, error } = await admin.rpc('yorgo_draft_save', { p_tenant: tenant!.id, p_conversation: conv, p_phone: phone, p_draft: draft }); return error || typeof data !== 'string' ? null : data; },
     },
   };
+  const rates = await getShopRates(tenant.id).catch(() => ({}));      // each shop's own lira rate (103)
   const out = kind === 'voice'
     ? await waVoiceTurn({ ...deps, hear: async () => {
         // the audio lives in memory for this call only: downloaded from Meta, sent to be written down, dropped
@@ -200,8 +202,8 @@ async function yorgo(m: Msg, from: string, phoneNumberId: string | undefined, ct
         if (!media) return { status: 'failed', error: 'media_unavailable' };
         if ('tooBig' in media) return { status: 'too_long' };
         return runVoice(voiceRoute!, voiceKey!, media.bytes, media.mime);
-      } }, { tenant, phone: from, site: ctx.site, shops })
-    : await waTurn(deps, { tenant, phone: from, text: m.text?.body ?? '', site: ctx.site, shops });
+      } }, { tenant, phone: from, site: ctx.site, shops, rates })
+    : await waTurn(deps, { tenant, phone: from, text: m.text?.body ?? '', site: ctx.site, shops, rates });
   if (out.reply) await say(out.reply);
   // asked for and not found, as counted phrases only (script 78), like the app chat
   if (out.turn?.status === 'ok') {

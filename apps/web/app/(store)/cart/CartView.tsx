@@ -2,23 +2,25 @@
 import Link from 'next/link';
 import { useCart } from '@/components/CartProvider';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale } from '@suqa/shared';
+import { formatMoneySum, rateOf, type Rates } from '@/lib/shop-money';
 import { waLink } from '@/lib/whatsapp';
 
 type Labels = Record<'cart' | 'emptyCart' | 'browseShops' | 'subtotal' | 'deliveryFee' | 'checkout' | 'from' | 'remove'
   | 'sendCartWhatsapp' | 'waHello' | 'waOrderIntro' | 'total' | 'notes' | 'minOrder' | 'belowMin' | 'checkoutSelected' | 'shopsSelected'
   | 'oneFeeCourier' | 'feePerShop' | 'includeInOrder' | 'keepForLater' | 'continueShopping' | 'home' | 'lineNote', string>;
 
-export default function CartView({ locale: L, fx, displayCurrency, signedIn, deliveryMode, labels }: {
-  locale: Locale; fx: number; displayCurrency: DisplayCurrency; signedIn: boolean; deliveryMode: 'per_shop' | 'courier'; labels: Labels;
+export default function CartView({ locale: L, fx, rates, displayCurrency, signedIn, deliveryMode, labels }: {
+  locale: Locale; fx: number; rates?: Rates; displayCurrency: DisplayCurrency; signedIn: boolean; deliveryMode: 'per_shop' | 'courier'; labels: Labels;
 }) {
   const { cart, multiShop, setQty, setNote, setSelected, removeShop, count, selectedShops, selectedSubtotal } = useCart();
-  const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
+  // each shop's lira at its own rate (103); a total across shops is the sum of their lira
+  const moneyAt = (shopId: string) => (v: number) => formatMoney(v, rateOf(rates, shopId, fx), displayCurrency, L);
   if (!count) return <div className="card stack" style={{ textAlign: 'center' }}><p className="muted">{labels.emptyCart}</p><Link className="btn primary" href="/">{labels.browseShops}</Link></div>;
 
   const shopSub = (lines: { price_usd: number; qty: number }[]) => Math.round(lines.reduce((s, l) => s + l.price_usd * l.qty, 0) * 100) / 100;
   const belowMin = selectedShops.filter(s => (s.min_order_usd ?? 0) > shopSub(s.lines));
   const canCheckout = selectedShops.length > 0 && belowMin.length === 0;
-  const waTextFor = (s: typeof cart.shops[number]) => [
+  const waTextFor = (s: typeof cart.shops[number], money = moneyAt(s.id)) => [
     `${labels.waHello} ${tr(s.name, L)} 👋`, labels.waOrderIntro,
     ...s.lines.map(l => `• ${l.qty} × ${tr(l.name, L)}${l.unit ? ` (${l.unit})` : ''} — ${money(l.price_usd * l.qty)}`),
     `${labels.total}: ${money(shopSub(s.lines))} (+ ${labels.deliveryFee.toLowerCase()})`,
@@ -32,7 +34,7 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
       </div>
 
       {cart.shops.map(s => {
-        const sub = shopSub(s.lines); const min = s.min_order_usd ?? 0; const short = min > sub;
+        const money = moneyAt(s.id); const sub = shopSub(s.lines); const min = s.min_order_usd ?? 0; const short = min > sub;
         const wa = s.whatsapp ? waLink(s.whatsapp, waTextFor(s)) : null;
         return (
           <section className={`card stack cart-shop ${s.selected ? '' : 'off'}`} key={s.id}>
@@ -70,7 +72,7 @@ export default function CartView({ locale: L, fx, displayCurrency, signedIn, del
 
       <section className="card stack">
         {multiShop && <div className="row spread muted" style={{ fontSize: 13 }}><span>{labels.shopsSelected}</span><span>{selectedShops.length}</span></div>}
-        <div className="row spread"><span>{labels.subtotal}</span><strong>{money(selectedSubtotal)}</strong></div>
+        <div className="row spread"><span>{labels.subtotal}</span><strong>{formatMoneySum(selectedShops.map(s => ({ usd: shopSub(s.lines), rate: rateOf(rates, s.id, fx) })), displayCurrency, L)}</strong></div>
         <div className="row spread muted" style={{ fontSize: 13 }}>
           <span>{labels.deliveryFee}</span>
           <span>{selectedShops.length > 1 ? (deliveryMode === 'courier' ? labels.oneFeeCourier : labels.feePerShop) : `→ ${labels.checkout}`}</span>

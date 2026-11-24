@@ -3,6 +3,7 @@
 // catalog. Nothing is ordered from WhatsApp — the link opens the basket in the app, where the customer orders the usual way.
 // Pure on purpose (no provider, no database client, no network): everything it needs is passed in, so it is tested as is.
 import { toLbp } from '@suqa/shared';
+import { rateOf } from '@/lib/shop-money';
 import { runTurn, type Deps, type HeardVoice, type Lang, type TurnResult } from './core';
 import type { ShopHint } from './prompts';
 import { hydrateBasket, slimBasket, type BasketDraft, type OrderDraft } from './tools';
@@ -44,13 +45,16 @@ export function mergeSlim(open: Slim, add: Slim): Slim {
 }
 
 /** One line: shop(s) · items · total in both currencies · what is left to choose · what was not found. No item list. */
-export function waSummary(d: Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>, lang: Lang | L2, fx: number | null): string {
+export function waSummary(d: Pick<BasketDraft, 'lines' | 'choices' | 'not_found'>, lang: Lang | L2, fx: number | null, rates?: Record<string, number> | null): string {
   const l = two(lang); const t = (k: 'items' | 'choose' | 'missing' | 'shops') => WA_TEXT[k][l];
   const shops = [...new Map(d.lines.map(x => [x.shop.id, x.shop.name?.[l] || x.shop.name?.ar || x.shop.name?.en || ''])).values()].filter(Boolean);
   const usd = Math.round(d.lines.reduce((s, x) => s + x.price_usd * Math.max(1, Math.round(x.quantity)), 0) * 100) / 100;
+  // the lira: each shop's part at its own rate (103), added up
+  const byShop = new Map<string, number>(); for (const x of d.lines) byShop.set(x.shop.id, (byShop.get(x.shop.id) ?? 0) + x.price_usd * Math.max(1, Math.round(x.quantity)));
+  const lbp = fx ? [...byShop].reduce((s, [id, v]) => s + toLbp(Math.round(v * 100) / 100, rateOf(rates, id, fx)), 0) : 0;
   const parts: string[] = [];
   if (shops.length === 1) parts.push(shops[0]); else if (shops.length > 1) parts.push(`${shops.length} ${t('shops')}`);
-  if (d.lines.length) parts.push(`${d.lines.length} ${t('items')}`, fx ? `$${usd.toFixed(2)} (${toLbp(usd, fx).toLocaleString('en-US')} ${l === 'ar' ? 'ل.ل.' : 'L.L.'})` : `$${usd.toFixed(2)}`);
+  if (d.lines.length) parts.push(`${d.lines.length} ${t('items')}`, fx ? `$${usd.toFixed(2)} (${lbp.toLocaleString('en-US')} ${l === 'ar' ? 'ل.ل.' : 'L.L.'})` : `$${usd.toFixed(2)}`);
   if (d.choices.length) parts.push(`${d.choices.length} ${t('choose')}`);
   if (d.not_found.length) parts.push(`${d.not_found.length} ${t('missing')}`);
   return parts.join(' · ');
@@ -70,7 +74,7 @@ export type WaDeps = Deps & {
 /** How far back Yorgo looks on WhatsApp: the conversation it re-reads (script 101, the database's default) and the basket a "zid …" joins.
  *  Older than this, a message starts a new order. Nothing is deleted. */
 export const WA_MEMORY_HOURS = 3;
-export type WaInput = { tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; phone: string; text: string; site: string; shops?: ShopHint[]; heard?: TurnInputHeard };
+export type WaInput = { tenant: { id: string; brand: string; fx_lbp_rate?: number | string | null }; phone: string; text: string; site: string; shops?: ShopHint[]; rates?: Record<string, number> | null; heard?: TurnInputHeard };
 type TurnInputHeard = { model: string; cost_usd: number; input_tokens: number; output_tokens: number } | null;
 export type WaOutcome = { reply: string | null; as: 'yorgo' | 'paused' | 'off' | 'error'; draft_id?: string | null; cost_usd?: number; error?: string; turn: TurnResult };
 
@@ -78,7 +82,7 @@ export type WaOutcome = { reply: string | null; as: 'yorgo' | 'paused' | 'off' |
 export async function waTurn(d: WaDeps, i: WaInput): Promise<WaOutcome> {
   const site = i.site.replace(/\/+$/, '');
   const card = d.drafts.lastState ? await d.drafts.lastState(i.phone).catch(() => null) : null;
-  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops, heard: i.heard ?? null, card });
+  const turn = await runTurn(d, { tenant: i.tenant, userId: null, waPhone: i.phone, mode: 'shopper', channel: 'whatsapp', shopId: null, role: null, conversationId: null, message: i.text, shops: i.shops, heard: i.heard ?? null, card, rates: i.rates ?? null });
   // the language of our own lines: the turn's when it ran, otherwise from this message alone
   const guess: L2 = /[؀-ۿ]/.test(i.text) ? 'ar' : 'en';
   if (turn.status === 'paused') {
@@ -98,13 +102,13 @@ export async function waTurn(d: WaDeps, i: WaInput): Promise<WaOutcome> {
     if (baskets[0].add === true) {
       const open = await d.drafts.latest(turn.conversation_id).catch(() => null);
       // the summary must describe what the link will show — the whole basket, read again from the catalog — not only what was added
-      if (open) { slim = mergeSlim(open, slim); full = await hydrateBasket({ sb: d.sb, tenantId: i.tenant.id, fx }, slim).catch(() => full); }
+      if (open) { slim = mergeSlim(open, slim); full = await hydrateBasket({ sb: d.sb, tenantId: i.tenant.id, fx, rates: i.rates ?? null }, slim).catch(() => full); }
     }
     const hasAny = slim.lines.length || slim.choices.length;
     if (hasAny) {
       draftId = await d.drafts.save(turn.conversation_id, i.phone, slim).catch(() => null);
       if (draftId) {
-        parts.push(`🛒 ${waSummary(full, lang, fx)}`, fill(WA_TEXT.open[lang], { link: `${site}/y/${draftId}` }));
+        parts.push(`🛒 ${waSummary(full, lang, fx, i.rates)}`, fill(WA_TEXT.open[lang], { link: `${site}/y/${draftId}` }));
       } else parts.push(fill(WA_TEXT.failed[lang], { site }));
     }
   }

@@ -1,6 +1,7 @@
 // The fixed set of typed tools the model may call. No tool takes SQL or free filters; every tool runs with the CALLER'S OWN
 // Supabase client, so row-level security decides what it can see — Yorgo never has more access than the person using it.
 import { usdPrice } from '@/lib/price';
+import { rateOf } from '@/lib/shop-money';
 import type { ToolDef } from './model';
 
 export type Mode = 'shopper' | 'seller';
@@ -8,7 +9,7 @@ export type Role = 'owner' | 'cashier' | 'stock' | 'setup';
 type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type From = (t: string) => any;
-export type ToolCtx = { sb: { rpc: Rpc; from?: From }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null; fx?: number | null };   // fx: the market's lira rate, for lira-priced items
+export type ToolCtx = { sb: { rpc: Rpc; from?: From }; tenantId: string; mode: Mode; shopId: string | null; role: Role | null; fx?: number | null; rates?: Record<string, number> | null };   // rates: each shop's own lira rate (103), over fx   // fx: the market's lira rate, for lira-priced items
 export type Tool = ToolDef & { modes: Mode[]; roles?: Role[]; run(input: Record<string, unknown>, ctx: ToolCtx): Promise<unknown> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,7 +48,7 @@ const matchItems: Tool = {
       candidates: ((data as Row[] | null) ?? []).filter(r => r.phrase_no === i + 1).map(r => ({
         product_id: r.product_id, name_ar: r.name?.ar ?? null, name_en: r.name?.en ?? null, ...(cat.get(r.product_id) ? { category: cat.get(r.product_id) } : {}),
         ...(ctx.mode === 'shopper' ? { shop_id: r.shop_id, shop: r.shop_name?.ar ?? r.shop_name?.en ?? null } : {}),
-        price_usd: Math.round(usdPrice(r, ctx.mode === 'shopper' ? ctx.fx : null) * 100) / 100, ...(r.price_currency === 'lbp' ? { price_lbp: Number(r.price_lbp) } : {}), unit: r.unit,
+        price_usd: Math.round(usdPrice(r, ctx.mode === 'shopper' ? rateOf(ctx.rates, r.shop_id, ctx.fx) : null) * 100) / 100, ...(r.price_currency === 'lbp' ? { price_lbp: Number(r.price_lbp) } : {}), unit: r.unit,
         available: r.is_available, ...(r.available_days?.length ? { only_on_weekdays: r.available_days } : {}), score: Math.round(r.score * 100) / 100, ...(r.matched_on === 'kind' ? { matched_on: 'kind' } : {}),
       })),
     }));
@@ -125,7 +126,7 @@ const draftBasket: Tool = {
  * prices, shops and availability re-read from the catalog with the given client, so it is always today's price. An id that is not
  * on sale online is dropped; one that is sold out is said in not_found.
  */
-export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx'>, slim: Pick<OrderDraft, 'lines' | 'choices' | 'not_found'>): Promise<{ lines: BasketDraft['lines']; choices: BasketDraft['choices']; not_found: string[]; soldOut: string[] }> {
+export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx' | 'rates'>, slim: Pick<OrderDraft, 'lines' | 'choices' | 'not_found'>): Promise<{ lines: BasketDraft['lines']; choices: BasketDraft['choices']; not_found: string[]; soldOut: string[] }> {
   const ids = [...new Set([...slim.lines.map(l => l.product_id), ...slim.choices.flatMap(c => c.options)])];
     const found = new Map<string, ItemOut>();
     const soldOut = new Map<string, string>();
@@ -139,7 +140,7 @@ export async function hydrateBasket(ctx: Pick<ToolCtx, 'sb' | 'tenantId' | 'fx'>
         const sh = Array.isArray(r.shops) ? (r.shops as Row['shops'][])[0] : r.shops;
         if (!sh || sh.tenant_id !== ctx.tenantId || sh.status !== 'active' || !r.is_active || r.visible_online === false) continue;
         if (!r.is_available) { soldOut.set(r.id, r.name?.ar || r.name?.en || ''); continue; }      // on the menu, not available now: said on the card, never dropped silently
-        found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: usdPrice(r, ctx.fx), days: r.available_days?.length ? r.available_days : null,
+        found.set(r.id, { product_id: r.id, name: r.name, unit: r.unit, price_usd: usdPrice(r, rateOf(ctx.rates, sh.id, ctx.fx)), days: r.available_days?.length ? r.available_days : null,
           shop: { id: sh.id, slug: sh.slug, name: sh.name, whatsapp: sh.whatsapp, min_order_usd: Number(sh.min_order_usd ?? 0), pickup_enabled: sh.pickup_enabled !== false } });
       }
     }

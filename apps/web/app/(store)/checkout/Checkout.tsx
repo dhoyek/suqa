@@ -9,6 +9,7 @@ import { useCart } from '@/components/CartProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
 import MapPicker from '@/components/MapPicker';
 import { normalizePhone } from '@/lib/whatsapp';
+import { formatMoneySum, rateOf, type Rates } from '@/lib/shop-money';
 import { formatMoney, placeOrder, placeBasket, pointToEwkt, t as tr, type DisplayCurrency, type Locale } from '@suqa/shared';
 
 type Addr = { id: string; label: string | null; line1: string | null; line2: string | null; notes: string | null; phone: string | null; is_default: boolean; lat: number; lng: number };
@@ -20,14 +21,17 @@ type Labels = Record<'checkout' | 'deliveryAddress' | 'newAddress' | 'addressLab
 
 const addrText = (a: Addr) => [a.line1, a.line2].filter(Boolean).join(', ');
 
-export default function Checkout(props: { tenantId: string; locale: Locale; fx: number; displayCurrency: DisplayCurrency; addresses: Addr[]; defaultPhone: string; center: { lat: number; lng: number }; deliveryMode: 'per_shop' | 'courier'; courierFee: number | null; labels: Labels; suggested?: { line1?: string; lat?: number; lng?: number; label?: string } | null }) {
+export default function Checkout(props: { tenantId: string; locale: Locale; fx: number; rates?: Rates; displayCurrency: DisplayCurrency; addresses: Addr[]; defaultPhone: string; center: { lat: number; lng: number }; deliveryMode: 'per_shop' | 'courier'; courierFee: number | null; labels: Labels; suggested?: { line1?: string; lat?: number; lng?: number; label?: string } | null }) {
   const { tenantId, locale: L, fx, displayCurrency, deliveryMode, courierFee, labels } = props;
   const router = useRouter();
   const ask = useConfirm();
   const sb = useMemo(() => supabaseBrowser(), []);
   const { selectedShops: shops, selectedSubtotal: subtotal, selectedCount: count, removeShops } = useCart();
   const shopKey = shops.map(s => s.id).join(',');
-  const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
+  // each shop's lira at its own rate (103) — the rate its order will be stored at; a sum across shops adds their lira up
+  const rate = (shopId: string) => rateOf(props.rates, shopId, fx);
+  const moneyAt = (shopId: string) => (v: number) => formatMoney(v, rate(shopId), displayCurrency, L);
+  const sumMoney = (parts: { usd: number; rate: number }[]) => formatMoneySum(parts, displayCurrency, L);
 
   // Contact phone is a checkout field: prefilled from the profile (or the default address), saved back on order.
   const [phone, setPhone] = useState(props.defaultPhone || props.addresses.find(a => a.is_default)?.phone || props.addresses[0]?.phone || '');
@@ -152,6 +156,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
     : !whenOk ? (ar ? 'اختر اليوم والوقت' : 'Pick the day and time')
     : !feesReady ? (ar ? 'جارٍ حساب رسوم التوصيل…' : 'Working out the delivery fee…') : '';
   const shopSub = (lines: { price_usd: number; qty: number }[]) => Math.round(lines.reduce((a, l) => a + l.price_usd * l.qty, 0) * 100) / 100;
+  // the same sums, shop by shop, for the lira: an order's lira is its own total at its shop's rate (one shared courier fee: the association's rate)
+  const feeOf = (shopId: string) => { const f = fees[shopId]; return f && f !== 'outside' ? Number(f.fee_usd) : 0; };
+  const subParts = shops.map(s => ({ usd: shopSub(s.lines), rate: rate(s.id) }));
+  const feeParts = pickup ? [] : courier ? [{ usd: feeUsd, rate: Number(fx) }] : shops.map(s => ({ usd: feeOf(s.id), rate: rate(s.id) }));
+  const totalParts = pickup ? subParts : courier ? [...subParts, ...feeParts] : shops.map(s => ({ usd: shopSub(s.lines) + feeOf(s.id), rate: rate(s.id) }));
 
   return (
     <div className="stack">
@@ -236,7 +245,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
       </section>
 
       {shops.map(s => {
-        const f = fees[s.id];
+        const f = fees[s.id]; const money = moneyAt(s.id);
         return (
           <section className="card stack" key={s.id}>
             <div className="row spread"><strong>{tr(s.name, L)}</strong><span>{money(shopSub(s.lines))}</span></div>
@@ -253,11 +262,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
 
       <section className="card stack">
         <textarea className="input" rows={2} placeholder={labels.orderNotes} value={notes} onChange={e => setNotes(e.target.value)} />
-        <div className="row spread"><span>{labels.subtotal}</span><span>{money(subtotal)}</span></div>
-        {!pickup && <div className="row spread"><span>{labels.deliveryFee}{shops.length > 1 && <span className="muted" style={{ fontSize: 12 }}> · {courier ? labels.oneFeeCourier : labels.feePerShop}</span>}</span><span>{feesReady && !anyOutside ? money(feeUsd) : '—'}</span></div>}
+        <div className="row spread"><span>{labels.subtotal}</span><span>{sumMoney(subParts)}</span></div>
+        {!pickup && <div className="row spread"><span>{labels.deliveryFee}{shops.length > 1 && <span className="muted" style={{ fontSize: 12 }}> · {courier ? labels.oneFeeCourier : labels.feePerShop}</span>}</span><span>{feesReady && !anyOutside ? sumMoney(feeParts) : '—'}</span></div>}
         {pickup && <div className="muted" style={{ fontSize: 13 }}>🛍️ {labels.pickup}</div>}
         {courier && !pickup && <div className="muted" style={{ fontSize: 13 }}>🚚 {labels.deliveredTogether}</div>}
-        <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{money(subtotal + feeUsd)}</strong></div>
+        <div className="row spread" style={{ fontSize: 18 }}><strong>{labels.total}</strong><strong>{sumMoney(totalParts)}</strong></div>
         <div className="muted" style={{ fontSize: 13 }}>💵 {labels.payCash}</div>
         {error && <div className="error" role="alert">{error}</div>}
         {addressStep
@@ -272,7 +281,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
           ? <button className="btn primary wide" disabled={busy} onClick={saveAddress}>📍 {ar ? 'حفظ العنوان والمتابعة' : 'Save address and continue'}</button>
           : <>
             {!canOrder && !busy && blocker && <div style={{ background: '#fff8e6', color: '#92400e', borderRadius: 10, padding: '6px 10px', fontSize: 13, marginBottom: 6, textAlign: 'center' }}>{blocker}</div>}
-            <button className="btn primary wide row spread" disabled={!canOrder} onClick={submit}><span>{labels.placeOrder}</span><span>{money(subtotal + feeUsd)}</span></button>
+            <button className="btn primary wide row spread" disabled={!canOrder} onClick={submit}><span>{labels.placeOrder}</span><span>{sumMoney(totalParts)}</span></button>
           </>}
       </div>
     </div>

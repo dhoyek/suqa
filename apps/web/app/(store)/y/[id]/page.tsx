@@ -3,6 +3,7 @@ import { getLocale } from '@/lib/locale';
 import { supabaseServer } from '@/lib/supabase-server';
 import { hydrateBasket, type OrderDraft } from '@/lib/yorgo/tools';
 import DraftBasket from './DraftBasket';
+import { getShopRates } from '@/lib/public-data';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -25,6 +26,6 @@ export default async function YorgoDraftPage({ params }: { params: Promise<{ id:
   const row = data as { id: string; tenant_id: string; draft: Partial<OrderDraft>; added: boolean; discarded?: boolean } | null;
   if (!row || row.tenant_id !== tenant.id) return gone;
   const slim = { lines: row.draft.lines ?? [], choices: row.draft.choices ?? [], not_found: row.draft.not_found ?? [] };
-  const full = await hydrateBasket({ sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never }, tenantId: tenant.id, fx: Number(tenant.fx_lbp_rate ?? 0) || null }, slim);
+  const full = await hydrateBasket({ sb: { rpc: (fn, args) => sb.rpc(fn, args), from: t => sb.from(t) as never }, tenantId: tenant.id, fx: Number(tenant.fx_lbp_rate ?? 0) || null, rates: await getShopRates(tenant.id).catch(() => ({})) }, slim);
   return <DraftBasket id={row.id} locale={L} draft={{ lines: full.lines, choices: full.choices, not_found: full.not_found }} alreadyAdded={row.added} discarded={row.discarded === true} />;
 }

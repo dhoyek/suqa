@@ -5,6 +5,8 @@ import { fmtLbp, fmtUsd, num, text, type CatalogIndex, type Conflict, type Produ
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import ItemEditor from '../components/ItemEditor';
+import dynamic from 'next/dynamic';
+const CameraScanner = dynamic(() => import('../components/CameraScanner'), { ssr: false });      // loaded only when the camera button is pressed
 import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import { can, roleOf } from '../lib/perm';
 import Modal from '../components/Modal';
@@ -14,7 +16,16 @@ import BulkDialog from '../components/BulkDialog';
 /** Catalog: list + editor, quick buttons (owner, online), conflict review (owner). Bulk tools + import live in a separate dialog (M4-c). */
 export default function ItemsView({ boot, sb, locale, index, tick, staff, reindex }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void }) {
   const [q, setQ] = useState(''); const [cat, setCat] = useState<Set<string>>(new Set()); const [showArchived, setShowArchived] = useState(false);
-  const [edit, setEdit] = useState<{ p: Product | null; from?: Product } | null>(null);      // from = a new item started as a copy of this one
+  const [edit, setEdit] = useState<{ p: Product | null; from?: Product; barcode?: string } | null>(null);      // from = a new item started as a copy of this one; barcode = a new item started from a scan
+  const [camera, setCamera] = useState(false);
+  // the camera on the items screen: a barcode that is known opens its item; an unknown one starts a new item with that barcode
+  const onCamera = (code: string) => {
+    setCamera(false);
+    const p = index.scan(code);
+    if (p) { if (canEdit) setEdit({ p }); else setQ(text(p.name, locale)); }
+    else if (canEdit) setEdit({ p: null, barcode: code });
+    else setQ(code);
+  };
   const [members, setMembers] = useState<Staff[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [archived, setArchived] = useState<Product[]>([]);
@@ -28,6 +39,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
     <div className="stack" style={{ padding: 16 }}>
       <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input className="input" style={{ flex: 1, minWidth: 220 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} />
+        <button className="btn" onClick={() => setCamera(true)} title={pt('cameraScan', locale)} aria-label={pt('cameraScan', locale)}>📷</button>
         <CategoryFilter cats={cats} selected={cat} onChange={setCat} locale={locale} />
         {canEdit && <button className="btn primary" onClick={() => setEdit({ p: null })}>＋ {pt('newItem', locale)}</button>}
         {tools && <button className="btn" onClick={() => setQuickOpen(true)}>⚡ {pt('quickButtons', locale)}</button>}
@@ -58,7 +70,8 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         })}
         {!list.length && <tr><td className="muted">{pt('noResults', locale)}</td></tr>}
       </tbody></table>
-      {edit && <ItemEditor key={edit.p?.id ?? `new-${edit.from?.id ?? ''}`} boot={boot} locale={locale} index={index} product={edit.p} template={edit.from ?? null} staff={members} me={staff} onDone={() => { setEdit(null); reindex(); }} onClose={() => setEdit(null)} onCopy={p => setEdit({ p: null, from: p })} />}
+      {camera && <CameraScanner open locale={locale} onScan={onCamera} onClose={() => setCamera(false)} />}
+      {edit && <ItemEditor key={edit.p?.id ?? `new-${edit.from?.id ?? ''}${edit.barcode ?? ''}`} boot={boot} locale={locale} index={index} product={edit.p} template={edit.from ?? null} presetBarcode={edit.barcode} staff={members} me={staff} onDone={() => { setEdit(null); reindex(); }} onClose={() => setEdit(null)} onCopy={p => setEdit({ p: null, from: p })} />}
       {importOpen && <ImportDialog boot={boot} locale={locale} onDone={reindex} onClose={() => setImportOpen(false)} />}
       {bulkOpen && <BulkDialog boot={boot} sb={sb} locale={locale} index={index} onDone={reindex} onClose={() => setBulkOpen(false)} />}
       {quickOpen && <QuickButtonsEditor boot={boot} sb={sb} locale={locale} index={index} onClose={() => { setQuickOpen(false); boot.engine.poke(); }} />}

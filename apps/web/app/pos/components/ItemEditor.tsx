@@ -8,6 +8,8 @@ import { useScanner } from '../lib/useScanner';
 import ImageUpload from '@/components/ImageUpload';
 import Modal from './Modal';
 import OwnerPin from './OwnerPin';
+import dynamic from 'next/dynamic';
+const CameraScanner = dynamic(() => import('./CameraScanner'), { ssr: false });      // loaded only when the camera button is pressed
 
 const UNITS = ['piece', 'kg', 'g', 'l', 'ml', 'pack'] as const;
 
@@ -46,6 +48,7 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index]);
   const original = useMemo(() => (product ? index.barcodes(product.id) : []), [product, index]);
 
+  const [cam, setCam] = useState(false);      // the camera reads a barcode straight into the list below
   const addBc = async (raw: string) => {
     const b = normBarcode(raw); if (!b) return;
     const other = await barcodeOwner(boot.db, b);
@@ -110,7 +113,8 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
               {b.pack_qty !== 1 && <input className="input" dir="ltr" inputMode="decimal" title={pt('packPrice', locale)} placeholder={pt('packPrice', locale)} value={b.pack_price_usd ?? ''} onChange={e => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_price_usd: e.target.value === '' ? null : Number(e.target.value) } : y)))} style={{ width: 110, minHeight: 36 }} />}
               {b.pack_qty !== 1 && <small className="muted">{pt('pack', locale)} ×{b.pack_qty}</small>}
               <button type="button" className="btn icon" style={{ minHeight: 0, padding: '0 6px' }} onClick={() => setBcs(x => x.filter((_, j) => j !== i))}>✕</button></div>)}</div>
-            <div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" placeholder={pt('addBarcode', locale)} value={bcInput} onChange={e => setBcInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addBc(bcInput); } }} /><button type="button" className="btn" onClick={() => addBc(bcInput)}>＋</button></div>
+            <div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" placeholder={pt('addBarcode', locale)} value={bcInput} onChange={e => setBcInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addBc(bcInput); } }} /><button type="button" className="btn" onClick={() => addBc(bcInput)}>＋</button><button type="button" className="btn" onClick={() => setCam(true)} title={pt('cameraScan', locale)} aria-label={pt('cameraScan', locale)}>📷</button></div>
+            {cam && <CameraScanner open locale={locale} onScan={code => { setCam(false); void addBc(code); }} onClose={() => setCam(false)} />}
             {bcErr && <div className="bad" style={{ fontSize: 13 }}>{bcErr}</div>}
           </div>
           <label className="label">{pt('unit', locale)}<select className="input" value={unit} onChange={e => setUnit(e.target.value)}>{UNITS.map(u => <option key={u} value={u}>{pt(u, locale)}</option>)}</select></label>

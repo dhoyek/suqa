@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { t as tr, type LocalizedText } from '@suqa/shared';
+import { intlPhone } from '@suqa/pos-core';
 
 export type Account = {
   id: string; name: string | null; phone: string | null; email: string | null; created_at: string; last_sign_in_at: string | null;
@@ -33,7 +34,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
   const reloadInvites = async () => { const { data } = await sb.rpc('admin_account_invites', { p_tenant: tenantId }); if (data) setInvites(data as Invite[]); };
   const sendInvite = async () => {
     setBusy(true); setIMsg(null); setEErr(null);
-    const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: iPhone, p_name: iName || null, p_tenant_role: iTenant || null, p_shop: iShop || null, p_shop_role: iShop ? iShopRole : null });
+    const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: intlPhone(iPhone), p_name: iName || null, p_tenant_role: iTenant || null, p_shop: iShop || null, p_shop_role: iShop ? iShopRole : null });
     setBusy(false);
     if (error) { setEErr(error.message); return; }
     setIMsg((data as { status: string }).status === 'applied' ? labels.applied : labels.invited); setIPhone(''); setIName(''); setITenant(''); setIShop('');
@@ -57,7 +58,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
   const save = async () => {
     if (!edit || busy) return; setBusy(true); setEErr(null);
     const phoneChanged = ePhone.replace(/\D/g, '') !== (edit.phone ?? '').replace(/\D/g, '');
-    const { data, error } = await sb.rpc('admin_account_update', { p_tenant: tenantId, p_user: edit.id, p_name: eName, p_phone: phoneChanged ? ePhone : null });
+    const { data, error } = await sb.rpc('admin_account_update', { p_tenant: tenantId, p_user: edit.id, p_name: eName, p_phone: phoneChanged ? intlPhone(ePhone) : null });
     setBusy(false);
     if (error) { setEErr(/phone_taken/.test(error.message) ? labels.phoneTaken : error.message); return; }
     const np = (data as { phone?: string | null })?.phone ?? edit.phone;
@@ -94,12 +95,12 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
         <div className="card stack" style={{ background: '#f8fafc' }}>
           <p className="muted" style={{ margin: 0, fontSize: 13 }}>{labels.inviteHint}</p>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <input className="input" style={{ flex: 1, minWidth: 160 }} dir="ltr" inputMode="tel" placeholder="+961 70 000 000" value={iPhone} onChange={e => setIPhone(e.target.value)} />
+            <input className="input" style={{ flex: 1, minWidth: 160 }} dir="ltr" inputMode="tel" placeholder="+961 70 000 000" value={iPhone} onChange={e => setIPhone(e.target.value)} onBlur={() => { if (iPhone.replace(/\D/g, '').length >= 7) setIPhone(intlPhone(iPhone)); }} />
             <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder={labels.name} value={iName} onChange={e => setIName(e.target.value)} />
             <select className="input" style={{ width: 'auto' }} value={iTenant} onChange={e => setITenant(e.target.value)}><option value="">{labels.assocRole}: {labels.none}</option><option value="ops">{labels.tenantOps}</option><option value="admin">{labels.tenantAdmin}</option></select>
             <select className="input" style={{ width: 'auto' }} value={iShop} onChange={e => setIShop(e.target.value)}><option value="">{labels.shopRoles}: {labels.none}</option>{shops.filter(s => s.pos).map(s => <option key={s.id} value={s.id}>{tr(s.name, L)}</option>)}</select>
             {iShop && <select className="input" style={{ width: 'auto' }} value={iShopRole} onChange={e => setIShopRole(e.target.value)}><option value="owner">{labels.roleOwner}</option><option value="cashier">{labels.roleCashier}</option><option value="stock">{labels.roleStock}</option></select>}
-            <button type="button" className="btn primary" disabled={busy || iPhone.replace(/\D/g, '').length < 8 || (!iTenant && !iShop)} onClick={sendInvite}>{labels.add}</button>
+            <button type="button" className="btn primary" disabled={busy || iPhone.replace(/\D/g, '').length < 7 || (!iTenant && !iShop)} onClick={sendInvite}>{labels.add}</button>
           </div>
           {iMsg && <p className="muted" style={{ margin: 0 }}>✓ {iMsg}</p>}
           {invites.length > 0 && <div className="stack" style={{ gap: 4 }}>

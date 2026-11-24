@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { deleteDriver, driverPayRule, fmtPhone, fmtUsd, getMeta, setMeta, META, text, upsertDriver, waDigits, type Driver, type DriverPayMode, type Shop } from '@suqa/pos-core';
+import { deleteDriver, driverPayRule, fmtPhone, intlPhone, fmtUsd, getMeta, setMeta, META, text, upsertDriver, waDigits, type Driver, type DriverPayMode, type Shop } from '@suqa/pos-core';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -77,12 +77,12 @@ function DriverForm({ locale, d, onSave, onClose }: { locale: L; d: Partial<Driv
     <div className="card stack" style={{ marginTop: 8, background: '#f8fafc' }}>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <label className="label" style={{ flex: 1, minWidth: 140 }}>{pt('driverFullName', locale)}<input className="input" value={name} onChange={e => setName(e.target.value)} autoFocus /></label>
-        <label className="label" style={{ flex: 1, minWidth: 140 }}>{pt('customerPhone', locale)}<input className="input" dir="ltr" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="70 123 456" /></label>
+        <label className="label" style={{ flex: 1, minWidth: 140 }}>{pt('customerPhone', locale)}<input className="input" dir="ltr" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} onBlur={() => { if (phone.replace(/\D/g, '').length >= 7) setPhone(intlPhone(phone)); }} placeholder="70 123 456" /></label>
         <label className="label" style={{ flex: 1, minWidth: 120 }}>{pt('vehicleKind', locale)}<input className="input" value={vehicle} onChange={e => setVehicle(e.target.value)} placeholder="موتو / سيارة" /></label>
       </div>
       <label className="label">{pt('customerNotes', locale)}<input className="input" value={notes} onChange={e => setNotes(e.target.value)} /></label>
       <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-        <button className="btn primary" disabled={!name.trim() || phone.replace(/\D/g, '').length < 6} onClick={() => onSave({ id: d.id, name, phone, vehicle: vehicle.trim() || null, active, notes: notes.trim() || null })}>{pt('save', locale)}</button>
+        <button className="btn primary" disabled={!name.trim() || phone.replace(/\D/g, '').length < 6} onClick={() => onSave({ id: d.id, name, phone: intlPhone(phone), vehicle: vehicle.trim() || null, active, notes: notes.trim() || null })}>{pt('save', locale)}</button>
         {d.id && <label className="row" style={{ gap: 6, alignItems: 'center' }}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /> {pt('active', locale)}</label>}
         <span style={{ flex: 1 }} /><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button>
       </div>

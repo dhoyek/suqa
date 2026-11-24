@@ -6,6 +6,21 @@ import type { CustomerAddress, Order, OrderLine, SavedAddress, ShopCustomer } fr
 export const normPhone = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '').replace(/^00/, '').replace(/^961/, '').replace(/^0/, '');
 
 /** Display form: +961 70 483 148 for local numbers, the digits otherwise. */
+/** The number as it is stored and dialled: "+<country><number>". A number typed without a country code gets the default one
+ *  (Lebanon): "03 369 072" → "+9613369072", "70 123 456" → "+96170123456", "3369072" → "+9613369072". One that already carries a
+ *  code ("+…", "00…", "961…", or any number too long to be local) keeps it; "+961 03…" loses the stray 0. '' when there is no number. */
+export function intlPhone(raw: string | null | undefined, cc = '961'): string {
+  const t = (raw ?? '').trim(); let d = t.replace(/\D/g, ''); if (!d) return '';
+  const coded = t.startsWith('+') || d.startsWith('00');
+  d = d.replace(/^00/, '');
+  if (!coded && !(d.startsWith(cc) && d.length >= cc.length + 7)) {
+    const local = d.replace(/^0+/, '');
+    if (local.length <= 8) d = cc + local;                              // a local number: the default country goes in front
+  }
+  if (d.startsWith(cc + '0')) d = cc + d.slice(cc.length).replace(/^0+/, '');   // +961 03… → +961 3…
+  return '+' + d;
+}
+
 export function fmtPhone(p: string | null | undefined): string {
   const k = normPhone(p); if (!k) return '';
   if (k.length === 8) return `+961 ${k.slice(0, 2)} ${k.slice(2, 5)} ${k.slice(5)}`;

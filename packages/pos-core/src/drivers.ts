@@ -1,5 +1,5 @@
 import type { PosDb } from './db';
-import { normPhone } from './customers';
+import { intlPhone, normPhone } from './customers';
 import { enqueue, newId } from './sale';
 import type { Currency, Driver, DriverPayMode, DriverScope, Order, Shift, Shop } from './types';
 import { getMeta, META } from './db';
@@ -15,7 +15,7 @@ export async function upsertDriver(db: PosDb, shopId: string, input: { id?: stri
   const key = normPhone(input.phone); if (key.length < 6) throw new Error('bad_phone');
   if (!input.name.trim()) throw new Error('bad_name');
   const existing = input.id ? await db.drivers.get(input.id) : await db.drivers.where('phone_key').equals(key).first();
-  const row: Driver = { id: existing?.id ?? newId(), shop_id: shopId, name: input.name.trim(), phone: input.phone.trim(), phone_key: key, vehicle: input.vehicle ?? existing?.vehicle ?? null,
+  const row: Driver = { id: existing?.id ?? newId(), shop_id: shopId, name: input.name.trim(), phone: intlPhone(input.phone), phone_key: key, vehicle: input.vehicle ?? existing?.vehicle ?? null,
     active: input.active ?? existing?.active ?? true, available: input.available ?? existing?.available ?? true, notes: input.notes ?? existing?.notes ?? null, user_id: existing?.user_id ?? null,
     last_used_at: existing?.last_used_at ?? null, updated_at: new Date().toISOString(),
     ...(existing?.pay_mode !== undefined ? { pay_mode: existing.pay_mode } : {}), ...(existing?.pay_cents !== undefined ? { pay_cents: existing.pay_cents } : {}), scope: input.scope ?? existing?.scope ?? 'shop' };

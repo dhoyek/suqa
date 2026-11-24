@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { text, type Staff } from '@suqa/pos-core';
+import { intlPhone, text, type Staff } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -50,7 +50,7 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
     try {
       const { data, error } = picked
         ? await sb.rpc('pos_staff_add_user', { p_shop: boot.shop.id, p_user: picked.id, p_role: role, p_name: name.trim() || picked.full_name })
-        : await sb.rpc('pos_staff_invite', { p_shop: boot.shop.id, p_phone: phone, p_name: name, p_role: role });
+        : await sb.rpc('pos_staff_invite', { p_shop: boot.shop.id, p_phone: intlPhone(phone), p_name: name, p_role: role });
       if (error) { setMsg(error.message); return; }
       const r = data as { status: 'member' | 'invited'; phone?: string };
       setMsg(r.status === 'member' ? pt('staffAdded', locale) : pt('invited', locale));
@@ -75,11 +75,11 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
   const saveEdit = async () => {
     if (!edit) return; setBusy(true); setEErr(null);
     try {
-      const name = eName.trim(); const phone = ePhone.trim(); const oldPhone = edit.phone ? '+' + edit.phone.replace(/^\+/, '') : '';
+      const name = eName.trim(); const phone = intlPhone(ePhone); const oldPhone = edit.phone ? '+' + edit.phone.replace(/^\+/, '') : '';
       if (name && name !== (edit.display_name || edit.full_name || '')) { const { error } = await sb.rpc('pos_staff_set', { p_shop: boot.shop.id, p_user: edit.user_id, p_name: name }); if (error) throw error; }
       if (phone && phone.replace(/\D/g, '') !== oldPhone.replace(/\D/g, '')) {
         if (!(await confirm(pt('staffPhoneConfirm', locale).replace('{name}', name).replace('{phone}', phone), { danger: true }))) { setBusy(false); return; }
-        const { error } = await sb.rpc('pos_staff_phone', { p_shop: boot.shop.id, p_user: edit.user_id, p_phone: phone }); if (error) throw error;
+        const { error } = await sb.rpc('pos_staff_phone', { p_shop: boot.shop.id, p_user: edit.user_id, p_phone: intlPhone(phone) }); if (error) throw error;
       }
       setEdit(null); setMsg(pt('saved', locale)); boot.engine.poke(); await load();
     } catch (e) { const m = (e as Error).message ?? String(e); setEErr(/phone_taken/.test(m) ? pt('phoneTaken', locale) : /bad_phone/.test(m) ? pt('customerPhone', locale) + ' ?' : /not_owner/.test(m) ? pt('ownerOnly', locale) : m); }
@@ -133,10 +133,10 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
         <div className="card" style={{ background: '#fafafa' }}>
           <strong>{pt('addStaff', locale)}</strong>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1, minWidth: 170 }}><label className="label">{pt('staffPhone', locale)}</label><input className="input" dir="ltr" inputMode="tel" placeholder="+961 70 000 000" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+            <div style={{ flex: 1, minWidth: 170 }}><label className="label">{pt('staffPhone', locale)}</label><input className="input" dir="ltr" inputMode="tel" placeholder="70 000 000" value={phone} onChange={e => setPhone(e.target.value)} onBlur={() => { if (phone.replace(/\D/g, '').length >= 7) setPhone(intlPhone(phone)); }} /></div>
             <div style={{ flex: 1, minWidth: 150 }}><label className="label">{pt('staffName', locale)}</label><input className="input" value={name} onChange={e => setName(e.target.value)} /></div>
             <div><label className="label">{pt('role', locale)}</label><div className="seg">{ROLES.map(r => <button key={r} className={role === r ? 'active' : ''} onClick={() => setRole(r)}>{pt(`role_${r}` as 'role_owner', locale)}</button>)}</div></div>
-            <button className="btn primary" disabled={busy || (!picked && phone.replace(/\D/g, '').length < 8)} onClick={add}>{pt('add', locale)}</button>
+            <button className="btn primary" disabled={busy || (!picked && phone.replace(/\D/g, '').length < 7)} onClick={add}>{pt('add', locale)}</button>
           </div>
           {picked && <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8 }}><span className="chip active">👤 {picked.full_name || '—'} <span dir="ltr">{picked.phone ? `+${picked.phone}` : picked.email}</span></span><button className="btn ghost" onClick={() => setPicked(null)}>✕</button><span className="muted" style={{ fontSize: 12 }}>{pt('accountPicked', locale)}</span></div>}
           {!picked && hits.length > 0 && (
@@ -153,7 +153,7 @@ export default function StaffPanel({ boot, sb, locale, staff, online }: { boot: 
       {edit && <Modal open onClose={() => setEdit(null)} title={`✎ ${edit.display_name || edit.full_name || ''}`}
         footer={<><button className="btn ghost" onClick={() => setEdit(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={busy || !eName.trim() || ePhone.replace(/\D/g, '').length < 8} onClick={saveEdit}>{pt('save', locale)}</button></>}>
         <label className="label">{pt('staffName', locale)}<input className="input" value={eName} onChange={e => setEName(e.target.value)} autoFocus /></label>
-        <label className="label">{pt('staffPhoneNew', locale)}<input className="input" dir="ltr" inputMode="tel" value={ePhone} onChange={e => setEPhone(e.target.value)} /></label>
+        <label className="label">{pt('staffPhoneNew', locale)}<input className="input" dir="ltr" inputMode="tel" value={ePhone} onChange={e => setEPhone(e.target.value)} onBlur={() => { if (ePhone.replace(/\D/g, '').length >= 7) setEPhone(intlPhone(ePhone)); }} /></label>
         <p className="muted" style={{ fontSize: 12 }}>{pt('staffPhoneHint', locale)}</p>
         {eErr && <div className="bad">{eErr}</div>}
       </Modal>}

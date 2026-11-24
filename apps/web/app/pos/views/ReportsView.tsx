@@ -11,11 +11,12 @@ import { can, roleOf } from '../lib/perm';
 import type { Staff } from '@suqa/pos-core';
 import { fmtTime } from '../lib/boot';
 import { doPrint, loadPrintSettings, receiptHtml, stockValueHtml } from '../lib/print';
+import StaleReport from '../components/StaleReport';
 import { downloadCsv, downloadXlsx, flat, usd, type Row } from '../lib/export';
 
 type Today = Awaited<ReturnType<typeof todaySummary>>;
 type Preset = 'today' | 'yesterday' | 'week' | 'month' | 'lastMonth' | 'custom';
-type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stock' | 'unpaid' | 'shifts' | 'approvals' | 'ops';
+type Tab = 'overview' | 'items' | 'sections' | 'slow' | 'stale' | 'stock' | 'unpaid' | 'shifts' | 'approvals' | 'ops';
 
 function presetRange(p: Preset): [string, string] {
   const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -158,7 +159,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
               <div className="kpi"><span>{pt('grossMargin', locale)}</span><strong>{N(rep.totals.total_cents - rep.totals.cost_cents)}</strong><small>{pt('cost', locale)} {N(rep.totals.cost_cents)}{rep.totals.total_cents ? ` · ${Math.round(((rep.totals.total_cents - rep.totals.cost_cents) / rep.totals.total_cents) * 100)}%` : ''}</small></div>
             </div>
             <div className="seg wrap" style={{ marginTop: 12 }}>
-              {(['overview', 'items', 'sections', 'slow', 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals', 'ops'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab', ops: 'opsTab' } as const)[x], locale)}</button>)}
+              {(['overview', 'items', 'sections', 'slow', ...(online && can(roleOf(staff), 'items.edit') ? ['stale'] : []), 'stock', 'unpaid', 'shifts', ...(owner && online ? ['approvals', 'ops'] : [])] as Tab[]).map(x => <button key={x} className={tab === x ? 'active' : ''} onClick={() => setTab(x)}>{pt(({ overview: 'byDay', items: 'byItem', sections: 'bySection', slow: 'slowMovers', stale: 'staleTab', stock: 'stockValue', unpaid: 'unpaidList', shifts: 'shiftsList', approvals: 'approvalsTab', ops: 'opsTab' } as const)[x], locale)}</button>)}
             </div>
             <div style={{ marginTop: 10, overflowX: 'auto' }}>
               {tab === 'overview' && <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
@@ -185,6 +186,7 @@ export default function ReportsView({ boot, sb, locale, tick, status, staff, ind
                 <tr><th style={{ textAlign: 'start' }}>{pt('noSalesInPeriod', locale)}</th><th>{pt('onHand', locale)}</th><th>{pt('atCost', locale)}</th></tr>
                 {rep.slow.map(i => <tr key={i.product_id}><td>{text(i.name, locale)}</td><td style={{ textAlign: 'center' }}>{i.on_hand}</td><td className="num muted">{N(num(i.cost_cents) * i.on_hand)}</td></tr>)}
               </tbody></table> : <p className="muted">—</p>)}
+              {tab === 'stale' && online && <StaleReport boot={boot} sb={sb} locale={locale} />}
               {tab === 'stock' && <div className="kpis">
                 <div className="kpi"><span>{pt('skus', locale)}</span><strong>{rep.stock.skus}</strong><small>{rep.stock.units} {pt('units', locale)}</small></div>
                 <div className="kpi"><span>{pt('atCost', locale)}</span><strong>{N(rep.stock.cost_cents)}</strong></div>

@@ -97,3 +97,47 @@ export function makeMatcher(query: string): ((item: Folded) => boolean) | null {
     });
   };
 }
+
+// ---- a shop page's search box: what was typed first, then the same word in the other alphabet, a typo only as a last resort ----
+// makeMatcher alone forgives too much for a list that is filtered as the person types: "panten" brought the whole "Pantry"
+// category (a category name compared by sound) and the peanuts ("bnt" is one sound away from "bntn"), and "pepsi" brought
+// "pops". Here a word matches, in this order of trust:
+//   1. as typed, anywhere in the item's text (names, description, other names, category);
+//   2. by sound against a NAME word written in the OTHER alphabet ("tawouk" = طاووق, "بانتين" = Pantene) — never against a
+//      category name, and never between two words of the same alphabet ("pepsi" is not "pops");
+//   3. only when nothing in the shop matched 1 or 2: the forgiving matcher (typos, same-alphabet sounds), as before.
+// A word that names a kind of item ("machroub", "chokola") keeps the kind rules of makeMatcher.
+type NameWord = { s: string; w: string; ar: boolean };
+export type SearchFold = Folded & { words: NameWord[] };
+const isAr = (w: string) => /[ء-يپچڤگ]/.test(w);
+/** fold an item for searchItems: `names` are compared by sound, `extra` (category names …) only as typed */
+export function foldForSearch(names: (string | null | undefined)[], extra: (string | null | undefined)[] = [], section?: string | null): SearchFold {
+  const n = names.filter(Boolean).join(' ');
+  const words = normText(n).split(' ').filter(Boolean).map(w => ({ w, s: skelWord(w), ar: isAr(w) })).filter(x => x.s);
+  return { norm: normText([n, ...extra.filter(Boolean)].join(' ')), skels: words.map(x => x.s), words, section: section ?? null };
+}
+// A long vowel written inside the Arabic word must be heard in the Latin one: بوبس ("pops") is not "pepsi", بيبسي is.
+// The last letter is left out (شامبو = "shampa" in speech), and so is a first و / ي, which is a consonant there.
+const vowelsAgree = (latin: string, arabic: string): boolean => {
+  for (let i = 1; i < arabic.length - 1; i++) {
+    if (arabic[i] === 'و' && !/[ouw]/.test(latin)) return false;
+    if (arabic[i] === 'ي' && !/[iey]/.test(latin)) return false;
+  }
+  return true;
+};
+/** the items a shop page shows for what was typed; everything when the box is empty */
+export function searchItems<T>(items: T[], foldOf: (item: T) => SearchFold, query: string): T[] {
+  const qn = normText(query);
+  if (!qn) return items;
+  const loose = makeMatcher(query)!;
+  if (kindsIn(qn).words.size) return items.filter(x => loose(foldOf(x)));
+  const toks = qn.split(' ').filter(Boolean).map(w => ({ w, s: skelWord(w), ar: isAr(w), num: /^[0-9]+$/.test(w) }));
+  const strong = (f: SearchFold) => f.norm.includes(qn) || toks.every(t => {
+    if (f.norm.includes(t.w)) return true;
+    if (t.num) return false;
+    if (t.s.length < 2) return toks.length > 1 && t.w.length <= 2;              // "w", "el" between other words carry no weight
+    return f.words.some(k => k.ar !== t.ar && (t.s.length === 2 ? k.s === t.s : k.s.startsWith(t.s)) && (t.ar ? vowelsAgree(k.w, t.w) : vowelsAgree(t.w, k.w)));
+  });
+  const sure = items.filter(x => strong(foldOf(x)));
+  return sure.length ? sure : items.filter(x => loose(foldOf(x)));
+}

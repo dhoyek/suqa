@@ -1,5 +1,5 @@
 'use client';
-import { foldItem, makeMatcher, type Folded } from '@/lib/item-match';
+import { foldForSearch, searchItems, type SearchFold } from '@/lib/item-match';
 import FilterIcon from '@/components/FilterIcon';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
@@ -35,13 +35,14 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) { fromHome.current = v.trim(); setQ(v); } }, []);   // arriving from the home page's item search
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-  // every item folded once: names, description, its section's names and its aliases ("man2ouche", "mayy" …)
-  const folded = useMemo(() => new Map<string, Folded>(products.map(p => [p.id, { ...foldItem(p.name?.ar, p.name?.en, p.description?.ar, p.description?.en, secText(p.section ?? ''), ...((p as { aliases?: string[] | null }).aliases ?? [])), section: p.section ?? null }])),
+  // every item folded once. Names and other names ("man2ouche", "mayy" …) are also compared by sound; the description and the
+  // section's names only as typed — a category that merely sounds like the word ("Pantry" for "panten") is not a match
+  const folded = useMemo(() => new Map<string, SearchFold>(products.map(p => [p.id, foldForSearch(
+    [p.name?.ar, p.name?.en, ...((p as { aliases?: string[] | null }).aliases ?? [])], [p.description?.ar, p.description?.en, secText(p.section ?? '')], p.section ?? null)])),
     [products]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const visible = useMemo(() => {
-    const hit = makeMatcher(q);                                  // Arabic, Arabizi, English, small typos, and the item's other names
-    return products.filter(p => (secs.size === 0 || secs.has(p.section ?? '')) && (!hit || hit(folded.get(p.id)!)));
-  }, [products, secs, q, folded]);
+  // as typed first, then the same word in the other alphabet (Arabizi), a typo only when nothing else matched (searchItems)
+  const visible = useMemo(() => searchItems(secs.size ? products.filter(p => secs.has(p.section ?? '')) : products, p => folded.get(p.id)!, q),
+    [products, secs, q, folded]);
   // what was searched in this shop, for the association's Demand page (99): once the person has stopped typing for 2 s
   const hitCount = visible.length;
   useEffect(() => {

@@ -1,6 +1,6 @@
-import { expect, test } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { CatalogIndex } from './catalog';
-import { foldItem, makeMatcher, skelWords } from './item-match';
+import { foldForSearch, foldItem, makeMatcher, searchItems, skelWords } from './item-match';
 test('folding matches SQL', () => {
   expect(skelWords('خبز')).toEqual(['xbz']); expect(skelWords('khebez')).toEqual(['xbz']); expect(skelWords('5ebez')).toEqual(['xbz']);
   expect(skelWords('منقوشة')).toEqual(['mnkc']); expect(skelWords('man2ouche')).toEqual(['mnkc']);
@@ -86,4 +86,44 @@ test('the categories a kind never matches in are the same in the till and in the
   const sql = readFileSync(new URL('../../../supabase/schema/97_kind_not_in_category.sql', import.meta.url), 'utf8');
   const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]::text[]`;
   for (const c of CONCEPTS) expect(sql.includes(`update suqa.match_concepts set not_in = ${lit(notInOf(c))} where id = '${c.id}';`), c.id).toBe(true);
+});
+
+describe('searchItems (the shop page search box)', () => {
+  const mk = (ar: string, en: string, sec: string, secAr = '', aliases: string[] = []) => ({ ar, en, f: foldForSearch([ar, en, ...aliases], [sec, secAr], sec) });
+  const shop = [
+    mk('بانتين شامبو', 'Pantene shampoo', 'Hair Care', 'العناية بالشعر'),
+    mk('بانتين بلسم', 'Pantene conditioner', 'Hair Care', 'العناية بالشعر'),
+    mk('زيت زيتون', 'Olive oil', 'Pantry (Mouneh)', 'مونة', ['zeit', 'zet']),
+    mk('زعتر', 'Zaatar', 'Pantry (Mouneh)', 'مونة'),
+    mk('ماستر نتس فستق مقلي 20 غ', 'MASTER NUTS PEANUT FRIED 20GR', 'Chips & Nuts', 'تشيبس ومكسرات'),
+    mk('كركيش بوبس', 'KARKESH POPS', 'Chips & Nuts', 'تشيبس ومكسرات'),
+    mk('بيبسي 2 ل', 'Pepsi 2L', 'Soft Drinks', 'مشروبات غازية'),
+    mk('صحن طاووق', 'Taouk platter', 'Platters', 'صحون'),
+    mk('خبز عربي', 'Arabic bread', 'Bread & Bakery', 'خبز'),
+  ];
+  const find = (q: string) => searchItems(shop, x => x.f, q).map(x => x.en);
+  it('a brand typed in either alphabet gives that brand only — not a category that sounds like it, not a word one sound away', () => {
+    expect(find('panten')).toEqual(['Pantene shampoo', 'Pantene conditioner']);
+    expect(find('pantene')).toEqual(['Pantene shampoo', 'Pantene conditioner']);
+    expect(find('بانتين')).toEqual(['Pantene shampoo', 'Pantene conditioner']);
+    expect(find('panten shampa')).toEqual(['Pantene shampoo']);
+  });
+  it('"pepsi" is not "pops", in Latin or in Arabic letters', () => {
+    expect(find('pepsi')).toEqual(['Pepsi 2L']);
+    expect(find('bebsi')).toEqual(['Pepsi 2L']);
+    expect(find('بيبسي')).toEqual(['Pepsi 2L']);
+    expect(find('pops')).toEqual(['KARKESH POPS']);
+  });
+  it('Arabizi still finds the Arabic name; a category name still filters when typed as written', () => {
+    expect(find('tawouk')).toEqual(['Taouk platter']);
+    expect(find('khebez')).toEqual(['Arabic bread']);
+    expect(find('zet')).toEqual(['Olive oil']);
+    expect(find('pantry')).toEqual(['Olive oil', 'Zaatar']);
+    expect(find('مونة')).toEqual(['Olive oil', 'Zaatar']);
+  });
+  it('a typo is forgiven only when nothing matched as typed or by sound; nothing for nonsense; everything for an empty box', () => {
+    expect(find('pantine')).toEqual(['Pantene shampoo', 'Pantene conditioner']);
+    expect(find('zzzz')).toEqual([]);
+    expect(find('  ')).toHaveLength(shop.length);
+  });
 });

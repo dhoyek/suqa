@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { deleteDriver, driverPayRule, fmtPhone, fmtUsd, getMeta, setMeta, META, upsertDriver, waDigits, type Driver, type DriverPayMode, type Shop } from '@suqa/pos-core';
+import { deleteDriver, driverPayRule, fmtPhone, fmtUsd, getMeta, setMeta, META, text, upsertDriver, waDigits, type Driver, type DriverPayMode, type Shop } from '@suqa/pos-core';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -21,6 +21,7 @@ export default function DriversPanel({ boot, locale, tick, sb, online = true }: 
   // pay rule: the shop default and each driver's own (schema 60). Saved online through pos_set_driver_pay; the feed brings it to the other tills.
   const [shop, setShop] = useState<Shop>(boot.shop); const [rule, setRule] = useState<null | { driver: Driver | null }>(null);
   useEffect(() => { getMeta<Shop>(boot.db, META.shop).then(s => { if (s) setShop(s); }); }, [boot, tick]);
+  const shopName = text(boot.shop.name, locale);
   const ruleLabel = (mode: DriverPayMode, cents: number) => mode === 'per_delivery' ? `${fmtUsd(cents)} · ${pt('pay_per_delivery', locale)}` : pt(`pay_${mode}` as 'pay_none', locale);
   const saveRule = async (driver: Driver | null, mode: DriverPayMode | null, cents: number) => {
     if (!sb) return;
@@ -48,7 +49,7 @@ export default function DriversPanel({ boot, locale, tick, sb, online = true }: 
       {rows.length ? <table className="table"><tbody>
         {rows.map(d => <tr key={d.id} className={d.active ? '' : 'muted'}>
           <td><strong>{d.name}</strong>{d.vehicle ? <span className="muted"> · {d.vehicle}</span> : null}{d.user_id ? <span className="pill ok" style={{ marginInlineStart: 6 }}>👤</span> : null}</td>
-          <td dir="ltr">{fmtPhone(d.phone)} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer">💬</a></td>
+          <td dir="ltr">{fmtPhone(d.phone)} <a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(d.phone)}`} target="_blank" rel="noreferrer">💬</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} title={pt('sendLogin', locale)} aria-label={pt('sendLogin', locale)} href={`https://wa.me/${waDigits(d.phone)}?text=${encodeURIComponent(pt('driverLoginMsg', locale).replace('{name}', d.name).replace('{shop}', shopName).replace('{url}', `${typeof location === 'undefined' ? '' : location.origin}/login`))}`} target="_blank" rel="noreferrer">🔗</a></td>
           <td><label className="row" style={{ gap: 6, alignItems: 'center' }}><input type="checkbox" checked={d.available} onChange={e => save({ id: d.id, name: d.name, phone: d.phone, available: e.target.checked })} /> {pt('availableToday', locale)}</label></td>
           <td>{(() => { const r = driverPayRule(shop, d); return <button className="btn ghost" style={{ minHeight: 0, padding: '2px 8px', fontSize: 13 }} disabled={!sb || !online} title={pt('payRule', locale)} onClick={() => setRule({ driver: d })}>💵 {ruleLabel(r.mode, r.cents)}{r.own ? <span className="pill warn" style={{ marginInlineStart: 6 }}>{pt('payOwn', locale)}</span> : null}</button>; })()}</td>
           <td style={{ whiteSpace: 'nowrap' }}><button className="btn ghost" title={pt('edit', locale)} onClick={() => setEdit(d)}>✎</button><button className="btn ghost" title={pt('removeDriver', locale)} onClick={() => remove(d)}>🗑</button></td>

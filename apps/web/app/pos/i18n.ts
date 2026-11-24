@@ -335,6 +335,8 @@ const T = {
   ownerOnly: { ar: 'لصاحب المحل فقط', en: 'Owners only' }, diff: { ar: 'الفرق', en: 'Difference' }, open: { ar: 'مفتوحة', en: 'Open' },
   addStaff: { ar: 'إضافة موظف', en: 'Add staff' }, staffPhone: { ar: 'رقم واتساب الموظف', en: 'Staff WhatsApp number' }, staffName: { ar: 'الاسم على الشاشة', en: 'Display name' }, role: { ar: 'الدور', en: 'Role' },
   invited: { ar: 'بانتظار أول تسجيل دخول', en: 'Waiting for first sign-in' }, staffAdded: { ar: 'تمت الإضافة', en: 'Added' }, sendInvite: { ar: 'إرسال الدعوة عبر واتساب', en: 'Send invite on WhatsApp' },
+  sendLogin: { ar: 'إرسال رابط الدخول عبر واتساب', en: 'Send the sign-in link on WhatsApp' },
+  driverLoginMsg: { ar: 'أهلاً {name}، هذا رابط الدخول لمحل {shop}. سجّل الدخول برقمك: {url}', en: 'Hi {name}, here is the sign-in link for {shop}. Sign in with your number: {url}' },
   inviteMsg: { ar: 'أهلاً {name}، تمت إضافتك إلى نقطة البيع لمحل {shop}. سجّل الدخول برقمك على {url} ثم افتح "نقطة البيع".', en: 'Hi {name}, you were added to the {shop} POS. Sign in with your number at {url} and open "POS".' },
   inactive: { ar: 'موقوف', en: 'Inactive' }, deactivate: { ar: 'إيقاف', en: 'Deactivate' }, activate: { ar: 'تفعيل', en: 'Activate' }, lastOwner: { ar: 'لا يمكن إزالة آخر صاحب محل', en: 'Cannot remove the last owner' },
   noPin: { ar: 'بدون PIN', en: 'No PIN' }, resetPin: { ar: 'إعادة تعيين PIN', en: 'Reset PIN' }, cancelInvite: { ar: 'إلغاء الدعوة', en: 'Cancel invite' },

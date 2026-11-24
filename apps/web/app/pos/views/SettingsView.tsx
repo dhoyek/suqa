@@ -27,7 +27,7 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
   useEffect(() => { void pushState().then(setPush); }, []);
   const togglePush = async () => { setPushBusy(true); setPushErr(null);
     try { setPush(push === 'on' ? await pushDisable(sb) : await pushEnable(sb, boot.shop.id, `${staff.display_name || staff.full_name || ''} · ${navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? ''}`.slice(0, 80))); }
-    catch (e) { setPushErr((e as Error).message); } finally { setPushBusy(false); } };
+    catch (e) { setPushErr(/not_shop_staff/.test((e as Error).message) ? pt('pushStaffOnly', locale) : (e as Error).message); } finally { setPushBusy(false); } };
   const toggleBig = (v: boolean) => { setBig(v); try { localStorage.setItem('suqa-pos-big', v ? '1' : '0'); } catch {} document.documentElement.classList.toggle('pos-big', v); };
   const [devices, setDevices] = useState<Device[]>([]);
   const [members, setMembers] = useState<Staff[]>([]);
@@ -138,7 +138,8 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
           </div>
           <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span>🔔 {pt('pushTitle', locale)}</span>
-            {push === 'on' || push === 'off'
+            {roleOf(staff) === 'setup' ? <span className="muted" style={{ fontSize: 13 }}>{pt('pushStaffOnly', locale)}</span>
+              : push === 'on' || push === 'off'
               ? <button className={`btn ${push === 'on' ? '' : 'primary'}`} disabled={pushBusy} onClick={() => void togglePush()}>{push === 'on' ? `✓ ${pt('pushOn', locale)} · ${pt('pushTurnOff', locale)}` : pt('pushTurnOn', locale)}</button>
               : <span className="muted" style={{ fontSize: 13 }}>{push ? pt(({ unsupported: 'pushUnsupported', blocked: 'pushBlocked', not_set_up: 'pushNotSetUp', ios_home: 'pushIosHome' } as const)[push], locale) : '…'}</span>}
           </div>

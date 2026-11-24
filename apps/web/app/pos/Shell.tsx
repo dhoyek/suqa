@@ -21,6 +21,7 @@ import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
 import PinGate from './components/PinGate';
 import CustomersView from './views/CustomersView';
+import PushReminder from './components/PushReminder';
 import PurchasesView from './views/PurchasesView';
 
 export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'purchases' | 'shift' | 'reports' | 'drivers' | 'settings';
@@ -109,6 +110,8 @@ export default function Shell(props: {
       </header>
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       {view === 'sell' && pendingCount > 0 && <button className="pos-neworder" onClick={() => setView('orders')}>🛎 {pendingCount} {pt('newOrderBanner', locale)} · {pt('openOrders', locale)} ›</button>}
+      {(view === 'sell' || view === 'orders') && roleOf(staff) !== 'setup' && <PushReminder sb={props.sb} shopId={boot.shop.id} locale={locale} online={online}
+        label={`${staff.display_name || staff.full_name || ''} · ${typeof navigator === 'undefined' ? '' : navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? ''}`.slice(0, 80)} />}
       <main className="pos-main">
         {view === 'sell' && <Sell {...props} onGo={setView} onOrder={openOrder} onStock={canStock ? id => { setStockFocus(f => ({ id, n: (f?.n ?? 0) + 1 })); setView('stock'); } : undefined} newOrderRequest={newOrderReq} presetCustomer={preset} yorgoCart={yorgoCart} onYorgoTaken={() => setYorgoCart(null)} />}
         {view === 'orders' && <OrdersView {...props} focus={orderFocus} onNewOrder={() => { setPreset(null); setNewOrderReq(n => n + 1); setView('sell'); }} onCustomer={openCustomer} />}

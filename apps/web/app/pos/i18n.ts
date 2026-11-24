@@ -382,6 +382,9 @@ const T = {
   // this device: start screen + notifications (2026-11-20)
   startScreen: { ar: 'الشاشة الأولى عند الفتح', en: 'Opens on' },
   pushTitle: { ar: 'إشعار عند وصول طلب جديد', en: 'Notify me of new orders' }, pushOn: { ar: 'مفعّل', en: 'On' }, pushTurnOff: { ar: 'إيقاف', en: 'Turn off' }, pushTurnOn: { ar: '🔔 تفعيل الإشعارات', en: '🔔 Turn on notifications' },
+  pushRemind: { ar: 'هذا الجهاز لا يصله إشعار عند وصول طلب جديد.', en: 'This device is not notified when a new order arrives.' }, pushLater: { ar: 'لاحقاً', en: 'Later' },
+  pushDeclined: { ar: 'لم تُفعَّل الإشعارات. اضغط مرة أخرى واختر «سماح».', en: 'Notifications were not turned on. Tap again and choose "Allow".' },
+  pushStaffOnly: { ar: 'إشعارات الطلبات لموظفي المحل فقط (المالك، الكاشير، أمين المخزن). حساب إدارة الجمعية لا يستقبلها.', en: 'Order notifications are for the shop\'s own staff (owner, cashier, stock). An association admin account does not receive them.' },
   pushUnsupported: { ar: 'هذا المتصفح لا يدعم الإشعارات', en: 'This browser does not support notifications' },
   pushBlocked: { ar: 'الإشعارات محظورة لهذا الموقع — فعّلها من إعدادات المتصفح', en: 'Notifications are blocked for this site — allow them in the browser settings' },
   pushNotSetUp: { ar: 'الإشعارات غير مفعّلة على الموقع بعد', en: 'Notifications are not set up on the site yet' },

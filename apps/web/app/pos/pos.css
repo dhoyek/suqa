@@ -557,6 +557,9 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .pos-nav button.nav-group::before { content: ''; position: absolute; inset-inline-start: -7px; top: 10px; bottom: 10px; border-inline-start: 1px solid var(--line); }
 @media (max-width: 760px) { .pos-nav.open button.nav-group { margin-inline-start: 0; } .pos-nav.open button.nav-group::before { display: none; } }
 /* Bay3: new orders waiting — one tap to Talabat */
+/* a reminder to turn notifications on: quiet, one line, above the screen's content */
+.pos-pushbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: #eff6ff; color: #1e3a8a; border-bottom: 1px solid #bfdbfe; font-size: 14px; }
+.pos-pushbar .btn { min-height: 36px; }
 .pos-neworder { display: block; width: 100%; border: 0; background: #fff7ed; color: #9a3412; font: inherit; font-weight: 700; padding: 8px 12px; text-align: center; cursor: pointer; border-bottom: 1px solid #fed7aa; animation: neworder-pulse 2s ease-in-out infinite; }
 @keyframes neworder-pulse { 50% { background: #ffedd5; } }
 

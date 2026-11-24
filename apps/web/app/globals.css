@@ -430,4 +430,11 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
   .admin-top .module-links::-webkit-scrollbar { display: none; }
   .admin-top .module-links > * { flex: none; white-space: nowrap; }
 }
+/* admin accounts: the ⋯ menu of one account */
+.acct-menu { position: fixed; z-index: 41; width: 240px; max-height: 80vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 6px; display: flex; flex-direction: column; }
+.acct-menu-head { padding: 6px 10px 8px; font-weight: 700; font-size: 13px; color: var(--muted, #6b7280); border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-menu button, .acct-menu a { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; background: none; border-radius: 8px; font: inherit; color: inherit; text-align: start; text-decoration: none; cursor: pointer; }
+.acct-menu button:hover, .acct-menu a:hover { background: #f3f4f6; }
+.acct-menu button > span, .acct-menu a > span { width: 24px; text-align: center; flex: none; }
+.acct-menu .danger { color: #b91c1c; }
 

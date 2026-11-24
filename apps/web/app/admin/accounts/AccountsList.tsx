@@ -23,6 +23,7 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
   const sb = useMemo(() => supabaseBrowser(), []);
   const [list, setList] = useState<Account[]>(initial);
   const [roles, setRoles] = useState<Account | null>(null);
+  const [menu, setMenu] = useState<{ a: Account; left: number; top?: number; bottom?: number } | null>(null);
   const [q, setQ] = useState(''); const [kind, setKind] = useState<Kind>('all');
   const [edit, setEdit] = useState<Account | null>(null); const [eName, setEName] = useState(''); const [ePhone, setEPhone] = useState(''); const [eErr, setEErr] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
   const [mergeFrom, setMergeFrom] = useState<Account | null>(null); const [mergeTo, setMergeTo] = useState<string>('');
@@ -111,6 +112,21 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
         </div>
       )}
       <nav className="row chips">{KINDS.map(k => <button type="button" key={k} className={`chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>{labels[k]} ({k === 'all' ? list.length : list.filter(a => kindOf(a).includes(k)).length})</button>)}</nav>
+      {menu && (() => { const a = menu.a; const pick = (run: () => void) => () => { setMenu(null); run(); };
+        return <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMenu(null)} />
+          <div className="acct-menu" style={{ left: menu.left, top: menu.top, bottom: menu.bottom }}>
+            <div className="acct-menu-head">{a.name || (a.phone ? `+${a.phone.replace(/^\+/, '')}` : '—')}</div>
+            <button type="button" onClick={pick(() => openEdit(a))}><span>✎</span>{labels.edit}</button>
+            <Link href={`/admin/accounts/${a.id}`} onClick={() => setMenu(null)}><span>📋</span>{labels.activity}</Link>
+            <button type="button" onClick={pick(() => setRoles(a))}><span>🎖️</span>{labels.roles}</button>
+            <button type="button" onClick={pick(() => signout(a))}><span>⎋</span>{labels.signoutAll}</button>
+            {a.shops.some(s => s.active) && <button type="button" onClick={pick(() => resetPin(a))}><span>🔢</span>{labels.resetPin}</button>}
+            <button type="button" onClick={pick(() => block(a))}><span>{a.blocked ? '🔓' : '⛔'}</span>{a.blocked ? labels.unblock : labels.block}</button>
+            <button type="button" onClick={pick(() => { setMergeFrom(a); setMergeTo(''); })}><span>⇄</span>{labels.merge}</button>
+            <button type="button" className="danger" onClick={pick(() => del(a))}><span>🗑</span>{labels.delete}</button>
+          </div>
+        </>; })()}
       <div style={{ overflowX: 'auto' }}>
         <table className="table">
           <thead><tr><th style={{ textAlign: 'start' }}>{L === 'ar' ? 'الاسم' : 'Name'}</th><th style={{ textAlign: 'start' }}>{L === 'ar' ? 'الرقم' : 'Phone'}</th><th style={{ textAlign: 'start' }}>{L === 'ar' ? 'الأدوار' : 'Roles'}</th><th>{labels.orders}</th><th>{labels.lastSeen}</th>{canEdit && <th />}</tr></thead>
@@ -133,16 +149,9 @@ export default function AccountsList({ initial, locale: L, labels, tenantId, can
                 </td>
                 <td className="num">{a.orders || ''}</td>
                 <td className="muted" style={{ textAlign: 'center' }}>{when(a.last_sign_in_at)}</td>
-                {canEdit && <td className="actions-cell">{!a.deleted && <>
-                  <button type="button" className="btn ghost" title={labels.edit} onClick={() => openEdit(a)}>✎</button>
-                  <Link href={`/admin/accounts/${a.id}`} className="btn ghost" title={labels.activity}>📋</Link>
-                  <button type="button" className="btn ghost" title={labels.roles} onClick={() => setRoles(a)}>🎖️</button>
-                  <button type="button" className="btn ghost" title={labels.signoutAll} onClick={() => signout(a)}>⎋</button>
-                  {a.shops.some(s => s.active) && <button type="button" className="btn ghost" title={labels.resetPin} onClick={() => resetPin(a)}>🔢</button>}
-                  <button type="button" className="btn ghost" title={a.blocked ? labels.unblock : labels.block} onClick={() => block(a)}>{a.blocked ? '🔓' : '⛔'}</button>
-                  <button type="button" className="btn ghost" title={labels.merge} onClick={() => { setMergeFrom(a); setMergeTo(''); }}>⇄</button>
-                  <button type="button" className="btn ghost" title={labels.delete} onClick={() => del(a)}>🗑</button>
-                </>}</td>}
+                {/* one ⋯ per account: its actions open as a named menu (fixed to the screen, so the table's sideways scroll does not cut it) */}
+                {canEdit && <td style={{ width: 44, textAlign: 'end' }}>{!a.deleted && <button type="button" className="btn ghost" aria-label="⋯" style={{ fontSize: 20, lineHeight: 1, padding: '4px 10px' }}
+                  onClick={e => { const r = e.currentTarget.getBoundingClientRect(); const w = 240; setMenu({ a, left: Math.max(8, Math.min(r.left + r.width / 2 < window.innerWidth / 2 ? r.left : r.right - w, window.innerWidth - w - 8)), ...(window.innerHeight - r.bottom < 380 && r.top > 380 ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }) }); }}>⋯</button>}</td>}
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={6} className="muted">—</td></tr>}

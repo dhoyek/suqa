@@ -1,6 +1,6 @@
 'use client';
 import { useConfirm, useNotify } from '@/components/ConfirmProvider';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { formatMoney, t as tr, NEXT_STATUS, type DisplayCurrency, type Locale, type Order, type OrderItem, type OrderStatus } from '@suqa/shared';
@@ -9,13 +9,15 @@ type Row = Order & { items: OrderItem[]; shop: { name: any } };
 type Labels = Record<'orders' | 'allShops' | 'allStatuses' | 'today' | 'last7days' | 'last30days' | 'total' | 'commission' | 'noOrders' | 'call', string>;
 const ALL: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'rejected', 'cancelled'];
 
-export default function OrdersTable(props: { orders: Row[]; shops: { id: string; name: string }[]; filters: { status: string; shop: string; range: string }; locale: Locale; fx: number; displayCurrency: DisplayCurrency; timezone: string; statusLabels: Record<OrderStatus, string>; labels: Labels }) {
+export default function OrdersTable(props: { orders: Row[]; shops: { id: string; name: string }[]; filters: { status: string; shop: string; range: string }; openId?: string | null; locale: Locale; fx: number; displayCurrency: DisplayCurrency; timezone: string; statusLabels: Record<OrderStatus, string>; labels: Labels }) {
   const { shops, filters, locale: L, fx, displayCurrency, timezone, statusLabels, labels } = props;
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
   const notify = useNotify();
   const [orders, setOrders] = useState(props.orders);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(props.openId ?? null);
+  // opened from the dashboard: bring that order into view
+  useEffect(() => { if (props.openId) document.getElementById(`o-${props.openId}`)?.scrollIntoView({ block: 'center' }); }, [props.openId]);
   const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
   const nav = (patch: Partial<typeof filters>) => { const f = { ...filters, ...patch }; const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as any).toString(); router.push(`/admin/orders${q ? `?${q}` : ''}`); };
   const ask = useConfirm();
@@ -40,7 +42,7 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
       <section className="card">
         {!orders.length && <div className="muted">{labels.noOrders}</div>}
         {orders.map(o => (
-          <div key={o.id} style={{ borderBottom: '1px solid var(--line)' }}>
+          <div key={o.id} id={`o-${o.id}`} style={{ borderBottom: '1px solid var(--line)' }}>
             <div className="product" style={{ borderBottom: 0, cursor: 'pointer' }} onClick={() => setOpen(open === o.id ? null : o.id)}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="name">{o.number} · {tr(o.shop?.name, L)}</div>

@@ -6,7 +6,7 @@ import OrdersTable from './OrdersTable';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminOrders({ searchParams }: { searchParams: Promise<{ status?: string; shop?: string; range?: string }> }) {
+export default async function AdminOrders({ searchParams }: { searchParams: Promise<{ status?: string; shop?: string; range?: string; open?: string }> }) {
   const sp = await searchParams;
   const tenant = await getTenant();
   const sb = await supabaseServer();
@@ -16,10 +16,14 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
   let q = sb.from('orders').select('*, items:order_items(*), shop:shops(name)').eq('tenant_id', tenant.id).gte('placed_at', since).order('placed_at', { ascending: false }).limit(300);
   if (sp.status) q = q.eq('status', sp.status);
   if (sp.shop) q = q.eq('shop_id', sp.shop);
-  const [{ data: orders }, { data: shops }] = await Promise.all([q, sb.from('shops').select('id,name').eq('tenant_id', tenant.id).order('sort_order')]);
+  // arriving from the dashboard's list (?open=<order id>): that order is shown opened, also when it is older than the list's range
+  const openId = sp.open && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sp.open) ? sp.open : null;
+  const [{ data: listed }, { data: shops }, { data: one }] = await Promise.all([q, sb.from('shops').select('id,name').eq('tenant_id', tenant.id).order('sort_order'),
+    openId ? sb.from('orders').select('*, items:order_items(*), shop:shops(name)').eq('tenant_id', tenant.id).eq('id', openId).maybeSingle() : Promise.resolve({ data: null })]);
+  const orders = one && !((listed as any[]) ?? []).some(o => o.id === (one as any).id) ? [one, ...((listed as any[]) ?? [])] : listed;
   const statusLabels = Object.fromEntries(Object.entries(STATUS_LABEL).map(([k, v]) => [k, (v as any)[L] ?? v.en]));
   return <OrdersTable orders={(orders as any[]) ?? []} shops={((shops as Shop[]) ?? []).map(s => ({ id: s.id, name: tr(s.name, L) }))}
-    filters={{ status: sp.status ?? '', shop: sp.shop ?? '', range: String(days) }} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} timezone={tenant.timezone}
+    filters={{ status: sp.status ?? '', shop: sp.shop ?? '', range: String(days) }} openId={one ? openId : null} locale={L} fx={tenant.fx_lbp_rate} displayCurrency={tenant.display_currency} timezone={tenant.timezone}
     statusLabels={statusLabels as any}
     labels={{ orders: ui('orders', L), allShops: ui('allShops', L), allStatuses: ui('allStatuses', L), today: ui('today', L), last7days: ui('last7days', L), last30days: ui('last30days', L),
       total: ui('total', L), commission: ui('commission', L), noOrders: ui('noOrders', L), call: ui('call', L) }} />;

@@ -32,14 +32,14 @@ export default async function AdminHome() {
       <section className="card">
         <div className="col-title" style={{ marginTop: 0 }}>{ui('orders', L)}</div>
         {((recent as any[]) ?? []).map(o => (
-          <div className="product" key={o.id}>
+          <Link className="product" key={o.id} href={`/admin/orders?open=${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
             <div style={{ flex: 1 }}>
               <div className="name">{o.number} · {tr(o.shop?.name, L)}</div>
               <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleTimeString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: tenant.timezone, hour: '2-digit', minute: '2-digit' })}</div>
             </div>
             <span className={`badge ${o.status}`}>{(STATUS_LABEL[o.status as OrderStatus] as any)[L]}</span>
             <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(o.total_usd)}</strong>
-          </div>
+          </Link>
         ))}
       </section>
     </div>

@@ -7,7 +7,7 @@ export const normPhone = (p: string | null | undefined) => (p ?? '').replace(/\D
 
 /** Display form: +961 70 483 148 for local numbers, the digits otherwise. */
 /** The number as it is stored and dialled: "+<country><number>". A number typed without a country code gets the default one
- *  (Lebanon): "03 369 072" → "+9613369072", "70 123 456" → "+96170123456", "3369072" → "+9613369072". One that already carries a
+ *  (Lebanon): "03 123 456" → "+9613123456", "70 123 456" → "+96170123456", "3123456" → "+9613123456". One that already carries a
  *  code ("+…", "00…", "961…", or any number too long to be local) keeps it; "+961 03…" loses the stray 0. '' when there is no number. */
 export function intlPhone(raw: string | null | undefined, cc = '961'): string {
   const t = (raw ?? '').trim(); let d = t.replace(/\D/g, ''); if (!d) return '';

@@ -78,25 +78,25 @@ import { intlPhone } from '../customers';
 import { upsertDriver } from '../drivers';
 describe('a phone typed without a country code gets +961', () => {
   it('prefixes local numbers, keeps coded ones', () => {
-    expect(intlPhone('03 369 072')).toBe('+9613369072');
-    expect(intlPhone('3369072')).toBe('+9613369072');
+    expect(intlPhone('03 123 456')).toBe('+9613123456');
+    expect(intlPhone('3123456')).toBe('+9613123456');
     expect(intlPhone('70 123 456')).toBe('+96170123456');
     expect(intlPhone('070123456')).toBe('+96170123456');
     expect(intlPhone('+961 70 123 456')).toBe('+96170123456');
     expect(intlPhone('0096170123456')).toBe('+96170123456');
     expect(intlPhone('96170123456')).toBe('+96170123456');
-    expect(intlPhone('9613369072')).toBe('+9613369072');
-    expect(intlPhone('+961 03 369 072')).toBe('+9613369072');
-    expect(intlPhone('961 03 369 072')).toBe('+9613369072');
+    expect(intlPhone('9613123456')).toBe('+9613123456');
+    expect(intlPhone('+961 03 123 456')).toBe('+9613123456');
+    expect(intlPhone('961 03 123 456')).toBe('+9613123456');
     expect(intlPhone('+33 6 12 34 56 78')).toBe('+33612345678');
     expect(intlPhone('0033612345678')).toBe('+33612345678');
     expect(intlPhone('')).toBe(''); expect(intlPhone(null)).toBe('');
   });
   it('a driver saved from the till is stored with the country code, and is still the same driver', async () => {
     const server = new FakeServer(); const a = await makeDevice(server, 'A');
-    const d1 = await upsertDriver(a.db, 's1', { name: 'Driver', phone: '03 369 072' });
-    expect(d1.phone).toBe('+9613369072');
-    const d2 = await upsertDriver(a.db, 's1', { name: 'Driver', phone: '+961 3 369 072' });
+    const d1 = await upsertDriver(a.db, 's1', { name: 'Driver', phone: '03 123 456' });
+    expect(d1.phone).toBe('+9613123456');
+    const d2 = await upsertDriver(a.db, 's1', { name: 'Driver', phone: '+961 3 123 456' });
     expect(d2.id).toBe(d1.id); expect(await a.db.drivers.count()).toBe(1);
   });
 });

@@ -44,6 +44,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState(''); const [range, setRange] = useState<'today' | 'yesterday' | '7d' | 'all'>('today'); const [unpaidOnly, setUnpaidOnly] = useState(false); const [staleOnly, setStaleOnly] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
+  // where the ⋯ menu opens: toward the side and the direction that has room, so it never leaves the screen (the button can be at either edge)
+  const [menuAt, setMenuAt] = useState<{ side: 'left' | 'right'; up: boolean }>({ side: 'left', up: false });
   const [, setClock] = useState(0); useEffect(() => { const t = setInterval(() => setClock(c => c + 1), 30_000); return () => clearInterval(t); }, []);   // ages tick every 30 s
   const comingSeen = useRef<Set<string> | null>(null);
   const ackSeen = useRef<Set<string> | null>(null); const [ackToast, setAckToast] = useState<string | null>(null);
@@ -230,8 +232,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                       {open && !infoEditBlock(o) && <button className="btn" onClick={() => setDialog({ k: 'info', o })}>👤 {pt('editOrderInfo', locale)}</button>}
                       {open && <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>}
                       {open && <span style={{ position: 'relative' }}>
-                        <button className="btn icon" title={pt('moreActions', locale)} onClick={() => setMenu(menu === o.id ? null : o.id)}>⋯</button>
-                        {menu === o.id && <div className="order-menu" onClick={() => setMenu(null)}>
+                        <button className="btn icon" title={pt('moreActions', locale)} onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setMenuAt({ side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right', up: window.innerHeight - r.bottom < 330 && r.top > 330 }); setMenu(menu === o.id ? null : o.id); }}>⋯</button>
+                        {menu === o.id && <div className="order-menu" style={{ insetInlineEnd: 'auto', [menuAt.side]: 0, ...(menuAt.up ? { top: 'auto', bottom: '100%' } : {}) }} onClick={() => setMenu(null)}>
                           <button onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨 {pt('print', locale)}</button>
                           <button onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
                           <a href={waHref(o.customer_phone, invoiceText(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 {pt('sendInvoiceWa', locale)}</a>

@@ -122,7 +122,9 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
     <>
       <Modal open onClose={onClose} title={product ? pt('editItem', locale) : template ? pt('copyOfItem', locale) : pt('newItem', locale)} wide
         actions={<>{product && onCopy && <button type="button" className="btn" onClick={() => onCopy(product)} title={pt('copyItem', locale)}>⧉ {pt('copyItem', locale)}</button>}<button className="btn icon primary" disabled={!valid} onClick={submit} aria-label={pt('save', locale)} title={pt('save', locale)}>✓</button></>}
-        footer={err ? <span className="bad">{err}</span> : undefined}>
+        footer={<>{/* Save is in the title bar (always in view) and here, at the end of the form, for whoever scrolled down */}
+          {err ? <span className="bad" style={{ flex: 1, minWidth: 0 }}>{err}</span> : <span style={{ flex: 1 }} />}
+          <button type="button" className="btn primary big" disabled={!valid} onClick={submit}>✓ {pt('save', locale)}</button></>}>
         <div className="item-form">
           {online && <div style={{ gridColumn: '1 / -1' }} className="row">
             <label className={`btn${reading ? ' disabled' : ''}`} style={{ cursor: reading ? 'wait' : 'pointer' }}>

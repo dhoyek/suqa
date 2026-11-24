@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /** Minimal modal: Esc closes, backdrop click closes, body scroll locked. */
 // `actions`: icon buttons shown in the title bar beside ✕ — the bar never scrolls away, so on a phone Save stays reachable with the keyboard open.
@@ -18,7 +19,11 @@ export default function Modal({ open, onClose, title, children, wide, footer, ac
     return () => window.removeEventListener('keydown', h, true);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // The dialog is drawn at the top of the POS, not inside the screen that opened it. On an iPhone the scrolling area of a screen
+  // (.pos-main) clips whatever is inside it — also a "fixed" dialog — so a tall dialog (the item editor) lost its title bar, with
+  // Save and ✕, under the top bar (Dan, 24 Nov 2026). Inside `.pos` the styles and the text direction stay the same.
+  const host = typeof document === 'undefined' ? null : document.querySelector('.pos');
+  const dialog = (
     <div className="pos-modal-backdrop" ref={me} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`pos-modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true">
         {title && <div className="pos-modal-title"><span className="pos-modal-title-text">{title}</span><span className="pos-modal-actions">{actions}<button className="btn icon" onClick={onClose} aria-label="close" title="Esc">✕</button></span></div>}
@@ -27,6 +32,7 @@ export default function Modal({ open, onClose, title, children, wide, footer, ac
       </div>
     </div>
   );
+  return host ? createPortal(dialog, host) : dialog;
 }
 
 /** Numeric keypad used by qty / price / amounts. Emits the full string; the caller parses. */

@@ -9,7 +9,7 @@ import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
-import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
+import { CategoryFilter } from '../components/CategoryFilter';
 import { can, roleOf } from '../lib/perm';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
@@ -21,7 +21,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' };
+type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
@@ -34,6 +34,14 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
+  // how the item tiles look on THIS device: size and whether they carry the item's photo (the sale screen's ▦ button)
+  const [tiles, setTiles] = useState<{ size: 's' | 'm' | 'l'; photos: boolean }>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos }; } catch { return { size: 'm', photos: false }; } });
+  const saveTiles = (t: { size: 's' | 'm' | 'l'; photos: boolean }) => { setTiles(t); try { localStorage.setItem('suqa-pos-tiles', JSON.stringify(t)); } catch {} };
+  const [qtyStr, setQtyStr] = useState('');
+  // a long press on a tile asks for the quantity; the tap that ends it must not also add one
+  const press = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean }>({ t: null, fired: false });
+  const pressStart = (p: Product) => { press.current.fired = false; if (press.current.t) clearTimeout(press.current.t); press.current.t = setTimeout(() => { press.current.fired = true; setQtyStr(''); setDialog({ k: 'qty', p }); }, 550); };
+  const pressEnd = () => { if (press.current.t) { clearTimeout(press.current.t); press.current.t = null; } };
   const [recent, setRecent] = useState(false);   // 107: the shop's recent sales — reprint one, or return items from it
   const [lastSale, setLastSale] = useState<{ r: CommitResult; no: string | null } | null>(null);   // reopen the last receipt (print / QR / WhatsApp / return)
   const [reopened, setReopened] = useState(false);
@@ -148,6 +156,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const updateLine = (l: DraftLine) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === l.id ? l : x)) }));
   const voidLine = (id: string, reason: string) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === id ? { ...x, voided: true, void_reason: reason } : x)) }));
   const live = draft.lines.filter(l => !l.voided);
+  const cartQty = new Map<string, number>(); for (const l of live) if (l.product_id) cartQty.set(l.product_id, (cartQty.get(l.product_id) ?? 0) + l.quantity);
 
   const startNew = useCallback(async () => { setReceipt(r => { if (r) setLastSale({ r, no: serverNo }); return null; }); setReopened(false); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, [serverNo]);
   const park = async (label: string, c?: { name: string; phone: string } | null) => { const d = c === undefined ? draft : { ...draft, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }; await saveDraft(boot.db, d, true, label || d.customer_name || ''); setParked(await listParked(boot.db)); await startNew(); };
@@ -208,15 +217,26 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           {typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches && <button className="btn big" style={{ width: 'auto' }} title={pt('shortcuts', locale)} onClick={() => setDialog({ k: 'help' })}>?</button>}
           <CategoryFilter cats={catList} selected={cats} onChange={setCats} locale={locale} big />
         </div>
-        <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />
-        <div className="muted num" style={{ fontSize: 12, flexShrink: 0 }}>{all.length.toLocaleString('en-US')} {pt('itemsCount', locale)}{q.trim() || cats.size ? ` / ${index.size.toLocaleString('en-US')}` : ''} · {pt('sortedByTop', locale)}</div>
+        {/* the categories, always in view: one tap shows a category, the same tap again (or "all") shows everything; several at once through the filter button */}
+        {catList.length > 1 && <div className="cat-strip">
+          <button className={`chip ${cats.size ? '' : 'active'}`} onClick={() => setCats(new Set())}>{pt('all', locale)}</button>
+          {catList.map(c => <button key={c.id} className={`chip ${cats.has(c.id) ? 'active' : ''}`} onClick={() => setCats(cats.has(c.id) && cats.size === 1 ? new Set() : new Set([c.id]))}>{text(c.name, locale)}</button>)}
+        </div>}
+        <div className="row spread" style={{ alignItems: 'center', flexShrink: 0 }}>
+          <span className="muted num" style={{ fontSize: 12 }}>{all.length.toLocaleString('en-US')} {pt('itemsCount', locale)}{q.trim() || cats.size ? ` / ${index.size.toLocaleString('en-US')}` : ''} · {pt('sortedByTop', locale)}</span>
+          <button className="link-btn" style={{ fontSize: 13 }} title={pt('tileView', locale)} onClick={() => setDialog({ k: 'view' })}>▦ {pt('tileView', locale)}</button>
+        </div>
         {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p, 1, { weigh: true })}>{b.label || text(p.name, locale)}</button> : null)}</div>}
-        <div className="grid-items">
+        <div className={`grid-items tiles-${tiles.size}`}>
           {results.map(p => {
+            const inCart = cartQty.get(p.id) ?? 0;
             const avail = num(p.on_hand) - num(p.reserved);
             const stock = !p.track_stock ? null : avail < 0 ? 'neg' : avail <= 0 ? 'out' : avail <= num(p.min_stock) ? 'low' : 'ok';
             return (
-              <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''}`} onClick={() => add(p, 1, { weigh: true, ask: true })}>
+              <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''} ${inCart ? 'in-cart' : ''}`} onClick={() => { if (press.current.fired) { press.current.fired = false; return; } add(p, 1, { weigh: true, ask: true }); }}
+                onPointerDown={() => pressStart(p)} onPointerUp={pressEnd} onPointerLeave={pressEnd} onPointerCancel={pressEnd} onContextMenu={e => e.preventDefault()}>
+                {inCart > 0 && <span className="tile-qty">{Math.round(inCart * 1000) / 1000}</span>}
+                {tiles.photos && p.image_url && <img className="item-photo" src={p.image_url} alt="" loading="lazy" draggable={false} onError={e => { e.currentTarget.style.display = 'none'; }} />}
                 <div className="item-name">{text(p.name, locale)}</div>
                 {/* sold on some weekdays only: still sellable here, the note is for the cashier (day = when the order is wanted) */}
                 {!availableOn(p, draft.needed_at ? new Date(draft.needed_at) : new Date()) && <small className="pill warn" style={{ alignSelf: 'start', fontSize: 11 }}>{pt('notToday', locale)} · {daysLabel(p.available_days, locale)}</small>}
@@ -233,7 +253,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>
       </div>
 
-      <aside className="pos-pane cart">
+      <aside className={`pos-pane cart ${live.length ? '' : 'empty'}`}>
         <div className="row spread" style={{ alignItems: 'center' }}>
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
@@ -303,6 +323,17 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'oos' && <Modal open onClose={() => setDialog(null)} title={text(dialog.p.name, locale)}
         footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { const p = dialog.p; setDialog(null); add(p, 1, { weigh: true }); }}>＋ {pt('addAnyway', locale)}</button></>}>
         <p style={{ margin: 0 }}>⚠ {pt('oosAsk', locale)} <span className="muted num">({dialog.avail} {pt('available', locale)})</span></p>
+      </Modal>}
+      {dialog?.k === 'qty' && (() => { const p = dialog.p; const n = Number(qtyStr); const go = () => { if (n > 0) { add(p, p.decimal_qty ? n : Math.round(n), { ask: true }); setDialog(null); } };
+        return <Modal open onClose={() => setDialog(null)} title={<>{text(p.name, locale)} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {pt('qty', locale)}</span></>}
+          footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary big" disabled={!(n > 0)} onClick={go}>＋ {qtyStr || '0'}</button></>}>
+          <div style={{ textAlign: 'center', fontSize: 30, fontWeight: 800, minHeight: 40 }} dir="ltr">{qtyStr || '0'}{p.unit ? <small className="muted" style={{ fontSize: 14 }}> {p.unit}</small> : null}</div>
+          <NumPad value={qtyStr} onChange={setQtyStr} decimal={!!p.decimal_qty} onEnter={go} big />
+        </Modal>; })()}
+      {dialog?.k === 'view' && <Modal open onClose={() => setDialog(null)} title={`▦ ${pt('tileView', locale)}`} footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={() => setDialog(null)}>{pt('ok', locale)}</button></>}>
+        <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>{pt('tileViewHow', locale)}</p>
+        <div className="seg" style={{ marginBottom: 12 }}>{(['s', 'm', 'l'] as const).map(z => <button key={z} className={tiles.size === z ? 'active' : ''} onClick={() => saveTiles({ ...tiles, size: z })}>{pt(`tile_${z}` as 'tile_s', locale)}</button>)}</div>
+        <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={tiles.photos} onChange={e => saveTiles({ ...tiles, photos: e.target.checked })} /> {pt('tilePhotos', locale)}</label>
       </Modal>}
       {recent && (() => {   // a cashier: the shop's window (7 days unless the owner set another); the owner: everything this till holds
         const owner = can(roleOf(staff), 'reports.profit'); const d = new Date(); const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;

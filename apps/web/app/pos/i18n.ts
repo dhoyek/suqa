@@ -289,6 +289,9 @@ const T = {
   returnAllBack: { ar: 'كل أصناف هذا البيع أُرجعت.', en: 'Everything on this sale was already returned.' },
   returnDaysLabel: { ar: 'مهلة إرجاع الأصناف بعد البيع (أيام)', en: 'Days after a sale its items can be returned' },
   cashierSalesDaysLabel: { ar: 'كم يوماً من المبيعات السابقة يرى الكاشير', en: 'Days of past sales a cashier can see' },
+  // sale screen: how the item tiles look on this device
+  tileView: { ar: 'عرض الأصناف', en: 'Item view' }, tileViewHow: { ar: 'يُحفظ على هذا الجهاز فقط. اضغط مطوّلاً على صنف لإدخال الكمية.', en: 'Saved on this device only. Press and hold an item to type its quantity.' },
+  tile_s: { ar: 'صغير', en: 'Small' }, tile_m: { ar: 'وسط', en: 'Medium' }, tile_l: { ar: 'كبير', en: 'Large' }, tilePhotos: { ar: 'إظهار صور الأصناف', en: 'Show item photos' },
   // 109: an order moved back after a wrong tap
   backStep: { ar: 'إرجاع الطلب إلى مرحلة سابقة', en: 'Move back to an earlier stage' },
   backHow: { ar: 'اختر المرحلة الصحيحة. الطلب الآن:', en: 'Pick the right stage. The order is now:' },

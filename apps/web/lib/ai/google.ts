@@ -108,3 +108,37 @@ export async function googleReadPhoto(o: { key: string; model: string; image: Ui
   const text = (j.steps ?? []).filter(s => s.type === 'model_output').flatMap(s => s.content ?? []).filter(c => c.type === 'text').map(c => c.text ?? '').join('').trim();
   return { text, usage: { input_tokens: j.usage?.total_input_tokens ?? 0, output_tokens: (j.usage?.total_output_tokens ?? 0) + (j.usage?.total_thought_tokens ?? 0) } };
 }
+
+// ---- task 'image_cleanup': an item photo → the same item on a clean white background, no shadows ----
+// An image model EDITS the photo (Google's image page, read 24 Nov 2026: POST /v1beta/interactions with a text and an image part;
+// the picture comes back as base64 in output_image.data, or in a model_output step's image block). The model redraws the
+// picture, so it can change small print: the result is always shown next to the original and a person chooses.
+export const CLEANUP_PROMPT = [
+  'Edit this product photo for a shop catalog.',
+  'Remove the background and every shadow, and put the product alone on a plain pure white background, centred, filling most of a square frame, evenly lit.',
+  'Keep the product itself EXACTLY as it is in the photo: the same shape, proportions, colours, packaging, logos and every word and number printed on it, in the same language and script.',
+  'Do not redraw, rewrite, translate, correct, sharpen into new text, or invent any text or detail. Do not add props, reflections, borders, labels or watermarks. Do not show more than what is in the photo.',
+].join(' ');
+export type CleanUsage = { input_tokens: number; output_tokens: number };
+export async function googleCleanImage(o: { key: string; model: string; image: Uint8Array; mime: string; size?: '1K' | '2K'; timeoutMs?: number; fetch?: FetchLike }): Promise<{ image: Uint8Array; mime: string; usage: CleanUsage }> {
+  const f = o.fetch ?? (fetch as unknown as FetchLike);
+  const res = await f('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    method: 'POST',
+    headers: { 'x-goog-api-key': o.key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: o.model, store: false,
+      input: [{ type: 'text', text: CLEANUP_PROMPT }, { type: 'image', mime_type: bareMime(o.mime) || 'image/jpeg', data: Buffer.from(o.image).toString('base64') }],
+      response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: '1:1', image_size: o.size ?? '1K' },
+    }),
+    signal: AbortSignal.timeout(o.timeoutMs ?? 55_000),
+  });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`clean_http_${res.status}: ${raw.slice(0, 300)}`);
+  type Img = { type?: string; data?: string; mime_type?: string };
+  type Out = { status?: string; output_image?: Img; steps?: { type?: string; content?: Img[] }[]; usage?: { total_input_tokens?: number; total_output_tokens?: number; total_thought_tokens?: number } };
+  let j: Out; try { j = JSON.parse(raw) as Out; } catch { throw new Error('clean_bad_json'); }
+  if (j.status && j.status !== 'completed') throw new Error(`clean_status_${j.status}`);
+  const img = j.output_image?.data ? j.output_image : (j.steps ?? []).filter(s => s.type === 'model_output').flatMap(s => s.content ?? []).filter(c => c.type === 'image' && c.data).pop();
+  if (!img?.data) throw new Error('clean_no_image');
+  return { image: new Uint8Array(Buffer.from(img.data, 'base64')), mime: img.mime_type || 'image/jpeg', usage: { input_tokens: j.usage?.total_input_tokens ?? 0, output_tokens: (j.usage?.total_output_tokens ?? 0) + (j.usage?.total_thought_tokens ?? 0) } };
+}

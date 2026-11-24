@@ -597,18 +597,52 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .item-tile.in-cart .item-photo + .item-name { padding-inline-end: 0; }
 .item-tile.in-cart { border-color: var(--brand-primary); box-shadow: inset 0 0 0 1px var(--brand-primary); }
 .tile-qty { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 1; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: var(--brand-primary); color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
-/* upright tablets (761–900 px) stack like phones: the items take the full width, the cart sits under them. Wider (a tablet on its side) keeps items and cart side by side. */
-@media (min-width: 761px) and (max-width: 900px) {
-  .pos-sell { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
-  .pos-sell > .pos-pane:first-child { min-height: 0; overflow: auto; }
-  .pos-pane.cart { border-inline-start: 0; border-top: 1px solid var(--line); max-height: 52dvh; display: flex; flex-direction: column; padding: 8px 12px; }
-  .cart-lines { min-height: 56px; max-height: 24dvh; }
-  .cart-actions .pay { min-height: 54px; }
+/* ---- sale screen layout: decided by the screen (Sell.tsx puts .split or .stacked on .pos-sell), not by width alone ---- */
+/* split = items beside the basket, as on a computer: wider than 900 px, or from 640 px when wider than tall (phone / foldable / tablet on its side) */
+.pos-sell.split { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 36%, 400px); grid-template-rows: minmax(0, 1fr); height: 100%; }
+.pos-sell.split > .pos-pane:first-child { min-height: 0; overflow: auto; }
+.pos-sell.split .pos-pane.cart { border-top: 0; border-inline-start: 1px solid var(--line); max-height: none; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.pos-sell.split .cart-lines { max-height: none; flex: 1; }
+/* stacked = items on top with the full width, the basket under them */
+.pos-sell.stacked { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
+.pos-sell.stacked > .pos-pane:first-child { min-height: 0; overflow: auto; }
+.pos-sell.stacked .pos-pane.cart { border-inline-start: 0; border-top: 1px solid var(--line); max-height: 62dvh; display: flex; flex-direction: column; padding: 8px 10px; }
+.pos-sell.stacked .cart-lines { min-height: 56px; max-height: 30dvh; }
+.pos-sell.stacked .cart-actions { grid-template-columns: 1fr 1fr 1fr auto; }   /* preview, discount, park and ✕ on one line */
+/* stacked, basket kept always open by this device: empty = just its header line */
+.pos-sell.stacked .pos-pane.cart.empty:not(.mini) .cart-lines, .pos-sell.stacked .pos-pane.cart.empty:not(.mini) .cart-totals, .pos-sell.stacked .pos-pane.cart.empty:not(.mini) .cart-actions { display: none; }
+/* stacked, the default: the basket is one bar — count, total, customer, pay — and opens in full on a tap */
+.pos-pane.cart.mini > :not(.cart-mini) { display: none !important; }
+.cart-mini { display: flex; align-items: center; gap: 10px; min-height: 52px; cursor: pointer; }
+.cart-mini-count { position: relative; font-size: 24px; line-height: 1; flex: none; padding-inline-end: 8px; }
+.cart-mini-count b { position: absolute; top: -6px; inset-inline-end: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--brand-primary); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+.cart-mini-total { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cart-mini-total strong { font-size: 20px; }
+.cart-mini-total small { font-size: 12px; }
+.cart-mini-added { font-weight: 700; color: var(--brand-primary); overflow: hidden; text-overflow: ellipsis; }
+.cart-mini .btn { min-height: 44px; }
+.cart-mini .btn.primary { padding-inline: 18px; font-weight: 800; font-size: 16px; }
+/* a low screen (a phone on its side): the top bar becomes the compact one — ☰ and the current screen — whatever the width */
+@media (max-height: 520px) and (min-width: 761px) {
+  .pos-bar { flex-wrap: nowrap; padding: 4px 8px; gap: 6px; }
+  .pos-menu-btn { display: inline-flex; min-width: 44px; font-size: 20px; position: relative; }
+  .pos-menu-current { display: inline-block; font-weight: 700; font-size: 15px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos-nav { display: none; }
+  .pos-nav.open { display: grid; position: fixed; inset: 0; z-index: 60; background: rgba(17,24,39,.45); grid-template-columns: repeat(6, 1fr); grid-auto-rows: max-content; gap: 8px; padding: 56px 12px 12px; overflow: auto; }
+  .pos-nav.open button { background: #fff; min-height: 64px; font-size: 13px; }
+  .pos-nav.open button.active { background: #eef6f8; }
+  .pos-nav.open button.nav-group { margin-inline-start: 0; } .pos-nav.open button.nav-group::before { display: none; }
+  .pos-status .muted { display: none; }
 }
-/* stacked layouts: an empty cart is one line (customer, recent sales, parked carts), so the items get the screen; it opens with the first item */
-@media (max-width: 900px) {
-  .cart-actions { grid-template-columns: 1fr 1fr 1fr auto; }   /* preview, discount, park and ✕ on one line */
-  .pos-pane.cart.empty { max-height: none; }
-  .pos-pane.cart.empty .cart-lines, .pos-pane.cart.empty .cart-totals, .pos-pane.cart.empty .cart-actions { display: none; }
+/* a low screen, items beside the basket: everything in the basket is tighter so lines, total and pay all fit */
+@media (max-height: 520px) {
+  .pos-sell.split .pos-pane { padding: 8px; gap: 6px; }
+  .pos-sell.split .cart-lines { min-height: 44px; }
+  .pos-sell.split .cart-totals .big { font-size: 17px; } .pos-sell.split .cart-totals .big.lbp { font-size: 13px; } .pos-sell.split .cart-totals .muted { display: none; }
+  .pos-sell.split .cart-actions { grid-template-columns: 1fr 1fr 1fr auto; gap: 4px; }
+  .pos-sell.split .cart-actions .btn { min-height: 36px; font-size: 13px; padding: 4px 6px; }
+  .pos-sell.split .cart-actions .pay { min-height: 44px; font-size: 17px; }
+  .pos-sell.split .cart-actions kbd { display: none; }
+  .pos-sell.split .item-tile { min-height: 60px; }
+  .pos-sell.split .input.big, .pos-sell.split .btn.big { min-height: 40px; }
 }
-

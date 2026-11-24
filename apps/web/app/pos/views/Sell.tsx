@@ -21,7 +21,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean };   // cats: the always-visible category line (off unless this device turns it on)
+type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean; cartOpen: boolean };   // cats: the always-visible category line; cartOpen: keep the basket always open on a stacked screen (both off unless this device turns them on)
 type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
 
 /**
@@ -36,9 +36,26 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
   // how the item tiles look on THIS device: size and whether they carry the item's photo (the sale screen's ▦ button)
-  const [tiles, setTiles] = useState<TileView>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean; cats?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos, cats: !!v?.cats }; } catch { return { size: 'm', photos: false, cats: false }; } });
+  const [tiles, setTiles] = useState<TileView>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean; cats?: boolean; cartOpen?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos, cats: !!v?.cats, cartOpen: !!v?.cartOpen }; } catch { return { size: 'm', photos: false, cats: false, cartOpen: false }; } });
   const saveTiles = (t: TileView) => { setTiles(t); try { localStorage.setItem('suqa-pos-tiles', JSON.stringify(t)); } catch {} };
   const [qtyStr, setQtyStr] = useState('');
+  // Items beside the basket (as on a computer) when the screen has the width for it: wider than 900 px, or from 640 px when it is wider
+  // than tall (a phone or a folded-open phone on its side, a tablet on its side). Otherwise stacked: items on top, basket under them.
+  // Worked out here, not in CSS, so an on-screen keyboard (which shortens the page on older Android) does not flip the layout while typing.
+  const [split, setSplit] = useState(true);
+  useEffect(() => {
+    let w = 0;
+    const calc = () => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+      if (typing && w === window.innerWidth) return;                 // same width: only the keyboard came or went
+      w = window.innerWidth; setSplit(w > 900 || (w >= 640 && w > window.innerHeight));
+    };
+    calc(); window.addEventListener('resize', calc); window.addEventListener('orientationchange', calc);
+    return () => { window.removeEventListener('resize', calc); window.removeEventListener('orientationchange', calc); };
+  }, []);
+  // stacked screens: the basket is a bar (count, total, customer, pay) until it is tapped open; it closes again when the sale is done
+  const [cartOpen, setCartOpen] = useState(false);
+  const [justAdded, setJustAdded] = useState<string | null>(null); const lastQty = useRef<Map<string, number> | null>(null);
   // a long press on a tile asks for the quantity; the tap that ends it must not also add one
   const press = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean }>({ t: null, fired: false });
   const pressStart = (p: Product) => { press.current.fired = false; if (press.current.t) clearTimeout(press.current.t); press.current.t = setTimeout(() => { press.current.fired = true; setQtyStr(''); setDialog({ k: 'qty', p }); }, 550); };
@@ -158,6 +175,16 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const voidLine = (id: string, reason: string) => setDraft(d => ({ ...d, lines: d.lines.map(x => (x.id === id ? { ...x, voided: true, void_reason: reason } : x)) }));
   const live = draft.lines.filter(l => !l.voided);
   const cartQty = new Map<string, number>(); for (const l of live) if (l.product_id) cartQty.set(l.product_id, (cartQty.get(l.product_id) ?? 0) + l.quantity);
+  const mini = !split && !tiles.cartOpen && !cartOpen;              // the basket shown as a bar
+  const liveKey = live.map(l => `${l.id}:${l.quantity}`).join('|');
+  useEffect(() => {
+    if (!live.length) setCartOpen(false);
+    // what was just added shows on the bar for a moment, so a wrong tap is noticed while the lines are hidden
+    const now = new Map(live.map(l => [l.id, l.quantity] as const)); const before = lastQty.current; lastQty.current = now;
+    if (!before) return;
+    const hit = live.find(l => (before.get(l.id) ?? 0) < l.quantity); if (!hit) return;
+    setJustAdded(`${text(hit.name, locale)} × ${hit.quantity}`); const t = setTimeout(() => setJustAdded(null), 1800); return () => clearTimeout(t);
+  }, [liveKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startNew = useCallback(async () => { setReceipt(r => { if (r) setLastSale({ r, no: serverNo }); return null; }); setReopened(false); setServerNo(null); setDraft(newDraft('walkin')); setDialog(null); searchRef.current?.focus(); }, [serverNo]);
   const park = async (label: string, c?: { name: string; phone: string } | null) => { const d = c === undefined ? draft : { ...draft, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }; await saveDraft(boot.db, d, true, label || d.customer_name || ''); setParked(await listParked(boot.db)); await startNew(); };
@@ -208,7 +235,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   );
 
   return (
-    <div className="pos-sell">
+    <div className={`pos-sell ${split ? 'split' : 'stacked'}`}>
       <div className="pos-pane" ref={paneRef} onScroll={growIfNear}>
         <div className="row" style={{ gap: 8 }}>
           <input ref={searchRef} className="input big" style={{ flex: 1 }} placeholder={pt('searchItems', locale)} value={q} onChange={e => setQ(e.target.value)} autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
@@ -255,9 +282,25 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>
       </div>
 
-      <aside className={`pos-pane cart ${live.length ? '' : 'empty'}`}>
-        <div className="row spread" style={{ alignItems: 'center' }}>
-          <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
+      <aside className={`pos-pane cart ${live.length ? '' : 'empty'} ${mini ? 'mini' : ''}`}>
+        {mini && <div className="cart-mini" onClick={() => { if (live.length) setCartOpen(true); }}>
+          <span className="cart-mini-count" aria-label={pt('cart', locale)}>🛒<b>{live.length}</b></span>
+          {live.length
+            ? <span className="cart-mini-total">{justAdded ? <span className="cart-mini-added">＋ {justAdded}</span> : <><strong>{fmtUsd(grand)}</strong><small className="muted">{fmtLbp(Math.round((grand * rate) / 100 / lbpStep) * lbpStep, locale)}</small></>}</span>
+            : <span className="cart-mini-total muted">{pt('emptyCart', locale)}</span>}
+          <span className="row" style={{ gap: 6, flex: 'none' }} onClick={e => e.stopPropagation()}>
+            {!live.length && lastSale && <button className="btn ghost icon" title={pt('lastSale', locale)} onClick={() => { setReopened(true); setServerNo(lastSale.no); setReceipt(lastSale.r); }}>🧾</button>}
+            {!live.length && <button className="btn ghost icon" title={pt('lastSales', locale)} onClick={() => setRecent(true)}>🕘</button>}
+            {!!parked.length && <button className="btn" onClick={() => setDialog({ k: 'park' })}>⏸ {parked.length}</button>}
+            <button className={`btn ${isOrder ? 'primary' : ''} icon`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>👤{draft.customer_phone || isOrder ? '✓' : ''}</button>
+            {!!live.length && (isOrder
+              ? <button className="btn primary" onClick={saveToOrders}>📥 {pt('saveToOrders', locale)}</button>
+              : <button className="btn primary" onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)}</button>)}
+            {!!live.length && <button className="btn icon" title={pt('cart', locale)} onClick={() => setCartOpen(true)}>▴</button>}
+          </span>
+        </div>}
+        <div className="row spread cart-head" style={{ alignItems: 'center' }}>
+          <strong>{!split && !tiles.cartOpen && <button className="btn icon" style={{ marginInlineEnd: 6 }} title={pt('cart', locale)} onClick={() => setCartOpen(false)}>▾</button>}{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
             {lastSale && !live.length && <button className="btn ghost" title={pt('lastSale', locale)} onClick={() => { setReopened(true); setServerNo(lastSale.no); setReceipt(lastSale.r); }}>🧾 {pt('lastSale', locale)}</button>}
             {!live.length && <button className="btn ghost" title={pt('lastSales', locale)} onClick={() => setRecent(true)}>🕘 {pt('lastSales', locale)}</button>}
@@ -337,6 +380,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <div className="seg" style={{ marginBottom: 12 }}>{(['s', 'm', 'l'] as const).map(z => <button key={z} className={tiles.size === z ? 'active' : ''} onClick={() => saveTiles({ ...tiles, size: z })}>{pt(`tile_${z}` as 'tile_s', locale)}</button>)}</div>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={tiles.photos} onChange={e => saveTiles({ ...tiles, photos: e.target.checked })} /> {pt('tilePhotos', locale)}</label>
         <label className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8 }}><input type="checkbox" checked={tiles.cats} onChange={e => saveTiles({ ...tiles, cats: e.target.checked })} /> {pt('tileCats', locale)}</label>
+        <label className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8 }}><input type="checkbox" checked={tiles.cartOpen} onChange={e => saveTiles({ ...tiles, cartOpen: e.target.checked })} /> {pt('tileCartOpen', locale)}</label>
       </Modal>}
       {recent && (() => {   // a cashier: the shop's window (7 days unless the owner set another); the owner: everything this till holds
         const owner = can(roleOf(staff), 'reports.profit'); const d = new Date(); const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;

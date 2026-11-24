@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 // POST (form: shop_id, image, categories = JSON array of category names) — the item editor's "fill from a photo".
 // A staff member of the shop sends ONE photo of an item; the answer is a SUGGESTED card (names, description, category, barcode)
 // that the person checks and saves in the editor. Nothing is written to the catalog here.
-// The same switches and caps as Yorgo in the till (yorgo_gate, seller mode): a shop over its cap, or with Yorgo off, gets "off".
+// The association's Yorgo switch and the shop's cap decide (yorgo_gate_tools, script 106) — not the shop's assistant switch.
 // What the reading cost is recorded on the staff member's Yorgo usage, so the caps count it. The picture is not stored.
 export async function POST(req: Request) {
   const user = await getUser();
@@ -34,7 +34,10 @@ export async function POST(req: Request) {
   if (!route?.enabled || !key) return NextResponse.json({ status: 'photo', reason: 'off' });      // not set up = off, never an error on screen
 
   // the shop's Yorgo switch and caps decide, before anything is spent
-  const gate = await admin.rpc('yorgo_gate', { p_tenant: tenant.id, p_user: user.id, p_mode: 'seller', p_shop: shopId });
+  // the tools' own gate (script 106): the association's switch, the rate and the caps — not the shop's assistant switch.
+  // A database that does not have it yet answers with the assistant's gate, as before.
+  let gate = await admin.rpc('yorgo_gate_tools', { p_tenant: tenant.id, p_user: user.id, p_shop: shopId });
+  if (gate.error) gate = await admin.rpc('yorgo_gate', { p_tenant: tenant.id, p_user: user.id, p_mode: 'seller', p_shop: shopId });
   const g = (gate.data ?? {}) as { ok?: boolean; reason?: string };
   if (gate.error) return NextResponse.json({ status: 'photo', reason: 'failed' });
   if (!g.ok) return NextResponse.json({ status: 'photo', reason: g.reason === 'rate' ? 'rate' : g.reason === 'off' ? 'off' : 'cap' });

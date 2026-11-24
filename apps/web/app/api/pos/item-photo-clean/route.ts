@@ -14,7 +14,7 @@ export const maxDuration = 60;
 // POST (form: shop_id, image) — the item editor's "remove background": ONE item photo → the same item on a clean white
 // background, returned as the picture itself (image/jpeg). The person sees it next to the original and chooses; nothing is
 // stored or written here — the chosen picture is uploaded by the editor like any item photo.
-// Same switches and caps as Yorgo in the till (yorgo_gate, seller mode); the cost is recorded on the shop's Yorgo usage.
+// The association's Yorgo switch and the shop's cap decide (yorgo_gate_tools, script 106); the cost is recorded on the shop's Yorgo usage.
 // Anything that is not a picture comes back as JSON { status: 'photo', reason }.
 export async function POST(req: Request) {
   const user = await getUser();
@@ -33,7 +33,10 @@ export async function POST(req: Request) {
   const route = await loadRoute('image_cleanup', async t => (await admin.from('yorgo_ai_routes').select(ROUTE_COLUMNS).eq('task', t).maybeSingle()).data as Record<string, unknown> | null);
   if (!route?.enabled || !key) return NextResponse.json({ status: 'photo', reason: 'off' });
 
-  const gate = await admin.rpc('yorgo_gate', { p_tenant: tenant.id, p_user: user.id, p_mode: 'seller', p_shop: shopId });
+  // the tools' own gate (script 106): the association's switch, the rate and the caps — not the shop's assistant switch.
+  // A database that does not have it yet answers with the assistant's gate, as before.
+  let gate = await admin.rpc('yorgo_gate_tools', { p_tenant: tenant.id, p_user: user.id, p_shop: shopId });
+  if (gate.error) gate = await admin.rpc('yorgo_gate', { p_tenant: tenant.id, p_user: user.id, p_mode: 'seller', p_shop: shopId });
   const g = (gate.data ?? {}) as { ok?: boolean; reason?: string };
   if (gate.error) return NextResponse.json({ status: 'photo', reason: 'failed' });
   if (!g.ok) return NextResponse.json({ status: 'photo', reason: g.reason === 'rate' ? 'rate' : g.reason === 'off' ? 'off' : 'cap' });

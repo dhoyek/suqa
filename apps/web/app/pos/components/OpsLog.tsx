@@ -15,7 +15,7 @@ type Row = { id: number; at: string; user_id: string | null; action: string; ref
 type Op = Row & { failed: boolean; amount: string; detail: string; undone: string | null; canUndo: 'sale' | 'purchase' | 'debt' | 'cash' | 'stock' | 'supplier' | 'payout' | 'pay' | null; why: string | null };
 
 /** The operations a till sends (no admin-side actions). */
-const POS_OPS = ['sale.commit', 'sale.cancel', 'return.commit', 'order.pay', 'order.status', 'order.back', 'order.edit', 'order.info', 'order.merge', 'order.delete', 'order.needed',
+const POS_OPS = ['sale.commit', 'sale.cancel', 'return.commit', 'order.pay', 'order.status', 'order.back', 'order.reopen', 'order.edit', 'order.info', 'order.merge', 'order.delete', 'order.needed',
   'order.driver_cash', 'order.driver_pay', 'driver.payout', 'cash.move', 'shift.open', 'shift.close', 'rate.set', 'debt.settle', 'debt.unsettle', 'stock.move',
   'product.patch', 'purchase.commit', 'purchase.void', 'supplier.pay', 'customer.upsert', 'customer.merge', 'customer.delete', 'supplier.upsert', 'supplier.merge',
   'supplier.delete', 'driver.upsert', 'driver.delete', 'op.cancel'];
@@ -97,6 +97,7 @@ export default function OpsLog({ boot, sb, locale, staff, from, to }: { boot: Bo
         case 'debt.settle': amount = money(a.currency, a.amount); detail = String(a.name || a.phone || ''); undone = undoneBy(unsettled.get(id)); if (!undone) canUndo = 'debt'; break;
         case 'debt.unsettle': detail = String(a.reason ?? ''); break;
         case 'purchase.commit': amount = usd(a.total_cents); detail = String(a.invoice_no ?? ''); undone = undoneBy(voided.get(id)); if (!undone) canUndo = 'purchase'; break;
+        case 'order.reopen': detail = `${String(a.number ?? '')} ↺ ${pt(`st_${String(a.status)}` as Key, locale)}`; break;
         case 'order.back': detail = `↶ ${pt(`st_${String(a.status)}` as Key, locale)}`; break;
         case 'purchase.void': detail = String(a.reason ?? ''); break;
         case 'supplier.pay': amount = money(a.currency, a.amount); detail = String(a.note ?? ''); undone = undoneBy(cancelled.get(String(r.id))); if (!undone) canUndo = 'supplier'; break;

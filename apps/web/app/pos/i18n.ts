@@ -292,6 +292,17 @@ const T = {
   // sale screen: how the item tiles look on this device
   tileView: { ar: 'عرض الأصناف', en: 'Item view' }, tileViewHow: { ar: 'يُحفظ على هذا الجهاز فقط. اضغط مطوّلاً على صنف لإدخال الكمية.', en: 'Saved on this device only. Press and hold an item to type its quantity.' },
   tile_s: { ar: 'صغير', en: 'Small' }, tile_m: { ar: 'وسط', en: 'Medium' }, tile_l: { ar: 'كبير', en: 'Large' }, tilePhotos: { ar: 'إظهار صور الأصناف', en: 'Show item photos' }, tileCartOpen: { ar: 'إبقاء السلة مفتوحة دائماً (على الشاشات الضيقة)', en: 'Keep the basket always open (narrow screens)' }, tileCats: { ar: 'إظهار سطر الفئات فوق الأصناف', en: 'Show the category line above the items' },
+  // 110: a cancelled / rejected order reopened
+  reopenOrder: { ar: 'إعادة فتح الطلب', en: 'Reopen order' },
+  reopenHow: { ar: 'يعود الطلب إلى المرحلة التي كان فيها قبل إلغائه أو رفضه، وتُحجز أصنافه من المخزون من جديد.', en: 'The order goes back to the stage it was in before it was cancelled or rejected, and its items are taken from stock again.' },
+  reopenNote: { ar: 'لا تُرسَل رسالة للزبون عند إعادة الفتح — هو أُبلغ بالإلغاء. الخطوة التالية تُرسل رسالتها كالعادة، ويُفضَّل إخباره.', en: 'The customer is not messaged about the reopen — he was told it was cancelled. The next step sends its message as usual; better to tell him yourself.' },
+  reopenOffline: { ar: 'إعادة الفتح تحتاج اتصالاً بالإنترنت.', en: 'Reopening needs an internet connection.' },
+  reopenWhyStock: { ar: 'لا يمكن إعادة الفتح: المخزون لم يعد يكفي.', en: 'Cannot reopen: the stock is no longer there.' },
+  reopenWhyCustomer: { ar: 'الزبون هو من ألغى هذا الطلب أو طلب إلغاءه — لا يُعاد فتحه. أنشئ طلباً جديداً إذا غيّر رأيه.', en: 'The customer cancelled this order himself, or asked for it — it is not reopened. Make a new order if he changed his mind.' },
+  reopenWhyMerged: { ar: 'أُلغي هذا الطلب لأنه دُمج مع طلب آخر — أصنافه هناك.', en: 'This order was cancelled because it was merged into another one — its items are there.' },
+  reopenWhyNotYet: { ar: 'هذه الخاصية لم تُفعَّل بعد على هذا النظام.', en: 'This is not switched on for this system yet.' },
+  reopenWhyOther: { ar: 'لا يمكن إعادة فتح هذا الطلب.', en: 'This order cannot be reopened.' },
+  a_order_reopen: { ar: 'إعادة فتح طلب', en: 'Order reopened' },
   // 109: an order moved back after a wrong tap
   backStep: { ar: 'إرجاع الطلب إلى مرحلة سابقة', en: 'Move back to an earlier stage' },
   backHow: { ar: 'اختر المرحلة الصحيحة. الطلب الآن:', en: 'Pick the right stage. The order is now:' },

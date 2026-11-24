@@ -416,3 +416,18 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .order-row-line .badge { flex: none; }
 
 .order-row .name { font-weight: 600; }
+/* admin header. Wide screens: everything stays at the top, tabs wrap if they must. Up to 1000 px (phones, tablets): the header itself
+   lets go of the top — only the tabs stay, as one line swiped sideways; the brand line and the "go to" shortcuts scroll with the page. */
+.admin-top .tabs { flex-wrap: wrap; }
+@media (max-width: 1000px) {
+  .topbar.admin-top { display: contents; }
+  .admin-top > .container:first-child { display: contents; }
+  .admin-top .brand { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; background: #fff; }
+  .admin-top .tabs { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: nowrap; justify-content: flex-start; margin-inline-start: 0; overflow-x: auto; scrollbar-width: none; padding: 6px 12px; gap: 4px; align-items: center; }
+  .admin-top .tabs::-webkit-scrollbar { display: none; }
+  .admin-top .tabs .tab, .admin-top .tabs form, .admin-top .tabs .btn { flex: none; white-space: nowrap; }
+  .admin-top .module-links { background: #fff; border-bottom: 1px solid var(--line); padding-top: 8px; padding-bottom: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: none; }
+  .admin-top .module-links::-webkit-scrollbar { display: none; }
+  .admin-top .module-links > * { flex: none; white-space: nowrap; }
+}
+

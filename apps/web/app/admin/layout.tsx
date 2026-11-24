@@ -19,7 +19,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   ];
   return (
     <>
-      <header className="topbar">
+      {/* wide screens: the whole header stays at the top, as before. Phones and tablets (globals.css, .admin-top): only the line of
+          tabs stays — one line, swiped sideways — and the brand and the "go to" shortcuts scroll away with the page */}
+      <header className="topbar admin-top">
         <div className="container" style={{ flexWrap: 'wrap' }}>
           <Link href="/admin" className="brand">{tenant.branding?.logo_url && <img className="brand-logo" src={tenant.branding.logo_url} alt="" />}{tenant.brand_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· {ui('admin', L)}</span></Link>
           <AdminNav tabs={tabs} signOut={ui('signOut', L)} />

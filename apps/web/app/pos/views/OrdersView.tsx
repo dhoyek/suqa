@@ -148,6 +148,19 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
   // 109: an order moved back to an earlier stage after a wrong tap — pick the stage, then (cashier) the owner's PIN
   const [back, setBack] = useState<null | { o: Order; to?: OrderStatus; why?: string }>(null);
+  // 110: a cancelled / rejected order reopened — on the server in one step (online), then every till gets it by sync
+  const [reopen, setReopen] = useState<null | { o: Order; gate?: boolean; why?: string; busy?: boolean }>(null);
+  const doReopen = async (o: Order, approvedBy: string | null) => {
+    setReopen({ o, busy: true });
+    const { error } = await sb.rpc('pos_order_reopen', { p_shop: boot.shop.id, p_order: o.id, p_approved_by: approvedBy });
+    if (error) {
+      const m = error.message; const item = (error as { details?: string }).details;
+      setReopen({ o, why: /out_of_stock/.test(m) ? `${pt('reopenWhyStock', locale)}${item ? ` (${item})` : ''}` : /cancelled_by_customer/.test(m) ? pt('reopenWhyCustomer', locale) : /merged/.test(m) ? pt('reopenWhyMerged', locale) : /Could not find the function|PGRST202/.test(m) ? pt('reopenWhyNotYet', locale) : `${pt('reopenWhyOther', locale)} (${m})` });
+      return;
+    }
+    try { await boot.engine.sync(); } catch { boot.engine.poke(); }
+    setReopen(null); setSel(o.id); await reload();
+  };
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
   const confirm = useConfirm();
   const colLabel = (c: Col) => pt(c === 'new' ? 'colNew' : c === 'active' ? 'colActive' : c === 'onway' ? 'colOnWay' : c === 'done' ? 'colDone' : 'colCancelled', locale);
@@ -253,6 +266,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                           {staff.role !== 'stock' && !!backTargets(o).length && <button onClick={() => setBack({ o })}>↶ {pt('backStep', locale)}</button>}
                           {NEXT[o.status].includes('rejected') && <button className="danger" onClick={() => act(o, 'rejected')}>✕ {pt('act_rejected', locale)}</button>}
                           {NEXT[o.status].includes('cancelled') && <button className="danger" onClick={() => act(o, 'cancelled')}>✕ {pt('act_cancelled', locale)}</button>}
+                          {(o.status === 'cancelled' || o.status === 'rejected') && o.channel !== 'walkin' && !o.parked && staff.role !== 'stock' && <button onClick={() => setReopen({ o })}>↺ {pt('reopenOrder', locale)}</button>}
                           {(o.status === 'cancelled' || o.status === 'rejected') && <button className="danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
                         </div>}
                       </span>}
@@ -274,6 +288,15 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
         </>}
       </Modal>}
       {back?.to && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('backStep', locale)} onDone={id => { const b = back; if (id && b.to) void doBack(b.o, b.to, id); else setBack(null); }} />}
+      {reopen && !reopen.gate && <Modal open onClose={() => setReopen(null)} title={`↺ ${pt('reopenOrder', locale)} · ${reopen.o.number ?? reopen.o.local_number ?? ''}`}
+        footer={<><button className="btn ghost" onClick={() => setReopen(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} />{!reopen.why && <button className="btn primary" disabled={reopen.busy || !online} onClick={() => (staff.role === 'owner' ? void doReopen(reopen.o, staff.user_id) : setReopen({ o: reopen.o, gate: true }))}>↺ {pt('reopenOrder', locale)}</button>}</>}>
+        {reopen.why ? <p className="bad">ⓘ {reopen.why}</p> : <>
+          <p style={{ marginTop: 0 }}>{pt('reopenHow', locale)}</p>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>ⓘ {pt('reopenNote', locale)}</p>
+          {!online && <p className="bad" style={{ marginBottom: 0 }}>{pt('reopenOffline', locale)}</p>}
+        </>}
+      </Modal>}
+      {reopen?.gate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('reopenOrder', locale)} onDone={id => { const r = reopen; if (id) void doReopen(r.o, id); else setReopen(null); }} />}
       {gate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('deleteOrder', locale)} onDone={id => { const o = gate; setGate(null); if (id) void removeOrder(o, id); }} />}
       {dialog?.k === 'eta' && <EtaDialog locale={locale} onDone={async eta => { await setOrderStatus(boot.db, dialog.o, 'accepted', { eta_minutes: eta }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'assign' && <DriverPicker boot={boot} locale={locale} order={dialog.o} early onClose={() => setDialog(null)}

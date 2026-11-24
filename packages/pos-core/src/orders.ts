@@ -92,6 +92,37 @@ export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Pay
   return { order: updated, settlement: s };
 }
 
+/** 109: the stages an order walks through, in order. Cancelled / rejected are not stages (and are not reopened). */
+export const STAGES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+/** Where an order can be moved BACK to after a wrong tap: every earlier stage — "new" only for an online order, "on the way" never for a pickup. */
+export function backTargets(order: Pick<Order, 'status' | 'channel' | 'fulfillment' | 'parked'>): OrderStatus[] {
+  const at = STAGES.indexOf(order.status); if (at < 1 || order.parked || order.channel === 'walkin') return [];
+  return STAGES.slice(0, at).filter(s => (s !== 'pending' || order.channel === 'online') && (s !== 'out_for_delivery' || order.fulfillment !== 'pickup'));
+}
+/** Why a DELIVERED order cannot be reopened (null = it can): nothing may be counted twice. The server checks the same things. */
+export async function backBlock(db: PosDb, order: Order): Promise<'has_payments' | 'has_returns' | 'driver_paid' | null> {
+  if (order.status !== 'delivered') return null;
+  const sum = { usd: 0, lbp: 0 }; for (const p of await db.payments.where('order_id').equals(order.id).toArray()) sum[p.currency === 'lbp' ? 'lbp' : 'usd'] += num(p.amount);
+  if (sum.usd !== 0 || sum.lbp !== 0) return 'has_payments';
+  if (await db.returns.where('order_id').equals(order.id).count()) return 'has_returns';
+  if (order.driver_paid_at) return 'driver_paid';
+  return null;
+}
+/** Move an order back to an earlier stage. The times the later stages stamped are cleared; stock and the customer are left alone. */
+export async function stepBackOrder(db: PosDb, order: Order, to: OrderStatus, approved_by: string | null): Promise<Order> {
+  if (!backTargets(order).includes(to)) throw new Error('not_a_step_back');
+  const block = await backBlock(db, order); if (block) throw new Error(block);
+  const updated = { ...order, status: to, updated_at: new Date().toISOString() } as Order & Record<string, unknown>;
+  if (order.status === 'delivered') { updated.delivered_at = null; updated.closed_at = null; updated.driver_delivered_at = null; }
+  if (STAGES.indexOf(to) < 4) { updated.picked_up_at = null; updated.driver_picked_at = null; }
+  if (to === 'pending') updated.accepted_at = null;
+  await db.transaction('rw', [db.orders, db.outbox], async () => {
+    await db.orders.put(updated);
+    await enqueue(db, 'order.back', { id: order.id, status: to, approved_by });
+  });
+  return updated;
+}
+
 /** 107: the shop's two windows, in days — 7 until the shop row carries them. */
 const days = (v: unknown, d = 7) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 1 ? Math.min(n, 365) : d; };
 export const returnDays = (shop: { return_days?: number | null }) => days(shop.return_days);

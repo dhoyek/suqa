@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
-import { returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { backBlock, backTargets, stepBackOrder, returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -146,10 +146,21 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [show, setShow] = useState<Set<Col>>(loadCols);
   const toggleCol = (c: Col) => setShow(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); if (!n.size) n.add(c); try { localStorage.setItem(LS_COLS, JSON.stringify([...n])); } catch {} return n; });
   const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState<Order | null>(null);
+  // 109: an order moved back to an earlier stage after a wrong tap — pick the stage, then (cashier) the owner's PIN
+  const [back, setBack] = useState<null | { o: Order; to?: OrderStatus; why?: string }>(null);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
   const confirm = useConfirm();
   const colLabel = (c: Col) => pt(c === 'new' ? 'colNew' : c === 'active' ? 'colActive' : c === 'onway' ? 'colOnWay' : c === 'done' ? 'colDone' : 'colCancelled', locale);
   const removeOrder = async (o: Order, approvedBy: string | null) => { await deleteOrder(boot.db, o, approvedBy); boot.engine.poke(); setSel(null); await reload(); };
+  const doBack = async (o: Order, to: OrderStatus, approvedBy: string | null) => {
+    try { await stepBackOrder(boot.db, o, to, approvedBy); boot.engine.poke(); setBack(null); await reload(); }
+    catch (e) { const m = (e as Error).message; setBack({ o, why: pt(m === 'has_payments' ? 'backWhyPaid' : m === 'has_returns' ? 'backWhyReturned' : m === 'driver_paid' ? 'backWhyDriverPaid' : 'backWhyOther', locale) }); }
+  };
+  const pickBack = async (o: Order, to: OrderStatus) => {
+    const block = await backBlock(boot.db, o);
+    if (block) { setBack({ o, why: pt(block === 'has_payments' ? 'backWhyPaid' : block === 'has_returns' ? 'backWhyReturned' : 'backWhyDriverPaid', locale) }); return; }
+    if (staff.role === 'owner') await doBack(o, to, staff.user_id); else setBack({ o, to });
+  };
   const askDelete = async (o: Order) => {
     if (!(await confirm(pt('deleteOrderConfirm', locale), { danger: true }))) return;
     if (staff.role === 'owner') await removeOrder(o, staff.user_id); else setGate(o);
@@ -239,6 +250,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                           <a href={waHref(o.customer_phone, invoiceText(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 {pt('sendInvoiceWa', locale)}</a>
                           <label><input type="checkbox" checked={o.notify_customer !== false} onClick={e => e.stopPropagation()} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
                           {o.status === 'delivered' && (staff.role === 'owner' || !returnTooOld(boot.shop, o)) && <button onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
+                          {staff.role !== 'stock' && !!backTargets(o).length && <button onClick={() => setBack({ o })}>↶ {pt('backStep', locale)}</button>}
                           {NEXT[o.status].includes('rejected') && <button className="danger" onClick={() => act(o, 'rejected')}>✕ {pt('act_rejected', locale)}</button>}
                           {NEXT[o.status].includes('cancelled') && <button className="danger" onClick={() => act(o, 'cancelled')}>✕ {pt('act_cancelled', locale)}</button>}
                           {(o.status === 'cancelled' || o.status === 'rejected') && <button className="danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}
@@ -253,6 +265,15 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
         ))}
       </div>
 
+      {back && !back.to && <Modal open onClose={() => setBack(null)} title={`↶ ${pt('backStep', locale)} · ${back.o.number ?? back.o.local_number ?? ''}`}
+        footer={<><span style={{ flex: 1 }} /><button className="btn ghost" onClick={() => setBack(null)}>{pt('cancel', locale)}</button></>}>
+        {back.why ? <p className="bad">ⓘ {back.why}</p> : <>
+          <p className="muted" style={{ marginTop: 0 }}>{pt('backHow', locale)} <strong>{pt(`st_${back.o.status}` as Key, locale)}</strong></p>
+          <div className="stack" style={{ gap: 8 }}>{backTargets(back.o).slice().reverse().map(t => <button key={t} className="btn" onClick={() => void pickBack(back.o, t)}>↶ {pt(`st_${t}` as Key, locale)}</button>)}</div>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>ⓘ {pt('backNote', locale)}</p>
+        </>}
+      </Modal>}
+      {back?.to && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('backStep', locale)} onDone={id => { const b = back; if (id && b.to) void doBack(b.o, b.to, id); else setBack(null); }} />}
       {gate && <OwnerPin open locale={locale} staff={members} me={staff} reason={pt('deleteOrder', locale)} onDone={id => { const o = gate; setGate(null); if (id) void removeOrder(o, id); }} />}
       {dialog?.k === 'eta' && <EtaDialog locale={locale} onDone={async eta => { await setOrderStatus(boot.db, dialog.o, 'accepted', { eta_minutes: eta }); boot.engine.poke(); setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'assign' && <DriverPicker boot={boot} locale={locale} order={dialog.o} early onClose={() => setDialog(null)}

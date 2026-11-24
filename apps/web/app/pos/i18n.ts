@@ -289,6 +289,15 @@ const T = {
   returnAllBack: { ar: 'كل أصناف هذا البيع أُرجعت.', en: 'Everything on this sale was already returned.' },
   returnDaysLabel: { ar: 'مهلة إرجاع الأصناف بعد البيع (أيام)', en: 'Days after a sale its items can be returned' },
   cashierSalesDaysLabel: { ar: 'كم يوماً من المبيعات السابقة يرى الكاشير', en: 'Days of past sales a cashier can see' },
+  // 109: an order moved back after a wrong tap
+  backStep: { ar: 'إرجاع الطلب إلى مرحلة سابقة', en: 'Move back to an earlier stage' },
+  backHow: { ar: 'اختر المرحلة الصحيحة. الطلب الآن:', en: 'Pick the right stage. The order is now:' },
+  backNote: { ar: 'لا تُرسَل رسالة للزبون عند الإرجاع، والمخزون لا يتغيّر. الخطوة التالية إلى الأمام تُرسل رسالتها كالعادة.', en: 'The customer is not messaged about a step back and stock does not change. The next step forward sends its message as usual.' },
+  backWhyPaid: { ar: 'على هذا الطلب دفعة مسجّلة. ألغِ الدفعة أولاً من التقارير ← سجل العمليات، ثم أرجِع الطلب — حتى لا يُحسب المبلغ مرتين.', en: 'A payment is recorded on this order. Cancel the payment first from Reports → operations log, then move the order back — so the money is never counted twice.' },
+  backWhyReturned: { ar: 'أُرجعت أصناف من هذا الطلب، فلا يمكن إعادة فتحه.', en: 'Items were returned from this order, so it cannot be reopened.' },
+  backWhyDriverPaid: { ar: 'السائق قبض أجرة هذا الطلب، فلا يمكن إعادة فتحه.', en: 'The driver was already paid for this order, so it cannot be reopened.' },
+  backWhyOther: { ar: 'لا يمكن إرجاع هذا الطلب.', en: 'This order cannot be moved back.' },
+  a_order_back: { ar: 'إرجاع طلب إلى مرحلة سابقة', en: 'Order moved back' },
   // 108: stale items
   staleDaysLabel: { ar: 'يُعتبر الصنف راكداً بعد كم يوم بدون بيع', en: 'An item is stale after this many days without a sale' },
   findItem: { ar: 'ابحث باسم الصنف', en: 'Find by item name' },

@@ -128,6 +128,7 @@ export class FakeServer {
         for (const m of p.stock_moves ?? []) this.move({ id: m.id, shop_id: this.shop.id, product_id: m.product_id, qty: m.qty, kind: m.kind ?? 'sale', ref_order_id: o.id, device_id: d.id, at: m.at }, d.id);
         return { number: o.number, id: o.id };
       }
+      case 'order.back': { const o = this.orders.get(p.id); if (!o) throw new Error('order_not_found'); if (o.status !== p.status) this.setStatus(p.id, p.status, d.id); return { order_status: p.status }; }
       case 'order.status': { if (!this.orders.has(p.id)) throw new Error('order_not_found'); this.setStatus(p.id, p.status, d.id); return { status: p.status }; }
       case 'stock.move': { if (!this.products.has(p.product_id)) throw new Error('product_not_found'); this.move({ id: p.id, shop_id: this.shop.id, product_id: p.product_id, qty: p.qty, kind: p.kind, device_id: d.id, note: p.note, unit_cost_cents: p.unit_cost_cents }, d.id); return { ok: true }; }
       case 'product.patch': {

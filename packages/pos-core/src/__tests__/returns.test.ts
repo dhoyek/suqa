@@ -32,3 +32,44 @@ describe('returns from a past sale (107)', () => {
     expect(returnTooOld({ return_days: 30 }, { placed_at: ago(20), delivered_at: null }, now)).toBe(false);
   });
 });
+
+import { backBlock, backTargets, setOrderStatus, stepBackOrder } from '../orders';
+
+describe('an order moved back after a wrong tap (109)', () => {
+  it('targets: every earlier stage; "new" only online; never "on the way" for a pickup; nothing for a counter sale or a cancelled order', () => {
+    const o = (status: string, channel = 'whatsapp', fulfillment = 'delivery') => ({ status, channel, fulfillment, parked: false }) as never;
+    expect(backTargets(o('ready'))).toEqual(['accepted', 'preparing']);
+    expect(backTargets(o('delivered'))).toEqual(['accepted', 'preparing', 'ready', 'out_for_delivery']);
+    expect(backTargets(o('delivered', 'whatsapp', 'pickup'))).toEqual(['accepted', 'preparing', 'ready']);
+    expect(backTargets(o('accepted', 'online'))).toEqual(['pending']);
+    expect(backTargets(o('accepted'))).toEqual([]);
+    expect(backTargets(o('cancelled'))).toEqual([]); expect(backTargets(o('pending', 'online'))).toEqual([]);
+    expect(backTargets(o('delivered', 'walkin'))).toEqual([]);
+  });
+  it('goes back on the till and on the server; a delivered order with money on it is refused until the payment is gone', async () => {
+    const server = new FakeServer();
+    const p = server.addProduct({ id: 'p1', price_usd: 10, on_hand: 50 });
+    const a = await makeDevice(server, 'A');
+    const r = await commitSale(a.db, { draft: addToDraft(newDraft('whatsapp'), p, 1), rate: RATE, lbpStep: 5000, changeIn: 'usd', status: 'accepted', payments: [] });
+    let o = await setOrderStatus(a.db, r.order, 'ready');
+    o = await stepBackOrder(a.db, o, 'preparing', 'u1');
+    expect(o.status).toBe('preparing');
+    await expect(stepBackOrder(a.db, o, 'ready', 'u1')).rejects.toThrow('not_a_step_back');
+    await a.engine.sync();
+    expect(server.orders.get(o.id)!.status).toBe('preparing');
+    expect((await a.db.orders.get(o.id))!.status).toBe('preparing');
+    // delivered with nothing paid: reopened, its closing times cleared
+    o = await setOrderStatus(a.db, (await a.db.orders.get(o.id))!, 'delivered');
+    expect(await backBlock(a.db, o)).toBeNull();
+    o = await stepBackOrder(a.db, o, 'ready', 'u1');
+    expect(o.status).toBe('ready'); expect(o.delivered_at ?? null).toBeNull(); expect(o.closed_at ?? null).toBeNull();
+    // delivered and paid: refused; with the payment reversed: allowed
+    o = await setOrderStatus(a.db, o, 'delivered');
+    await a.db.payments.put({ id: 'pay1', order_id: o.id, tender: 'cash_usd', amount: 1000, currency: 'usd', at: new Date().toISOString() } as never);
+    expect(await backBlock(a.db, o)).toBe('has_payments');
+    await expect(stepBackOrder(a.db, o, 'ready', 'u1')).rejects.toThrow('has_payments');
+    expect((await a.db.orders.get(o.id))!.status).toBe('delivered');
+    await a.db.payments.put({ id: 'pay2', order_id: o.id, tender: 'cash_usd', amount: -1000, currency: 'usd', at: new Date().toISOString() } as never);
+    expect(await backBlock(a.db, o)).toBeNull();
+  });
+});

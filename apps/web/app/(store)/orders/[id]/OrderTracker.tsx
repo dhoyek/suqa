@@ -40,7 +40,7 @@ export default function OrderTracker(props: { initial: Row; extra: Extra; rating
     if (error) { notify(friendlyError(error, L)); return; }
     setRating({ stars, comment: comment.trim() || null });
   }
-  const money = (v: number) => formatMoney(Number(v), fx, displayCurrency, L);
+  const money = (v: number) => formatMoney(Number(v), Number(o.fx_lbp_rate) || fx, displayCurrency, L);      // the rate the order was placed at (its shop's, 103) — not today's
   const loc = ar ? 'ar-LB-u-nu-latn' : 'en-GB';
   const fmt = (iso: string, withDate = false) => new Date(iso).toLocaleString(loc, { timeZone: timezone, ...(withDate ? { day: 'numeric', month: 'short' } : {}), hour: '2-digit', minute: '2-digit' });
 

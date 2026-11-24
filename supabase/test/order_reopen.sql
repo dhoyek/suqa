@@ -1,4 +1,4 @@
--- 110: a cancelled / rejected order reopened — where it goes back to, stock taken or reserved again exactly once, refusals, no message. Rolls back.
+-- 110 + 111: a cancelled / rejected order reopened; an online order cancelled after its stock was taken gives it back — where it goes back to, stock taken or reserved again exactly once, refusals, no message. Rolls back.
 \set ON_ERROR_STOP on
 begin;
 create schema if not exists net;
@@ -91,9 +91,13 @@ begin
   assert pg_temp.go('on2', 'accepted')->>'status' = 'ok' and pg_temp.go('on2', 'ready')->>'status' = 'ok';
   assert pg_temp.hand() = 8 and pg_temp.resv() = 2;
   assert pg_temp.go('on2', 'cancelled')->>'status' = 'ok';
+  assert pg_temp.hand() = 10 and pg_temp.resv() = 2, '111: the cancel gives the 2 taken pieces back: ' || pg_temp.hand() || ' / ' || pg_temp.resv();
   r := pg_temp.reopen('on2'); assert (r->>'ok')::boolean and r->>'status' = 'ready', 'reopen on2: ' || r::text;
-  assert pg_temp.hand() = 8 and pg_temp.resv() = 2, 'stock untouched: ' || pg_temp.hand() || ' / ' || pg_temp.resv();
-  assert (select count(*) from suqa.stock_moves where ref_order_id = o2 and kind = 'sale') = 1, 'still one sale move';
+  assert pg_temp.hand() = 8 and pg_temp.resv() = 2, 'taken again, once: ' || pg_temp.hand() || ' / ' || pg_temp.resv();
+  assert (select sum(qty) from suqa.stock_moves where ref_order_id = o2 and kind in ('sale', 'return')) = -2, 'its moves add up to its 2 pieces';
+  -- cancelled once more and left cancelled: the stock is back, and a later status-less update adds nothing
+  assert pg_temp.go('on2', 'cancelled')->>'status' = 'ok' and pg_temp.hand() = 10, 'cancelled again: back again';
+  r := pg_temp.reopen('on2'); assert (r->>'ok')::boolean and pg_temp.hand() = 8, 'and reopened again';
 end $$;
 -- ---- online on3: the CUSTOMER cancels his pending order → the shop cannot reopen it
 reset role;

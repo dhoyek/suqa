@@ -28,6 +28,9 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
   const togglePush = async () => { setPushBusy(true); setPushErr(null);
     try { setPush(push === 'on' ? await pushDisable(sb) : await pushEnable(sb, boot.shop.id, `${staff.display_name || staff.full_name || ''} · ${navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? ''}`.slice(0, 80))); }
     catch (e) { setPushErr(/not_shop_staff/.test((e as Error).message) ? pt('pushStaffOnly', locale) : (e as Error).message); } finally { setPushBusy(false); } };
+  // 🪄 this device cleans the background of every new item photo by itself (then asks which picture to keep)
+  const [autoClean, setAutoClean] = useState(() => { try { return localStorage.getItem('suqa-pos-autoclean') === '1'; } catch { return false; } });
+  const toggleAutoClean = (v: boolean) => { setAutoClean(v); try { localStorage.setItem('suqa-pos-autoclean', v ? '1' : '0'); } catch {} };
   const toggleBig = (v: boolean) => { setBig(v); try { localStorage.setItem('suqa-pos-big', v ? '1' : '0'); } catch {} document.documentElement.classList.toggle('pos-big', v); };
   const [devices, setDevices] = useState<Device[]>([]);
   const [members, setMembers] = useState<Staff[]>([]);
@@ -125,6 +128,10 @@ export default function SettingsView({ boot, sb, locale, status, staff, tick, se
         <div className="row" style={{ gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="seg"><button className={locale === 'ar' ? 'active' : ''} onClick={() => setLocale('ar')}>العربية</button><button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')}>English</button></div>
           <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={big} onChange={e => toggleBig(e.target.checked)} /> {pt('bigButtons', locale)}</label>
+          {can(roleOf(staff), 'items.edit') && <div>
+            <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={autoClean} onChange={e => toggleAutoClean(e.target.checked)} /> 🪄 {pt('autoClean', locale)}</label>
+            <p className="muted" style={{ fontSize: 12, margin: '2px 0 0' }}>{pt('autoCleanNote', locale)}</p>
+          </div>}
         </div>
         <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{pt('perDevice', locale)}</p>
       </section>

@@ -1,11 +1,11 @@
 'use client';
 import CategoryPicker from './CategoryPicker';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff, type Supplier } from '@suqa/pos-core';
 import { pt, dayName, DAY_ORDER, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
-import ImageUpload from '@/components/ImageUpload';
+import ImageUpload, { type ImageUploadHandle } from '@/components/ImageUpload';
 import Modal from './Modal';
 import OwnerPin from './OwnerPin';
 import dynamic from 'next/dynamic';
@@ -51,6 +51,9 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
   // "fill from a photo": one photo of the item → suggested names, description, category and barcode. Only EMPTY fields are filled,
   // and nothing is saved until the person saves. The picture is shrunk here first (a phone photo is several MB) and is not stored.
   const [reading, setReading] = useState(false); const [photoMsg, setPhotoMsg] = useState<string | null>(null);
+  const picture = useRef<ImageUploadHandle>(null);
+  // a setting of this device (POS → Settings): clean the background of every new item photo, then show before / after
+  const [autoClean] = useState(() => { try { return localStorage.getItem('suqa-pos-autoclean') === '1'; } catch { return false; } });
   const shrink = (file: File) => new Promise<Blob>((resolve, reject) => {
     const url = URL.createObjectURL(file); const im = new Image();
     im.onload = () => {
@@ -65,6 +68,8 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
   const readPhoto = async (file: File | undefined) => {
     if (!file || reading) return;
     setReading(true); setPhotoMsg(null);
+    // one photo, both jobs: when the item has no picture yet, the same photo becomes it (tidied on the device; cleaned too when the setting is on)
+    if (!img) void picture.current?.take(file);
     try {
       const form = new FormData(); form.append('shop_id', boot.shop.id); form.append('image', await shrink(file), 'item.jpg');
       form.append('categories', JSON.stringify([...new Set([...index.shared.map(c => c.id), ...index.categories.keys()])].slice(0, 150)));
@@ -147,7 +152,7 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
           <label className="label">{pt('descAr', locale)}<input className="input" value={dAr} onChange={e => setDAr(e.target.value)} /></label>
           <label className="label">{pt('descEn', locale)}<input className="input" dir="ltr" value={dEn} onChange={e => setDEn(e.target.value)} /></label>
           <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('photo', locale)}
-            {online ? <ImageUpload shopId={boot.shop.id} kind="product" value={img} onChange={setImg} locale={locale} shape="square" labels={{ add: pt('addPhoto', locale), change: pt('changePhoto', locale), remove: pt('removePhoto', locale) }} />
+            {online ? <ImageUpload ref={picture} autoClean={autoClean} shopId={boot.shop.id} kind="product" value={img} onChange={setImg} locale={locale} shape="square" labels={{ add: pt('addPhoto', locale), change: pt('changePhoto', locale), remove: pt('removePhoto', locale) }} />
               : <small className="muted">{pt('photoOffline', locale)}</small>}
           </div>
           <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('barcodes', locale)}

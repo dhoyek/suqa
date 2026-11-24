@@ -335,6 +335,8 @@ const T = {
   ownerOnly: { ar: 'لصاحب المحل فقط', en: 'Owners only' }, diff: { ar: 'الفرق', en: 'Difference' }, open: { ar: 'مفتوحة', en: 'Open' },
   addStaff: { ar: 'إضافة موظف', en: 'Add staff' }, staffPhone: { ar: 'رقم واتساب الموظف', en: 'Staff WhatsApp number' }, staffName: { ar: 'الاسم على الشاشة', en: 'Display name' }, role: { ar: 'الدور', en: 'Role' },
   invited: { ar: 'بانتظار أول تسجيل دخول', en: 'Waiting for first sign-in' }, staffAdded: { ar: 'تمت الإضافة', en: 'Added' }, sendInvite: { ar: 'إرسال الدعوة عبر واتساب', en: 'Send invite on WhatsApp' },
+  autoClean: { ar: 'نظّف خلفية صور الأصناف تلقائياً', en: 'Clean the background of item photos automatically' },
+  autoCleanNote: { ar: 'على هذا الجهاز: بعد كل صورة صنف جديدة تظهر الصورة الأصلية والمنظّفة لتختار. كل تنظيف يُحتسب من حدّ يورغو الشهري للمحل.', en: 'On this device: after each new item photo the original and the cleaned picture are shown for you to choose. Each cleaning counts toward the shop\'s monthly Yorgo limit.' },
   fillFromPhoto: { ar: 'املأ من صورة', en: 'Fill from a photo' }, photoReading: { ar: 'أقرأ الصورة…', en: 'Reading the photo…' },
   photoFilled: { ar: 'ملأت الحقول الفارغة من الصورة. راجعها قبل الحفظ.', en: 'Filled the empty fields from the photo. Check them before saving.' },
   photoNoEmpty: { ar: 'لا حقول فارغة لملئها. امسح الحقل الذي تريد تغييره وجرّب مرة أخرى.', en: 'No empty field to fill. Clear the field you want changed and try again.' },

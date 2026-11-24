@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { uploadShopImage, deleteShopImage } from '@/lib/upload';
 import { tidyItemPhoto } from '@/lib/photo-tidy';
@@ -7,10 +7,15 @@ import { friendlyError } from '@/lib/ui-text';
 import type { Locale } from '@suqa/shared';
 
 // Pick → compress → upload → onChange(url). Shows the current image with change/remove.
-export default function ImageUpload({ shopId, kind, value, onChange, locale, labels, shape = 'wide' }: {
+// `autoClean` (items only, a setting of the device): after a new photo is in, the background removal starts by itself and the
+// before / after choice opens — still a choice, never applied silently. `ref.take(file)` lets the item editor hand over the photo
+// it just read the names from, so one photo does both jobs.
+export type ImageUploadHandle = { take(file: File): Promise<void> };
+type Props = {
   shopId: string; kind: 'logo' | 'cover' | 'product'; value: string | null; onChange: (url: string | null) => void; locale: Locale;
-  labels: { add: string; change: string; remove: string }; shape?: 'wide' | 'square';
-}) {
+  labels: { add: string; change: string; remove: string }; shape?: 'wide' | 'square'; autoClean?: boolean;
+};
+const ImageUpload = forwardRef<ImageUploadHandle, Props>(function ImageUpload({ shopId, kind, value, onChange, locale, labels, shape = 'wide', autoClean = false }, ref) {
   const input = useRef<HTMLInputElement>(null); const camera = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -26,27 +31,30 @@ export default function ImageUpload({ shopId, kind, value, onChange, locale, lab
       const url = await uploadShopImage(sb, shopId, kind, body);
       if (value) deleteShopImage(sb, value);
       onChange(url); setTidied(tidy);
+      setBusy(false); return url;
     } catch (e) { setErr(friendlyError(e, locale)); }
-    setBusy(false);
+    setBusy(false); return null;
   }
   async function pick(file: File | undefined) {
     if (!file) return;
     taken.current = kind === 'product' ? file : null;
-    await send(file, kind === 'product');
+    const url = await send(file, kind === 'product');
+    if (url && kind === 'product' && autoClean) void removeBackground(url);      // the setting: clean every new item photo, then let the person choose
   }
+  useImperativeHandle(ref, () => ({ take: pick }));
   // "Remove background" (items only): the current picture goes to the AI and comes back on a clean white background. The AI
   // redraws the picture and can change small print, so it is NEVER applied by itself: both are shown and the person taps one.
   const [clean, setClean] = useState<{ before: string; after: string; blob: Blob } | null>(null); const [cleaning, setCleaning] = useState(false);
   const T = (ar: string, en: string) => (locale === 'ar' ? ar : en);
   const closeClean = () => { if (clean) URL.revokeObjectURL(clean.after); setClean(null); };
-  async function removeBackground() {
-    if (!value || cleaning) return;
+  async function removeBackground(from: string | null = value) {
+    if (!from || cleaning) return;
     setCleaning(true); setErr(null);
     try {
-      const src = await fetch(value).then(r => (r.ok ? r.blob() : Promise.reject(new Error('no_image'))));
+      const src = await fetch(from).then(r => (r.ok ? r.blob() : Promise.reject(new Error('no_image'))));
       const form = new FormData(); form.append('shop_id', shopId); form.append('image', new Blob([src], { type: 'image/jpeg' }), 'item.jpg');
       const res = await fetch('/api/pos/item-photo-clean', { method: 'POST', body: form });
-      if (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/')) { const blob = await res.blob(); setClean({ before: value, after: URL.createObjectURL(blob), blob }); }
+      if (res.ok && (res.headers.get('content-type') ?? '').startsWith('image/')) { const blob = await res.blob(); setClean({ before: from, after: URL.createObjectURL(blob), blob }); }
       else {
         const j = (await res.json().catch(() => ({}))) as { reason?: string };
         setErr(j.reason === 'off' ? T('إزالة الخلفية غير متاحة الآن.', 'Background removal is not available right now.')
@@ -62,7 +70,7 @@ export default function ImageUpload({ shopId, kind, value, onChange, locale, lab
     try {
       const sb = supabaseBrowser();
       const url = await uploadShopImage(sb, shopId, kind, new File([clean.blob], 'item.jpg', { type: clean.blob.type || 'image/jpeg' }));
-      if (value) deleteShopImage(sb, value);
+      if (clean.before) deleteShopImage(sb, clean.before);
       taken.current = null; onChange(url); closeClean();
     } catch (e) { setErr(friendlyError(e, locale)); }
     setBusy(false);
@@ -99,4 +107,5 @@ export default function ImageUpload({ shopId, kind, value, onChange, locale, lab
       )}
     </div>
   );
-}
+});
+export default ImageUpload;

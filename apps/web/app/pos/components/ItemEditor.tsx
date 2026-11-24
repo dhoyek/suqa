@@ -48,6 +48,41 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index]);
   const original = useMemo(() => (product ? index.barcodes(product.id) : []), [product, index]);
 
+  // "fill from a photo": one photo of the item → suggested names, description, category and barcode. Only EMPTY fields are filled,
+  // and nothing is saved until the person saves. The picture is shrunk here first (a phone photo is several MB) and is not stored.
+  const [reading, setReading] = useState(false); const [photoMsg, setPhotoMsg] = useState<string | null>(null);
+  const shrink = (file: File) => new Promise<Blob>((resolve, reject) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(im.width, im.height)); const c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d')!.drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(b => (b ? resolve(b) : reject(new Error('no_image'))), 'image/jpeg', 0.82);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('no_image')); };
+    im.src = url;
+  });
+  const readPhoto = async (file: File | undefined) => {
+    if (!file || reading) return;
+    setReading(true); setPhotoMsg(null);
+    try {
+      const form = new FormData(); form.append('shop_id', boot.shop.id); form.append('image', await shrink(file), 'item.jpg');
+      form.append('categories', JSON.stringify([...new Set([...index.shared.map(c => c.id), ...index.categories.keys()])].slice(0, 150)));
+      const res = await fetch('/api/pos/item-photo', { method: 'POST', body: form });
+      type Card = { name_ar: string; name_en: string; description_ar: string; description_en: string; category: string; barcode: string };
+      const r = (res.ok ? await res.json() : { status: 'photo', reason: 'failed' }) as { status: 'ok'; card: Card } | { status: 'photo'; reason: string };
+      if (r.status !== 'ok') { setPhotoMsg(pt(r.reason === 'off' ? 'photoOff' : r.reason === 'nothing' ? 'photoNothing' : r.reason === 'cap' || r.reason === 'rate' ? 'yorgoCap' : 'photoFailed', locale)); return; }
+      const c = r.card; let n = 0;
+      if (!ar.trim() && c.name_ar) { setAr(c.name_ar); n++; }
+      if (!en.trim() && c.name_en) { setEn(c.name_en); n++; }
+      if (!dAr.trim() && c.description_ar) { setDAr(c.description_ar); n++; }
+      if (!dEn.trim() && c.description_en) { setDEn(c.description_en); n++; }
+      if (!cat && c.category) { setCat(c.category); n++; }
+      if (c.barcode && !bcs.length) { await addBc(c.barcode); n++; }
+      setPhotoMsg(n ? pt('photoFilled', locale) : pt('photoNoEmpty', locale));
+    } catch { setPhotoMsg(pt('photoFailed', locale)); }
+    finally { setReading(false); }
+  };
   const [cam, setCam] = useState(false);      // the camera reads a barcode straight into the list below
   const addBc = async (raw: string) => {
     const b = normBarcode(raw); if (!b) return;
@@ -89,6 +124,13 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
         actions={<>{product && onCopy && <button type="button" className="btn" onClick={() => onCopy(product)} title={pt('copyItem', locale)}>⧉ {pt('copyItem', locale)}</button>}<button className="btn icon primary" disabled={!valid} onClick={submit} aria-label={pt('save', locale)} title={pt('save', locale)}>✓</button></>}
         footer={err ? <span className="bad">{err}</span> : undefined}>
         <div className="item-form">
+          {online && <div style={{ gridColumn: '1 / -1' }} className="row">
+            <label className={`btn${reading ? ' disabled' : ''}`} style={{ cursor: reading ? 'wait' : 'pointer' }}>
+              📷✨ {reading ? pt('photoReading', locale) : pt('fillFromPhoto', locale)}
+              <input type="file" accept="image/*" capture="environment" hidden disabled={reading} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; void readPhoto(f); }} />
+            </label>
+            {photoMsg && <small className="muted" style={{ alignSelf: 'center' }}>{photoMsg}</small>}
+          </div>}
           <label className="label">{pt('nameAr', locale)}<input className="input" value={ar} onChange={e => setAr(e.target.value)} autoFocus /></label>
           <label className="label">{pt('nameEn', locale)}<input className="input" dir="ltr" value={en} onChange={e => setEn(e.target.value)} /></label>
           <div className="label">{pt('category', locale)}<CategoryPicker index={index} shopId={boot.shop.id} tenantId={boot.shop.tenant_id} locale={locale} value={cat} onChange={setCat} online={typeof navigator === 'undefined' || navigator.onLine} /></div>

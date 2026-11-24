@@ -409,3 +409,10 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 /* Yorgo: a voice message being recorded */
 .yorgo-rec { flex: 1; color: #b91c1c; font-size: 14px; animation: pulse 1.6s ease-in-out infinite; }
+/* admin orders list: each order is two lines — number · shop + status, then customer · time + amount; the long part is cut with …, nothing wraps */
+.order-row { padding: 10px 0; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.order-row-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.order-row-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-row-line .badge { flex: none; }
+
+.order-row .name { font-weight: 600; }

@@ -43,18 +43,22 @@ export default function OrdersTable(props: { orders: Row[]; shops: { id: string;
         {!orders.length && <div className="muted">{labels.noOrders}</div>}
         {orders.map(o => (
           <div key={o.id} id={`o-${o.id}`} style={{ borderBottom: '1px solid var(--line)' }}>
-            <div className="product" style={{ borderBottom: 0, cursor: 'pointer' }} onClick={() => setOpen(open === o.id ? null : o.id)}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="name">{o.number} · {tr(o.shop?.name, L)}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{o.customer_name} · {new Date(o.placed_at).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: timezone, dateStyle: 'short', timeStyle: 'short' })}</div>
+            {/* two lines that never wrap on a phone: number · shop + status, then customer · time + amount */}
+            <div className="order-row" onClick={() => setOpen(open === o.id ? null : o.id)}>
+              <div className="order-row-line">
+                <span className="name order-row-main"><bdi dir="ltr">{o.number}</bdi> · {tr(o.shop?.name, L)}</span>
+                <span className={`badge ${o.status}`}>{statusLabels[o.status]}</span>
               </div>
-              <span className={`badge ${o.status}`}>{statusLabels[o.status]}</span>
-              <strong style={{ minWidth: 70, textAlign: 'end' }}>{money(o.total_usd)}</strong>
+              <div className="order-row-line">
+                <span className="muted order-row-main" style={{ fontSize: 13 }}>{o.customer_name ? <>{o.customer_name} · </> : null}{new Date(o.placed_at).toLocaleString(L === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { timeZone: timezone, dateStyle: 'short', timeStyle: 'short' })}</span>
+                <strong style={{ whiteSpace: 'nowrap' }}>{money(o.total_usd)}</strong>
+              </div>
             </div>
             {open === o.id && (
               <div className="stack" style={{ padding: '0 0 12px', fontSize: 14 }}>
                 {o.items?.map(i => <div className="row spread" key={i.id}><span><span className="qty">{Number(i.quantity)}×</span> {tr(i.name, L)}</span><span>{money(i.line_total_usd)}</span></div>)}
-                <div className="muted" style={{ fontSize: 13 }}>{o.address?.line1}{o.address?.line2 ? `, ${o.address.line2}` : ''} · <a href={`tel:${o.customer_phone}`}>{o.customer_phone}</a></div>
+                <div style={{ fontSize: 14 }}>👤 {o.customer_name || '—'}{o.customer_phone ? <> · <a href={`tel:${o.customer_phone}`}><bdi dir="ltr">{o.customer_phone}</bdi></a></> : null}</div>
+                {(o.address?.line1 || o.address?.line2) && <div className="muted" style={{ fontSize: 13 }}>📍 {[o.address?.line1, o.address?.line2].filter(Boolean).join(', ')}</div>}
                 {o.customer_notes && <div className="muted" style={{ fontSize: 13 }}>“{o.customer_notes}”</div>}
                 {o.reject_reason && <div className="error">{o.reject_reason}</div>}
                 <div className="row">

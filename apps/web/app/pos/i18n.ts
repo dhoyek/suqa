@@ -291,7 +291,7 @@ const T = {
   cashierSalesDaysLabel: { ar: 'كم يوماً من المبيعات السابقة يرى الكاشير', en: 'Days of past sales a cashier can see' },
   // sale screen: how the item tiles look on this device
   tileView: { ar: 'عرض الأصناف', en: 'Item view' }, tileViewHow: { ar: 'يُحفظ على هذا الجهاز فقط. اضغط مطوّلاً على صنف لإدخال الكمية.', en: 'Saved on this device only. Press and hold an item to type its quantity.' },
-  tile_s: { ar: 'صغير', en: 'Small' }, tile_m: { ar: 'وسط', en: 'Medium' }, tile_l: { ar: 'كبير', en: 'Large' }, tilePhotos: { ar: 'إظهار صور الأصناف', en: 'Show item photos' },
+  tile_s: { ar: 'صغير', en: 'Small' }, tile_m: { ar: 'وسط', en: 'Medium' }, tile_l: { ar: 'كبير', en: 'Large' }, tilePhotos: { ar: 'إظهار صور الأصناف', en: 'Show item photos' }, tileCats: { ar: 'إظهار سطر الفئات فوق الأصناف', en: 'Show the category line above the items' },
   // 109: an order moved back after a wrong tap
   backStep: { ar: 'إرجاع الطلب إلى مرحلة سابقة', en: 'Move back to an earlier stage' },
   backHow: { ar: 'اختر المرحلة الصحيحة. الطلب الآن:', en: 'Pick the right stage. The order is now:' },

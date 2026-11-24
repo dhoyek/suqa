@@ -9,7 +9,7 @@ import type { Booted } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
-import { CategoryFilter } from '../components/CategoryFilter';
+import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import { can, roleOf } from '../lib/perm';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
@@ -21,6 +21,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
+type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean };   // cats: the always-visible category line (off unless this device turns it on)
 type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
 
 /**
@@ -35,8 +36,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
   // how the item tiles look on THIS device: size and whether they carry the item's photo (the sale screen's ▦ button)
-  const [tiles, setTiles] = useState<{ size: 's' | 'm' | 'l'; photos: boolean }>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos }; } catch { return { size: 'm', photos: false }; } });
-  const saveTiles = (t: { size: 's' | 'm' | 'l'; photos: boolean }) => { setTiles(t); try { localStorage.setItem('suqa-pos-tiles', JSON.stringify(t)); } catch {} };
+  const [tiles, setTiles] = useState<TileView>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean; cats?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos, cats: !!v?.cats }; } catch { return { size: 'm', photos: false, cats: false }; } });
+  const saveTiles = (t: TileView) => { setTiles(t); try { localStorage.setItem('suqa-pos-tiles', JSON.stringify(t)); } catch {} };
   const [qtyStr, setQtyStr] = useState('');
   // a long press on a tile asks for the quantity; the tap that ends it must not also add one
   const press = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean }>({ t: null, fired: false });
@@ -217,8 +218,9 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           {typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches && <button className="btn big" style={{ width: 'auto' }} title={pt('shortcuts', locale)} onClick={() => setDialog({ k: 'help' })}>?</button>}
           <CategoryFilter cats={catList} selected={cats} onChange={setCats} locale={locale} big />
         </div>
-        {/* the categories, always in view: one tap shows a category, the same tap again (or "all") shows everything; several at once through the filter button */}
-        {catList.length > 1 && <div className="cat-strip">
+        {/* the category line, when this device asked for it (▦): one tap shows a category, the same tap again (or "all") shows everything. Otherwise, as before: the filter button, and the chosen categories as removable chips */}
+        {!tiles.cats && <CategoryChips cats={catList} selected={cats} onChange={setCats} locale={locale} />}
+        {tiles.cats && catList.length > 1 && <div className="cat-strip">
           <button className={`chip ${cats.size ? '' : 'active'}`} onClick={() => setCats(new Set())}>{pt('all', locale)}</button>
           {catList.map(c => <button key={c.id} className={`chip ${cats.has(c.id) ? 'active' : ''}`} onClick={() => setCats(cats.has(c.id) && cats.size === 1 ? new Set() : new Set([c.id]))}>{text(c.name, locale)}</button>)}
         </div>}
@@ -334,6 +336,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>{pt('tileViewHow', locale)}</p>
         <div className="seg" style={{ marginBottom: 12 }}>{(['s', 'm', 'l'] as const).map(z => <button key={z} className={tiles.size === z ? 'active' : ''} onClick={() => saveTiles({ ...tiles, size: z })}>{pt(`tile_${z}` as 'tile_s', locale)}</button>)}</div>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={tiles.photos} onChange={e => saveTiles({ ...tiles, photos: e.target.checked })} /> {pt('tilePhotos', locale)}</label>
+        <label className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8 }}><input type="checkbox" checked={tiles.cats} onChange={e => saveTiles({ ...tiles, cats: e.target.checked })} /> {pt('tileCats', locale)}</label>
       </Modal>}
       {recent && (() => {   // a cashier: the shop's window (7 days unless the owner set another); the owner: everything this till holds
         const owner = can(roleOf(staff), 'reports.profit'); const d = new Date(); const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;

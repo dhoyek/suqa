@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, availableOn, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
+import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
 import { pt, daysLabel, type L } from '../i18n';
@@ -15,6 +15,7 @@ import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
 import Receipt from '../components/Receipt';
+import { SalesList } from '../components/SaleDetail';
 import InvoicePreview from '../components/InvoicePreview';
 import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
@@ -33,6 +34,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
+  const [recent, setRecent] = useState(false);   // 107: the shop's recent sales — reprint one, or return items from it
   const [lastSale, setLastSale] = useState<{ r: CommitResult; no: string | null } | null>(null);   // reopen the last receipt (print / QR / WhatsApp / return)
   const [reopened, setReopened] = useState(false);
   const [serverNo, setServerNo] = useState<string | null>(null);
@@ -236,6 +238,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           <strong>{pt('cart', locale)} {live.length ? `(${live.length})` : ''}</strong>
           <span className="row" style={{ gap: 6 }}>
             {lastSale && !live.length && <button className="btn ghost" title={pt('lastSale', locale)} onClick={() => { setReopened(true); setServerNo(lastSale.no); setReceipt(lastSale.r); }}>🧾 {pt('lastSale', locale)}</button>}
+            {!live.length && <button className="btn ghost" title={pt('lastSales', locale)} onClick={() => setRecent(true)}>🕘 {pt('lastSales', locale)}</button>}
             {!!parked.length && <button className="btn" onClick={() => setDialog({ k: 'park' })}>⏸ {parked.length}</button>}
             <button className={`btn ${isOrder ? 'primary' : draft.customer_phone ? '' : 'icon'}`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>
               {isOrder ? `${pt(draft.channel as 'whatsapp', locale)} · ${draft.customer_name || draft.customer_phone || '👤'}` : draft.customer_phone ? `👤 ${draft.customer_name || draft.customer_phone}` : '👤'}
@@ -301,6 +304,11 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { const p = dialog.p; setDialog(null); add(p, 1, { weigh: true }); }}>＋ {pt('addAnyway', locale)}</button></>}>
         <p style={{ margin: 0 }}>⚠ {pt('oosAsk', locale)} <span className="muted num">({dialog.avail} {pt('available', locale)})</span></p>
       </Modal>}
+      {recent && (() => {   // a cashier: the shop's window (7 days unless the owner set another); the owner: everything this till holds
+        const owner = can(roleOf(staff), 'reports.profit'); const d = new Date(); const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+        const to = iso(d); d.setDate(d.getDate() - ((owner ? Math.max(num(shop.offline_days) || 30, cashierSalesDays(shop)) : cashierSalesDays(shop)) - 1));
+        return <SalesList boot={boot} locale={locale} title={`🕘 ${pt('lastSales', locale)}`} from={iso(d)} to={to} staff={staff} plain onClose={() => setRecent(false)} />;
+      })()}
       {dialog?.k === 'saved' && <Modal open onClose={() => setDialog(null)} title={<>✓ {pt('orderSavedTitle', locale)} · <button className="link-btn" style={{ font: 'inherit', textDecoration: 'underline' }} title={pt('orderDetails', locale)} onClick={() => { const id = dialog.order.id; setDialog(null); onOrder?.(id, true); }}>{dialog.order.number ?? dialog.order.local_number ?? ''}</button></>}
         footer={<><button className="btn" onClick={() => { const id = dialog.order.id; setDialog(null); if (onOrder) onOrder(id); else onGo('orders'); }}>📥 {pt('openThisOrder', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { setDraft({ ...newDraft('whatsapp'), fulfillment: 'delivery' }); setDialog({ k: 'customer' }); }}>＋ {pt('newOrderBtn', locale)}</button></>}>
         <div className="stack" style={{ gap: 8 }}>

@@ -14,6 +14,7 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
   const [neg, setNeg] = useState(!!s.allow_negative_stock); const [hide, setHide] = useState(!!s.hide_online_when_zero);
   const [deduct, setDeduct] = useState<'ready' | 'delivered'>(s.deduct_stock_at ?? 'ready');
   const [days, setDays] = useState(String(s.offline_days ?? 30)); const [footer, setFooter] = useState(s.receipt_footer ?? '');
+  const [retDays, setRetDays] = useState(String(s.return_days ?? 7)); const [seeDays, setSeeDays] = useState(String(s.cashier_sales_days ?? 7));   // 107
   const [marginPct, setMarginPct] = useState(String(num(s.default_margin_pct) || ''));
   const [scPrefix, setScPrefix] = useState(s.scale_prefix ?? ''); const [scLen, setScLen] = useState(String(s.scale_code_len ?? 5)); const [scKind, setScKind] = useState<'weight' | 'price_lbp' | 'price_usd'>(s.scale_value_kind ?? 'weight'); const [scDiv, setScDiv] = useState(String(s.scale_value_divisor ?? 1000));
   const STAGES = ['accepted', 'ready', 'out_for_delivery', 'delivered', 'rejected'] as const;
@@ -25,7 +26,7 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
   const save = async () => {
     setBusy(true); setMsg(null);
     try {
-      const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, receipt_footer: footer.trim() || null,
+      const patch = { default_delivery_fee_usd: Number(fee) || 0, max_discount_pct: Number(disc) || 0, lbp_rounding_step: Number(step) || 5000, allow_negative_stock: neg, hide_online_when_zero: hide, deduct_stock_at: deduct, offline_days: Number(days) || 30, return_days: Number(retDays) || 7, cashier_sales_days: Number(seeDays) || 7, receipt_footer: footer.trim() || null,
         default_margin_pct: Number(marginPct) || 0, scale_prefix: scPrefix.replace(/\D/g, '') || '', scale_code_len: Number(scLen) || 5, scale_value_kind: scKind, scale_value_divisor: Number(scDiv) || 1000, notify_stages: stages, scale_formats: extra.filter(f => f.prefix.replace(/\D/g, '')).map(f => ({ prefix: f.prefix.replace(/\D/g, ''), code_len: Number(f.code_len) || 5, value_kind: f.value_kind ?? 'weight', value_divisor: Number(f.value_divisor) || 1000 })) };
       const { data, error } = await sb.rpc('pos_shop_settings', { p_shop: s.id, p_patch: patch });
       if (error) { setMsg(error.message); return; }
@@ -43,6 +44,8 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
         <F label={pt('lbpStep', locale)}><select className="input" value={step} onChange={e => setStep(e.target.value)}>{[1000, 5000, 10000, 25000, 50000].map(v => <option key={v} value={v}>{v.toLocaleString('en')}</option>)}</select></F>
         <F label={pt('deductAt', locale)}><div className="seg"><button className={deduct === 'ready' ? 'active' : ''} onClick={() => setDeduct('ready')}>{pt('st_ready', locale)}</button><button className={deduct === 'delivered' ? 'active' : ''} onClick={() => setDeduct('delivered')}>{pt('st_delivered', locale)}</button></div></F>
         <F label={pt('offlineDaysLabel', locale)}><input className="input" dir="ltr" inputMode="numeric" value={days} onChange={e => setDays(e.target.value)} /></F>
+        <F label={pt('returnDaysLabel', locale)}><input className="input" dir="ltr" inputMode="numeric" value={retDays} onChange={e => setRetDays(e.target.value)} /></F>
+        <F label={pt('cashierSalesDaysLabel', locale)}><input className="input" dir="ltr" inputMode="numeric" value={seeDays} onChange={e => setSeeDays(e.target.value)} /></F>
       </div>
       <div className="row" style={{ gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={neg} onChange={e => setNeg(e.target.checked)} /> {pt('allowNegative', locale)}</label>

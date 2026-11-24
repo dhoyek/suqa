@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
-import { NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -236,7 +236,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                           <button onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
                           <a href={waHref(o.customer_phone, invoiceText(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 {pt('sendInvoiceWa', locale)}</a>
                           <label><input type="checkbox" checked={o.notify_customer !== false} onClick={e => e.stopPropagation()} onChange={async e => { await setOrderStatus(boot.db, o, o.status, { notify_customer: e.target.checked }).catch(() => undefined); await boot.db.orders.update(o.id, { notify_customer: e.target.checked }); reload(); }} /> 🔔 {pt('notifyOn', locale)}</label>
-                          {o.status === 'delivered' && <button onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
+                          {o.status === 'delivered' && (staff.role === 'owner' || !returnTooOld(boot.shop, o)) && <button onClick={() => setDialog({ k: 'return', o })}>↩ {pt('returnTitle', locale)}</button>}
                           {NEXT[o.status].includes('rejected') && <button className="danger" onClick={() => act(o, 'rejected')}>✕ {pt('act_rejected', locale)}</button>}
                           {NEXT[o.status].includes('cancelled') && <button className="danger" onClick={() => act(o, 'cancelled')}>✕ {pt('act_cancelled', locale)}</button>}
                           {(o.status === 'cancelled' || o.status === 'rejected') && <button className="danger" onClick={() => askDelete(o)}>🗑 {pt('deleteOrder', locale)}</button>}

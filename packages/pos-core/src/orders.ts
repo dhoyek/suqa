@@ -92,12 +92,32 @@ export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Pay
   return { order: updated, settlement: s };
 }
 
+/** 107: the shop's two windows, in days — 7 until the shop row carries them. */
+const days = (v: unknown, d = 7) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 1 ? Math.min(n, 365) : d; };
+export const returnDays = (shop: { return_days?: number | null }) => days(shop.return_days);
+export const cashierSalesDays = (shop: { cashier_sales_days?: number | null }) => days(shop.cashier_sales_days);
+/** Is this sale past the shop's return window? Counted from when it was handed over (a counter sale: when it was made). */
+export function returnTooOld(shop: { return_days?: number | null }, order: Pick<Order, 'placed_at' | 'delivered_at'>, now = Date.now()): boolean {
+  const at = Date.parse(order.delivered_at ?? order.placed_at); return Number.isFinite(at) && now - at > returnDays(shop) * 86_400_000;
+}
+/** What was already given back on a sale, per order line — so the same piece is never returned (and refunded) twice. */
+export async function returnedQty(db: PosDb, orderId: string): Promise<Record<string, number>> {
+  const ids = (await db.returns.where('order_id').equals(orderId).primaryKeys()) as string[]; const out: Record<string, number> = {};
+  if (!ids.length) return out;
+  for (const l of await db.returnLines.where('return_id').anyOf(ids).toArray()) { const k = l.order_item_id as string | null; if (k) out[k] = (out[k] ?? 0) + num(l.qty as number); }
+  return out;
+}
+
 export interface ReturnLineInput { order_item_id: string; product_id: string | null; qty: number; destination: 'stock' | 'damaged'; amount_cents: number }
 /** Full/partial return against a delivered order. Refund in one currency; stock back (or damaged); the shift's expected cash drops. */
 export async function commitReturn(db: PosDb, order: Order, lines: ReturnLineInput[], input: { refund_currency: Currency; refund_usd_cents: number; refund_lbp: number; reason: string; approved_by: string | null; user_id: string; shift_id?: string | null }): Promise<string> {
   const id = newId(); const now = new Date().toISOString();
   const deviceId = (await db.meta.get(META.deviceId))?.value as string | undefined;
-  await db.transaction('rw', [db.payments, db.stockMoves, db.products, db.outbox], async () => {
+  const rows = lines.map(l => ({ id: newId(), ...l }));
+  await db.transaction('rw', [db.payments, db.stockMoves, db.products, db.outbox, db.returns, db.returnLines], async () => {
+    // this till's own copy at once (the server's rows, same ids, replace them on the next sync): a second return sees what is already back
+    await db.returns.put({ id, shop_id: order.shop_id, order_id: order.id, user_id: input.user_id, approved_by: input.approved_by, refund_usd_cents: input.refund_usd_cents, refund_lbp: input.refund_lbp, reason: input.reason, at: now });
+    await db.returnLines.bulkPut(rows.map(l => ({ ...l, return_id: id, shop_id: order.shop_id })));
     if (input.refund_usd_cents > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_usd', amount: -input.refund_usd_cents, currency: 'usd', note: `refund ${id}`, at: now, shift_id: input.shift_id ?? null });
     if (input.refund_lbp > 0) await db.payments.put({ id: newId(), order_id: order.id, tender: 'cash_lbp', amount: -input.refund_lbp, currency: 'lbp', note: `refund ${id}`, at: now, shift_id: input.shift_id ?? null });
     for (const l of lines) {
@@ -107,7 +127,7 @@ export async function commitReturn(db: PosDb, order: Order, lines: ReturnLineInp
       if (l.destination === 'damaged') await db.stockMoves.put({ id: newId(), shop_id: order.shop_id, product_id: l.product_id, qty: -l.qty, kind: 'damaged', ref_order_id: order.id, ref_id: id, device_id: deviceId ?? null, user_id: input.user_id, at: now, note: 'return' });
       else await db.products.put({ ...p, on_hand: num(p.on_hand) + l.qty });
     }
-    await enqueue(db, 'return.commit', { id, order_id: order.id, lines: lines.map(l => ({ id: newId(), ...l })), refund_usd_cents: input.refund_usd_cents, refund_lbp: input.refund_lbp, refund_tender: input.refund_currency === 'lbp' ? 'cash_lbp' : 'cash_usd', reason: input.reason, approved_by: input.approved_by, shift_id: input.shift_id ?? null });
+    await enqueue(db, 'return.commit', { id, order_id: order.id, lines: rows, refund_usd_cents: input.refund_usd_cents, refund_lbp: input.refund_lbp, refund_tender: input.refund_currency === 'lbp' ? 'cash_lbp' : 'cash_usd', reason: input.reason, approved_by: input.approved_by, shift_id: input.shift_id ?? null });
   });
   return id;
 }

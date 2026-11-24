@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fillCents, fmtLbp, fmtUsd, num, text, type Order, type OrderLine, type Payment, type Staff } from '@suqa/pos-core';
+import { fillCents, fmtLbp, fmtUsd, num, returnDays, returnTooOld, returnedQty, text, type Order, type OrderLine, type Payment, type Staff } from '@suqa/pos-core';
 import { pt, type Key, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
@@ -20,21 +20,24 @@ import ReturnDialog from './ReturnDialog';
  * A sale that is not on this till (older than what it holds) is read from the server when `sb` is given and the till is online (93);
  * it is shown, printed and sent the same way, but cancelled from a till that holds it.
  */
+/** ↩ Return items (107): with `staff`, a sale that was handed over, is on this till and still has something left to give back — some of
+ * its items or all, within the shop's return period (the owner is not held to it). A sale still on credit is not refunded in cash. */
 export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me, sb }: { boot: Booted; locale: L; orderId: string; onClose: () => void; actions?: ReactNode; staff?: Staff; sb?: SupabaseClient }) {
-  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[]; returned: boolean; remote?: boolean } | null | 'missing'>(null);
-  const [ask, setAsk] = useState(false); const [ret, setRet] = useState<string | null>(null);
+  const [d, setD] = useState<{ o: Order; lines: OrderLine[]; pays: Payment[]; staff: Staff[]; returned: boolean; left: boolean; remote?: boolean } | null | 'missing'>(null);
+  const [ask, setAsk] = useState(false); const [ret, setRet] = useState<string | null>(null); const [part, setPart] = useState(false);
   useEffect(() => { void (async () => {
     const o = await boot.db.orders.get(orderId);
     if (!o) {
       if (sb && (typeof navigator === 'undefined' || navigator.onLine)) {
         const { data } = await sb.rpc('pos_sale_detail', { p_shop: boot.shop.id, p_order: orderId });
         const r = data as { order: Record<string, unknown>; lines: Record<string, unknown>[]; payments: Record<string, unknown>[]; returned: boolean } | null;
-        if (r?.order) { setD({ o: fillCents('orders', r.order) as unknown as Order, lines: r.lines.map(l => fillCents('order_items', l) as unknown as OrderLine).filter(l => !l.voided), pays: r.payments as unknown as Payment[], staff: await boot.db.staff.toArray(), returned: r.returned, remote: true }); return; }
+        if (r?.order) { setD({ o: fillCents('orders', r.order) as unknown as Order, lines: r.lines.map(l => fillCents('order_items', l) as unknown as OrderLine).filter(l => !l.voided), pays: r.payments as unknown as Payment[], staff: await boot.db.staff.toArray(), returned: r.returned, left: false, remote: true }); return; }
       }
       setD('missing'); return;
     }
     const [lines, pays, staff, rets] = await Promise.all([boot.db.orderLines.where('order_id').equals(orderId).toArray(), boot.db.payments.where('order_id').equals(orderId).toArray(), boot.db.staff.toArray(), boot.db.returns.where('order_id').equals(orderId).count()]);
-    setD({ o, lines: lines.filter(l => !l.voided), pays, staff, returned: rets > 0 });
+    const back = rets > 0 ? await returnedQty(boot.db, orderId) : {};
+    setD({ o, lines: lines.filter(l => !l.voided), pays, staff, returned: rets > 0, left: lines.some(l => !l.voided && num(l.quantity) - (back[l.id] ?? 0) > 0.0005) });
   })(); }, [boot, orderId, sb]);
   if (d === null) return null;
   if (d === 'missing') return <Modal open onClose={onClose} title={pt('saleDetails', locale)}><p className="muted">{pt('opsNotOnDevice', locale)}</p></Modal>;
@@ -43,6 +46,12 @@ export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me,
   const owner = !!me && can(roleOf(me), 'reports.profit'); const live = !d.remote && o.status !== 'cancelled' && o.status !== 'rejected' && !d.returned && !pays.some(p => num(p.amount) < 0);
   const why = !owner || actions || !live ? null : o.channel !== 'walkin' ? pt('opsWhyOrder', locale) : !pays.length || pays.some(p => p.tender !== 'cash_usd' && p.tender !== 'cash_lbp') ? pt('opsWhyNotCash', locale) : null;
   const canCancel = owner && !actions && live && !why;
+  // ↩ some items back (107)
+  const canSell = !!me && roleOf(me) !== 'setup'; const done = !d.remote && !o.parked && o.status === 'delivered';
+  const onCredit = pays.some(p => p.tender === 'unpaid' && !p.settled_at);
+  const whyNoReturn = !canSell || actions || !done ? null : !d.left ? pt('returnAllBack', locale) : onCredit ? pt('returnWhyDebt', locale) : !owner && returnTooOld(boot.shop, o) ? pt('returnTooOld', locale).replace('{n}', String(returnDays(boot.shop))) : null;
+  const canReturn = canSell && !actions && done && !whyNoReturn;
+  if (part && me) return <ReturnDialog boot={boot} locale={locale} order={o} lines={lines} staff={me} onDone={() => { boot.engine.poke(); onClose(); }} onClose={() => setPart(false)} />;
   if (ret != null && me) return <ReturnDialog boot={boot} locale={locale} order={o} lines={lines} staff={me} full presetReason={ret} onDone={() => { boot.engine.poke(); onClose(); }} onClose={() => setRet(null)} />;
   if (ask) return <ReasonDialog locale={locale} title={`${pt('opsCancel', locale)} · ${o.number ?? o.local_number ?? ''}`} line={<><strong dir="ltr">{o.number ?? o.local_number}</strong> {fmtUsd(num(o.total_cents))}</>} how={pt('opsSaleHow', locale)} onOk={r => { setAsk(false); setRet(r); }} onClose={() => setAsk(false)} />;
   const seller = staff.find(s => s.user_id === o.staff_user_id); const sellerName = seller?.display_name || seller?.full_name || '';
@@ -52,7 +61,7 @@ export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me,
       footer={<>
         <button className="btn" onClick={() => doPrint(receiptHtml(o, lines, pays, boot.shop, locale, loadPrintSettings(), { again: true, cashier: sellerName }))}>🖨 {pt('print', locale)}</button>
         <a className="btn" href={waHref(o.customer_phone, invoiceText(o, lines, pays, boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 WhatsApp</a>
-        {actions}{canCancel && <button className="btn danger" onClick={() => setAsk(true)}>✕ {pt('opsCancel', locale)}</button>}
+        {actions}{canReturn && <button className="btn" onClick={() => setPart(true)}>↩ {pt('returnItems', locale)}</button>}{canCancel && <button className="btn danger" onClick={() => setAsk(true)}>✕ {pt('opsCancel', locale)}</button>}
         <span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
       <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
         {o.channel === 'online' ? pt('onlineShop', locale) : pt(o.channel as 'walkin', locale)} · {pt(`st_${o.status}` as Key, locale)}{sellerName ? ` · ${pt('cashier', locale)}: ${sellerName}` : ''}
@@ -75,13 +84,14 @@ export function SaleDetail({ boot, locale, orderId, onClose, actions, staff: me,
         {pays.map(p => { const refund = num(p.amount) < 0 || /^refund /.test(p.note ?? ''); const amt = Math.abs(num(p.amount)); return <tr key={p.id} className={refund ? 'bad' : undefined}><td className="muted">{fmtTime(p.at, locale)}</td><td>{refund ? `↩ ${pt('refund', locale)} · ` : ''}{pt(p.tender, locale)}{p.unpaid_name ? ` · ${p.unpaid_name}` : ''}{p.note && !refund ? <span className="muted"> · {p.note}</span> : null}</td><td className="num">{refund ? '−' : ''}{p.currency === 'lbp' ? fmtLbp(amt, locale) : fmtUsd(amt)}</td></tr>; })}
       </tbody></table>}
       {why && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>ⓘ {why}</p>}
+      {whyNoReturn && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>ⓘ {whyNoReturn}</p>}
     </Modal>
   );
 }
 
 /** What a list of sales is narrowed to: one channel, one way of paying, one item, or one category ('' = items with no category). With an item or a category each row shows those items' quantity and amount. */
 export type SalesFilter = { channel?: string; tender?: string; productId?: string; section?: string };
-type SaleRow = { id: string; number: string | null; local_number: string | null; placed_at: string; customer_name: string | null; channel: string; items: number; qty: number | null; cents: number; paid_usd?: number | null; paid_lbp?: number | null };
+type SaleRow = { id: string; number: string | null; local_number: string | null; placed_at: string; customer_name: string | null; phone?: string | null; channel: string; items: number; qty: number | null; cents: number; paid_usd?: number | null; paid_lbp?: number | null };
 
 /**
  * Reports → tap a day, a shift, a channel, a way of paying, an item or a category: its sales, newest first; tap one for its items.
@@ -89,7 +99,9 @@ type SaleRow = { id: string; number: string | null; local_number: string | null;
  * totals for any period (93). Without it, or when the server cannot be reached, it is this till's own copy — which starts where
  * this till started — and the list says so.
  */
-export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, sb, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; sb?: SupabaseClient; onClose: () => void }) {
+/** `plain` (the sale screen's "Recent sales", 107): no totals — a cashier finds a sale to reprint or return from, not the shop's turnover — and a box to find it by its number, the customer's name or phone. */
+export function SalesList({ boot, locale, title, from, to, shiftId, filter, staff, sb, plain, onClose }: { boot: Booted; locale: L; title: string; from?: string; to?: string; shiftId?: string; filter?: SalesFilter; staff?: Staff; sb?: SupabaseClient; plain?: boolean; onClose: () => void }) {
+  const [q, setQ] = useState('');
   const [rows, setRows] = useState<SaleRow[] | null>(null); const [open, setOpen] = useState<string | null>(null);
   const [total, setTotal] = useState<{ count: number; cents: number; paid_usd?: number | null; paid_lbp?: number | null } | null>(null); const [local, setLocal] = useState(false);
   const byItem = filter?.productId != null || filter?.section != null;
@@ -120,7 +132,7 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, staf
     }
     if (byItem) os = os.filter(o => hit.has(o.id));
     if (!on) return;
-    setRows(os.map(o => ({ id: o.id, number: o.number ?? null, local_number: o.local_number ?? null, placed_at: o.placed_at, customer_name: o.customer_name ?? null, channel: o.channel, items: count.get(o.id) ?? 0,
+    setRows(os.map(o => ({ id: o.id, number: o.number ?? null, local_number: o.local_number ?? null, placed_at: o.placed_at, customer_name: o.customer_name ?? null, phone: o.customer_phone ?? null, channel: o.channel, items: count.get(o.id) ?? 0,
       qty: byItem ? hit.get(o.id)!.qty : null, cents: byItem ? hit.get(o.id)!.cents : num(o.total_cents), paid_usd: filter?.tender ? took.get(o.id)!.usd : null, paid_lbp: filter?.tender ? took.get(o.id)!.lbp : null })));
     setTotal(null); setLocal(true);
   })(); return () => { on = false; }; }, [boot, sb, from, to, shiftId, filter]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,13 +141,16 @@ export function SalesList({ boot, locale, title, from, to, shiftId, filter, staf
   const byPaid = !!filter?.tender && !!rows?.length && rows.every(r => r.paid_usd != null || r.paid_lbp != null);
   const paid = (u: unknown, l: unknown) => [num(u as number) ? fmtUsd(num(u as number)) : '', num(l as number) ? fmtLbp(num(l as number), locale) : ''].filter(Boolean).join(' · ') || fmtUsd(0);
   const head = byPaid ? paid(total ? total.paid_usd : rows!.reduce((s, r) => s + num(r.paid_usd as number), 0), total ? total.paid_lbp : rows!.reduce((s, r) => s + num(r.paid_lbp as number), 0)) : fmtUsd(sum);
+  const needle = q.trim().toLowerCase(); const digits = needle.replace(/\D/g, '');
+  const shown = !rows || !needle ? rows : rows.filter(r => `${r.number ?? ''} ${r.local_number ?? ''} ${r.customer_name ?? ''}`.toLowerCase().includes(needle) || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits)));
   return (
     <>
-      <Modal open={!open} onClose={onClose} wide title={<>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {n ?? '…'} · {head}</span></>}
+      <Modal open={!open} onClose={onClose} wide title={plain ? title : <>{title} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {n ?? '…'} · {head}</span></>}
         footer={<><span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
-        {local && <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>ⓘ {pt('salesOnDeviceOnly', locale)}</p>}
-        {!rows ? <p className="muted">…</p> : !rows.length ? <p className="muted">—</p> : <table className="table clickable"><tbody>
-          {rows.map(r => <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}>
+        {local && !plain && <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>ⓘ {pt('salesOnDeviceOnly', locale)}</p>}
+        {plain && <input className="input" style={{ marginBottom: 8 }} placeholder={pt('findSale', locale)} value={q} onChange={e => setQ(e.target.value)} />}
+        {!shown ? <p className="muted">…</p> : !shown.length ? <p className="muted">—</p> : <table className="table clickable"><tbody>
+          {shown.map(r => <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(r.id)}>
             <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(r.placed_at, locale)}</td>
             <td><strong dir="ltr">{r.number ?? r.local_number}</strong> <span className="muted">{r.customer_name || ''}</span><div className="muted" style={{ fontSize: 12 }}>{r.qty != null ? <>{pt('qty', locale)} <span dir="ltr">{r.qty}</span> · </> : null}{r.items} {pt('itemsCount', locale)} · {r.channel === 'online' ? pt('onlineShop', locale) : pt(r.channel as 'walkin', locale)}</div></td>
             <td className="num">{byPaid ? <>{paid(r.paid_usd, r.paid_lbp)}<div className="muted" style={{ fontSize: 12 }}>{pt('total', locale)} {fmtUsd(r.cents)}</div></> : fmtUsd(r.cents)}</td><td className="muted">›</td>

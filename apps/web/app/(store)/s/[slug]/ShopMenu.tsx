@@ -65,7 +65,7 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   // the buy controls of an item (add, or − qty +): the same in the list and in the item's details
   const buy = (p: Product) => { const q = qtyOf(p.id); return (<>
       {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
+                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(shop.id, p.id, q - 1)} aria-label="−">−</button>
                         <span className="qty">{q}</span>
@@ -123,16 +123,18 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
             {sec && <div className="col-title" style={{ marginTop: 0 }}>{secName(sec)}</div>}
             {shown.filter(p => (p.section ?? '') === sec).map(p => {
               return (
-                <div className={`product ${p.is_available ? '' : 'off'}`} key={p.id}>
+                <div className={`product menu-item ${p.is_available ? '' : 'off'}`} key={p.id}>
                   {p.image_url ? <img className="thumb lg" src={p.image_url} alt="" loading="lazy" onClick={() => setDetail(p.id)} style={{ cursor: 'zoom-in' }} /> : <span className="thumb ph" aria-hidden onClick={() => setDetail(p.id)} style={{ cursor: 'pointer' }}>{(tr(p.name, L) || '•').trim().charAt(0)}</span>}
                   <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setDetail(p.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') setDetail(p.id); }} aria-label={`${tr(p.name, L)} — ${labels.details}`}>
                     <div className="name">{tr(p.name, L)}</div>
                     {!!(p as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((p as { available_days?: number[] }).available_days!, L)}</div>}
-                    {tr(p.description, L) && <div className="muted" style={{ fontSize: 13 }}>{tr(p.description, L)}</div>}
-                    <div style={{ fontSize: 14 }}>{money(Number(p.price_usd))}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
+                    {tr(p.description, L) && <div className="muted desc">{tr(p.description, L)}</div>}
+                    <div className="price">{money(Number(p.price_usd))}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
                   </div>
-                  {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
-                  {buy(p)}
+                  <div className="menu-acts">
+                    {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
+                    {buy(p)}
+                  </div>
                 </div>
               );
             })}

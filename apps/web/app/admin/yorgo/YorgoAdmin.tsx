@@ -26,6 +26,9 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
   const [saved, setSaved] = useState<Settings>(settings ?? DEFAULTS);
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(yshops.map(y => [y.shop_id, y.enabled])));
   const [busy, setBusy] = useState(false);
+  // a shop's own monthly limit (yorgo_shops.cap_usd); empty = the default "per shop" limit above
+  const [caps, setCaps] = useState<Record<string, number | null>>(Object.fromEntries(yshops.map(y => [y.shop_id, y.cap_usd])));
+  const [capText, setCapText] = useState<Record<string, string>>(Object.fromEntries(yshops.filter(y => y.cap_usd != null).map(y => [y.shop_id, String(y.cap_usd)])));
   const [missList, setMissList] = useState(misses);
   const dirty = JSON.stringify(s) !== JSON.stringify(saved) || !settings;
 
@@ -60,6 +63,14 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
     const v = !on[id]; setOn(o => ({ ...o, [id]: v }));
     const { error } = await sb.from('yorgo_shops').upsert({ shop_id: id, tenant_id: tenantId, enabled: v, updated_at: new Date().toISOString() }, { onConflict: 'shop_id' });
     if (error) { setOn(o => ({ ...o, [id]: !v })); notify(error.message); }
+  }
+  async function saveCap(id: string) {
+    const raw = (capText[id] ?? '').trim(); const v = raw === '' ? null : Math.max(0, Math.round(Number(raw) * 100) / 100);
+    if (v !== null && !Number.isFinite(v)) { setCapText(c => ({ ...c, [id]: caps[id] == null ? '' : String(caps[id]) })); return; }
+    if (v === (caps[id] ?? null)) return;
+    const { error } = await sb.from('yorgo_shops').upsert({ shop_id: id, tenant_id: tenantId, cap_usd: v, updated_at: new Date().toISOString() }, { onConflict: 'shop_id' });
+    if (error) { notify(error.message); setCapText(c => ({ ...c, [id]: caps[id] == null ? '' : String(caps[id]) })); return; }
+    setCaps(c => ({ ...c, [id]: v })); setCapText(c => ({ ...c, [id]: v == null ? '' : String(v) })); notify(T('تم حفظ حد المحل.', 'Shop limit saved.'));
   }
   async function dismiss(id: string) { setMissList(l => l.filter(m => m.id !== id)); await sb.rpc('yorgo_miss_dismiss', { p_id: id }); }
   const num = (k: keyof Settings, step: string) => <input className="input" type="number" min="0" step={step} inputMode="decimal" style={{ maxWidth: 120 }} value={Number.isFinite(s[k] as number) ? (s[k] as number) : ''} onChange={e => setS(x => ({ ...x, [k]: e.target.value === '' ? 0 : Number(e.target.value) }))} />;
@@ -100,10 +111,15 @@ export default function YorgoAdmin({ tenantId, locale, today, hasKey, settings, 
 
       <div className="card stack">
         <strong>{T('يورغو في نقطة البيع، لكل محل', 'Yorgo in the point of sale, per shop')}</strong>
-        {shops.map(sh => { const u = byShop.get(sh.id) ?? { cost: 0, messages: 0 }; const cap = yshops.find(y => y.shop_id === sh.id)?.cap_usd ?? saved.cap_shop_usd; return (
+        {shops.map(sh => { const u = byShop.get(sh.id) ?? { cost: 0, messages: 0 }; const cap = caps[sh.id] ?? saved.cap_shop_usd; return (
           <div key={sh.id} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: 8 }}>
             <label className="row" style={{ flex: 1, minWidth: 180 }}><input type="checkbox" checked={!!on[sh.id]} onChange={() => void toggleShop(sh.id)} /> {sh.name}</label>
             <span className="muted" style={{ fontSize: 13 }}>{u.messages} {T('رسالة', 'messages')} · {usd(u.cost)} / {usd(cap)}</span>
+            <label className="row yorgo-shop-cap" style={{ gap: 4, fontSize: 13 }} title={T('حد هذا المحل الشهري بالدولار. فارغ = الحد العام لكل محل.', "This shop's monthly limit in dollars. Empty = the default per-shop limit.")}>
+              <span className="muted">{T('حد المحل $', 'Shop limit $')}</span>
+              <input className="input" type="number" min="0" step="1" inputMode="decimal" style={{ width: 84, minHeight: 36, padding: '6px 8px' }} placeholder={String(saved.cap_shop_usd)}
+                value={capText[sh.id] ?? ''} onChange={e => setCapText(c => ({ ...c, [sh.id]: e.target.value }))} onBlur={() => void saveCap(sh.id)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+            </label>
             <div style={{ width: 120 }}><Bar value={u.cost} cap={cap} /></div>
           </div>); })}
       </div>

@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
-  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs } from '@suqa/pos-core';
+  type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs , type QuickButton } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
 import { pt, daysLabel, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -21,7 +21,7 @@ import OwnerPin from '../components/OwnerPin';
 import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
-type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean; cartOpen: boolean };   // cats: the always-visible category line; cartOpen: keep the basket always open on a stacked screen (both off unless this device turns them on)
+type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean; cartOpen: boolean; fav?: boolean };   // cats: the always-visible category line; cartOpen: keep the basket always open on a stacked screen (both off unless this device turns them on)
 type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
 
 /**
@@ -36,7 +36,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
   // how the item tiles look on THIS device: size and whether they carry the item's photo (the sale screen's ▦ button)
-  const [tiles, setTiles] = useState<TileView>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean; cats?: boolean; cartOpen?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos, cats: !!v?.cats, cartOpen: !!v?.cartOpen }; } catch { return { size: 'm', photos: false, cats: false, cartOpen: false }; } });
+  const [tiles, setTiles] = useState<TileView>(() => { try { const v = JSON.parse(localStorage.getItem('suqa-pos-tiles') || 'null') as { size?: string; photos?: boolean; cats?: boolean; cartOpen?: boolean } | null; return { size: v?.size === 's' || v?.size === 'l' ? v.size : 'm', photos: !!v?.photos, cats: !!v?.cats, cartOpen: !!v?.cartOpen, fav: !!(v as { fav?: boolean } | null)?.fav }; } catch { return { size: 'm', photos: false, cats: false, cartOpen: false }; } });
   const saveTiles = (t: TileView) => { setTiles(t); try { localStorage.setItem('suqa-pos-tiles', JSON.stringify(t)); } catch {} };
   const [qtyStr, setQtyStr] = useState('');
   // Items beside the basket (as on a computer) when the screen has the width for it: wider than 900 px, or from 640 px when it is wider
@@ -121,10 +121,25 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [noteFor, setNoteFor] = useState<string | null>(null);        // cart line whose note input is open
   // The whole catalog (it is all on the device), most ordered first: units sold in the last 30 days, then all-time, then the shop's own order.
   // Typing searches everything; the category filter narrows the same list. Nothing is cut off — tiles are drawn in batches as you scroll.
+  // ⭐ favourites = the shop's quick buttons (one list for the whole shop, set by the owner). The filter is this device's; typing searches everything.
+  const [favTick, setFavTick] = useState(0);
+  const favIds = useMemo(() => new Set(index.quickButtons.map(b => b.product_id).filter(Boolean) as string[]), [index, tick, favTick]);
+  const favOn = !!tiles.fav && !q.trim();
+  const [favBusy, setFavBusy] = useState(false);
+  const toggleFav = async (p: Product) => {
+    if (favBusy) return; setFavBusy(true);
+    try {
+      const cur = index.quickButtons.find(b => b.product_id === p.id);
+      if (cur) { const { error } = await sb.from('quick_buttons').delete().eq('id', cur.id); if (error) throw error; await boot.db.quickButtons.delete(cur.id); index.setQuickButtons(index.quickButtons.filter(b => b.id !== cur.id)); }
+      else { const { data, error } = await sb.from('quick_buttons').insert({ shop_id: boot.shop.id, tenant_id: boot.shop.tenant_id, product_id: p.id, sort_order: index.quickButtons.length }).select().single(); if (error) throw error; await boot.db.quickButtons.put(data as QuickButton); index.setQuickButtons([...index.quickButtons, data as QuickButton]); }
+      setFavTick(t => t + 1);
+    } catch (e) { setToast((e as Error).message); setTimeout(() => setToast(null), 4000); } finally { setFavBusy(false); }
+  };
   const all = useMemo(() => {
-    const list = q.trim() ? index.search(q, 100000, cats) : index.byCategory(cats, 100000);
+    const base = q.trim() ? index.search(q, 100000, cats) : index.byCategory(cats, 100000);
+    const list = favOn ? base.filter(p => favIds.has(p.id)) : base;
     return list.filter(p => p.is_active !== false).sort((a, b) => (pop30.get(b.id) ?? 0) - (pop30.get(a.id) ?? 0) || (pop.get(b.id) ?? 0) - (pop.get(a.id) ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  }, [q, cats, index, tick, pop, pop30]);
+  }, [q, cats, index, tick, pop, pop30, favOn, favIds]);
   const BATCH = 120;
   const [shown, setShown] = useState(BATCH);
   const paneRef = useRef<HTMLDivElement>(null);
@@ -253,9 +268,13 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         </div>}
         <div className="row spread" style={{ alignItems: 'center', flexShrink: 0 }}>
           <span className="muted num" style={{ fontSize: 12 }}>{all.length.toLocaleString('en-US')} {pt('itemsCount', locale)}{q.trim() || cats.size ? ` / ${index.size.toLocaleString('en-US')}` : ''} · {pt('sortedByTop', locale)}</span>
-          <button className="link-btn" style={{ fontSize: 13 }} title={pt('tileView', locale)} onClick={() => setDialog({ k: 'view' })}>▦ {pt('tileView', locale)}</button>
+          <span className="row" style={{ gap: 10, alignItems: 'center' }}>
+            <button className={`chip fav-chip ${tiles.fav ? 'active' : ''}`} style={{ fontSize: 13 }} onClick={() => saveTiles({ ...tiles, fav: !tiles.fav })}>⭐ {pt('favOnly', locale)}{favIds.size ? ` (${favIds.size})` : ''}</button>
+            <button className="link-btn" style={{ fontSize: 13 }} title={pt('tileView', locale)} onClick={() => setDialog({ k: 'view' })}>▦ {pt('tileView', locale)}</button>
+          </span>
         </div>
-        {!!quick.length && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p, 1, { weigh: true })}>{b.label || text(p.name, locale)}</button> : null)}</div>}
+        {favOn && !all.length && <p className="muted" style={{ margin: '8px 0' }}>{pt('favEmpty', locale)}</p>}
+        {!!quick.length && !tiles.fav && <div className="quick-row">{quick.map(({ b, p }) => p ? <button key={b.id} className="quick" style={{ background: b.color ?? undefined }} onClick={() => add(p, 1, { weigh: true })}>{b.label || text(p.name, locale)}</button> : null)}</div>}
         <div className={`grid-items tiles-${tiles.size}`}>
           {results.map(p => {
             const inCart = cartQty.get(p.id) ?? 0;
@@ -265,6 +284,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
               <button key={p.id} className={`item-tile ${stock === 'out' || stock === 'neg' ? 'oos' : ''} ${inCart ? 'in-cart' : ''}`} onClick={() => { if (press.current.fired) { press.current.fired = false; return; } add(p, 1, { weigh: true, ask: true }); }}
                 onPointerDown={() => pressStart(p)} onPointerUp={pressEnd} onPointerLeave={pressEnd} onPointerCancel={pressEnd} onContextMenu={e => e.preventDefault()}>
                 {inCart > 0 && <span className="tile-qty">{Math.round(inCart * 1000) / 1000}</span>}
+                {favIds.has(p.id) && <span className="tile-fav" aria-hidden>⭐</span>}
                 {tiles.photos && p.image_url && <img className="item-photo" src={p.image_url} alt="" loading="lazy" draggable={false} onError={e => { e.currentTarget.style.display = 'none'; }} />}
                 <div className="item-name">{text(p.name, locale)}</div>
                 {/* sold on some weekdays only: still sellable here, the note is for the cashier (day = when the order is wanted) */}
@@ -372,6 +392,9 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'qty' && (() => { const p = dialog.p; const n = Number(qtyStr); const go = () => { if (n > 0) { add(p, p.decimal_qty ? n : Math.round(n), { ask: true }); setDialog(null); } };
         return <Modal open onClose={() => setDialog(null)} title={<>{text(p.name, locale)} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· {pt('qty', locale)}</span></>}
           footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary big" disabled={!(n > 0)} onClick={go}>＋ {qtyStr || '0'}</button></>}>
+          {boot.role === 'owner'
+            ? <button type="button" className={`chip fav-toggle ${favIds.has(p.id) ? 'active' : ''}`} style={{ marginBottom: 8 }} disabled={favBusy || !(status?.online ?? true)} onClick={() => void toggleFav(p)}>{favIds.has(p.id) ? `⭐ ${pt('favRemove', locale)}` : `☆ ${pt('favAdd', locale)}`}</button>
+            : favIds.has(p.id) ? <div className="muted" style={{ marginBottom: 8, fontSize: 13 }}>⭐ {pt('favOnly', locale)}</div> : null}
           <div style={{ textAlign: 'center', fontSize: 30, fontWeight: 800, minHeight: 40 }} dir="ltr">{qtyStr || '0'}{p.unit ? <small className="muted" style={{ fontSize: 14 }}> {p.unit}</small> : null}</div>
           <NumPad value={qtyStr} onChange={setQtyStr} decimal={!!p.decimal_qty} onEnter={go} big />
         </Modal>; })()}

@@ -344,6 +344,10 @@ const T = {
   customerNotes: { ar: 'ملاحظات عن الزبون', en: 'Customer notes' }, noCustomers: { ar: 'لا زبائن بعد — يُضافون تلقائياً مع كل طلب', en: 'No customers yet — they are added with every order' }, newOrderFor: { ar: 'طلب جديد', en: 'New order' },
   // M10 purchases
   purchasesNav: { ar: 'المشتريات', en: 'Purchases' }, suppliers: { ar: 'الموردون', en: 'Suppliers' }, supplier: { ar: 'المورد', en: 'Supplier' }, newSupplier: { ar: 'مورد جديد', en: 'New supplier' },
+  ntTitle: { ar: 'الإشعارات', en: 'Notifications' }, ntNone: { ar: 'لا إشعارات بعد.', en: 'No notifications yet.' }, ntNew: { ar: 'طلب جديد', en: 'New order' },
+  ntHint: { ar: 'ما وصل إلى هذا الجهاز خلال آخر يومين: طلبات جديدة، تأكيد السائق واستلامه وتسليمه، زبون في الطريق. اضغط لفتح الطلبات.', en: 'What reached this device in the last two days: new orders, the driver confirming, picking up and delivering, a customer on his way. Tap to open Orders.' },
+  favOnly: { ar: 'المفضّلة', en: 'Favourites' }, favAdd: { ar: 'أضف إلى المفضّلة', en: 'Add to favourites' }, favRemove: { ar: 'أزل من المفضّلة', en: 'Remove from favourites' },
+  favEmpty: { ar: 'لا أصناف مفضّلة بعد. اضغط مطوّلاً على صنف ثم ⭐.', en: 'No favourites yet. Press and hold an item, then ⭐.' }, favOwner: { ar: 'صاحب المحل يحدّد المفضّلة (يحتاج اتصالاً).', en: 'The shop owner sets the favourites (needs a connection).' },
   invoiceDiscount: { ar: 'خصم على الفاتورة', en: 'Invoice discount' }, invoiceNote: { ar: 'ملاحظة على الفاتورة', en: 'Invoice note' }, refNo: { ar: 'المرجع', en: 'Ref' },
   newPurchase: { ar: 'فاتورة شراء', en: 'Purchase invoice' }, purchaseReturn: { ar: 'مرتجع للمورد', en: 'Return to supplier' }, invoiceNo: { ar: 'رقم الفاتورة', en: 'Invoice no.' }, invoiceDate: { ar: 'تاريخ الفاتورة', en: 'Invoice date' },
   newSellPrice: { ar: 'سعر البيع الجديد', en: 'New selling price' }, margin: { ar: 'الهامش', en: 'Margin' }, expiry: { ar: 'انتهاء الصلاحية', en: 'Expiry' },

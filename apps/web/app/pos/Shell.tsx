@@ -10,6 +10,8 @@ import YorgoPanel, { type YorgoCartLine } from './components/YorgoPanel';
 import { initApproval, refreshApproval } from './lib/approval';
 import { roleOf, viewsFor } from './lib/perm';
 import { newOrderChime } from './lib/chime';
+import Modal from './components/Modal';
+import { loadNotices, markNoticesRead, syncNotices, type Notice } from './lib/notices';
 import Sell from './views/Sell';
 import SettingsView from './views/SettingsView';
 import ShiftView from './views/ShiftView';
@@ -53,6 +55,19 @@ export default function Shell(props: {
     else if (!os.length) document.title = document.title.replace(/^\(\d+\) /, '');
     seenPending.current = ids;
   }); }, [boot, props.tick]);
+  // 🔔 what came in, on any screen: new orders, a driver's confirmation / pick-up / delivery, a pickup customer on his way
+  const [notices, setNotices] = useState<Notice[]>(() => loadNotices(boot.shop.id)?.items ?? []); const [bellOpen, setBellOpen] = useState(false);
+  const viewRef = useRef(view); viewRef.current = view;
+  useEffect(() => { boot.db.orders.toArray().then(os => {
+    const { store, fresh } = syncNotices(boot.shop.id, os);
+    setNotices(store.items);
+    // the orders board has its own sound for these; a new order already chimes above
+    if (fresh.some(f => f.kind !== 'new') && viewRef.current !== 'orders') newOrderChime();
+  }); }, [boot, props.tick]);
+  const unread = notices.filter(n => !n.read).length;
+  const openBell = () => { setBellOpen(true); };
+  const closeBell = () => { setBellOpen(false); const s = markNoticesRead(boot.shop.id); if (s) setNotices(s.items); };
+  const noticeText = (n: Notice) => n.kind === 'new' ? `🛒 ${pt('ntNew', locale)}` : n.kind === 'ack' ? `🛵✅ ${pt('driverAcked', locale)}` : n.kind === 'picked' ? `📦 ${pt('driverPicked', locale)}` : n.kind === 'delivered' ? `🏠 ${pt('driverDelivered', locale)}` : `🚶 ${pt('customerComing', locale)}`;
   const online = status?.online ?? true;
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
@@ -104,10 +119,20 @@ export default function Shell(props: {
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
           {canYorgo && <button className="btn yorgo-btn" title={pt('yorgoOpen', locale)} onClick={() => setYorgoOpen(true)}>✨<span className="yorgo-btn-label"> Yorgo</span></button>}
+          <button className="btn icon pos-bell" title={pt('ntTitle', locale)} onClick={openBell}>🔔{unread > 0 && <span className="nav-badge">{unread}</span>}</button>
           <button className={`btn icon sync ${spinning ? 'spin' : ''}`} title={pt('syncNow', locale)} onClick={syncNow}>🔄</button>
           <AccountMenu sb={props.sb} boot={boot} staff={staff} locale={locale} setLocale={props.setLocale} onLock={onLock} />
         </div>
       </header>
+      {bellOpen && <Modal open onClose={closeBell} title={`🔔 ${pt('ntTitle', locale)}`}>
+        {!notices.length && <p className="muted">{pt('ntNone', locale)}</p>}
+        <div className="notice-list">{notices.map(n => (
+          <button key={n.key} type="button" className={`notice ${n.read ? '' : 'unread'}`} onClick={() => { closeBell(); setView('orders'); }}>
+            <span className="notice-main"><strong>{noticeText(n)}</strong><span> · <bdi dir="ltr">{n.number}</bdi>{n.who ? ` · ${n.who}` : ''}</span></span>
+            <span className="muted notice-time">{fmtTime(n.at, locale)}</span>
+          </button>))}</div>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>{pt('ntHint', locale)}</p>
+      </Modal>}
       {updateReady && <div className="pos-update"><span>{pt('updateReady', locale)}</span><button className="btn primary" onClick={onUpdate}>{pt('updateNow', locale)}</button></div>}
       {view === 'sell' && pendingCount > 0 && <button className="pos-neworder" onClick={() => setView('orders')}>🛎 {pendingCount} {pt('newOrderBanner', locale)} · {pt('openOrders', locale)} ›</button>}
       {(view === 'sell' || view === 'orders') && roleOf(staff) !== 'setup' && <PushReminder sb={props.sb} shopId={boot.shop.id} locale={locale} online={online}

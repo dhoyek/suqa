@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { waConfigured, waSendText, waSendTemplate } from '@/lib/server/whatsapp';
 import { normalizePhone } from '@/lib/whatsapp';
-import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, shopCustomerComing, shopCustomerComingTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
+import { shopNewOrder, customerStatus, courierReady, shopNewOrderTpl, customerStatusTpl, courierReadyTpl, customerEdited, customerEditedTpl, customerConfirm, customerConfirmTpl, driverDispatch, driverDispatchTpl, shopCustomerComing, shopCustomerComingTpl, shopDriverAck, shopDriverAckTpl, tplComponents, shouldNotifyCustomer, type OrderEvent, type Tpl } from '@/lib/server/wa-messages';
 import { logWaMessage, type Party } from '@/lib/server/wa-log';
 import { pushToShop } from '@/lib/server/push';
 
@@ -29,7 +29,16 @@ export async function POST(req: Request) {
           url: `/pos#orders`, tag: `order-${e.order.id}`,
         }).catch(err => { console.error('[push] order', (err as Error).message); return null; }); })()
     : null;
-  if (!waConfigured()) { await push; return NextResponse.json({ skipped: 'whatsapp_not_configured' }); }
+  // 🔔 the shop's driver confirmed he got the order (120): the same devices are told, whatever the order's channel
+  const pushAck = e.event === 'order.driver_ack' && e.shop?.id
+    ? (() => { const ar = (e.tenant?.default_locale ?? 'ar') === 'ar';
+        return pushToShop(e.shop!.id, {
+          title: ar ? `🛵✅ السائق أكّد الطلب ${e.order.number}` : `🛵✅ Driver confirmed order ${e.order.number}`,
+          body: [e.driver?.name, e.order.customer_name].filter(Boolean).join(' · '),
+          url: `/pos#orders`, tag: `ack-${e.order.id}`,
+        }).catch(err => { console.error('[push] ack', (err as Error).message); return null; }); })()
+    : null;
+  if (!waConfigured()) { await push; await pushAck; return NextResponse.json({ skipped: 'whatsapp_not_configured' }); }
 
   const u = new URL(req.url);
   const origin = `https://${req.headers.get('x-forwarded-host') ?? u.host}`;
@@ -72,11 +81,13 @@ export async function POST(req: Request) {
     }
   } else if (e.event === 'order.coming') {
     to(e.shop?.whatsapp, shopCustomerComing(e), 'shop', shopCustomerComingTpl(e, origin));
+  } else if (e.event === 'order.driver_ack') {
+    to(e.shop?.whatsapp, shopDriverAck(e), 'shop', shopDriverAckTpl(e, origin));
   } else if (e.event === 'order.driver') {
     // a driver chosen (or changed) without a status change: he gets the order now so he can come for it
     if (e.driver?.phone) to(e.driver.phone, driverDispatch(e, origin), 'courier', driverDispatchTpl(e, origin));
   }
   await Promise.all(sends);
-  await push;
+  await push; await pushAck;
   return NextResponse.json({ ok: true, sent: sends.length });
 }

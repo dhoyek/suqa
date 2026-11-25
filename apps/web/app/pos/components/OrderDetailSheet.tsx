@@ -21,7 +21,7 @@ type Tab = 'timeline' | 'edits' | 'payments' | 'returns' | 'messages' | 'stock';
 const when = (iso: string, locale: L) => new Date(iso).toLocaleString(locale === 'ar' ? 'ar-LB-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 /** Everything that happened to one order, read from the server (works only online; the local mirror has no history). */
-export default function OrderDetailSheet({ sb, locale, order, lines, payments, online, onCustomer, onClose }: { sb: SupabaseClient; locale: L; order: Order; lines: OrderLine[]; payments: Payment[]; online: boolean; onCustomer?: (phone: string, name: string) => void; onClose: () => void }) {
+export default function OrderDetailSheet({ sb, locale, order, lines, payments, online, onCustomer, onClose, imageOf }: { /** the item's picture, when it has one */ imageOf?: (productId: string | null | undefined) => string | null | undefined; sb: SupabaseClient; locale: L; order: Order; lines: OrderLine[]; payments: Payment[]; online: boolean; onCustomer?: (phone: string, name: string) => void; onClose: () => void }) {
   const [h, setH] = useState<Hist | null>(null); const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('timeline');
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function OrderDetailSheet({ sb, locale, order, lines, payments, o
     <Modal open onClose={onClose} title={`🧾 ${order.number ?? order.local_number} · ${order.customer_name || ''}`} wide>
       <div className="detail-head">
         <div className="muted" style={{ fontSize: 13 }}>{pt(order.channel as Key, locale)} · {order.fulfillment === 'pickup' ? pt('pickupBadge', locale) : pt('deliveryBadge', locale)} · {pt(`st_${order.status}` as Key, locale)} · {fmtTime(order.placed_at, locale)}</div>
-        <div className="order-items" style={{ fontSize: 13 }}>{live.map(l => <div key={l.id}>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''} <span className="muted num">{fmtUsd(num(l.line_total_cents))}</span></div>)}</div>
+        <div className="order-items" style={{ fontSize: 13 }}>{live.map(l => { const img = imageOf?.(l.product_id); return <div key={l.id} className="order-item-row">{img && <img className="order-item-pic" src={img} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }} />}<span>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''} <span className="muted num">{fmtUsd(num(l.line_total_cents))}</span></span></div>; })}</div>
         <div className="num" style={{ fontSize: 13 }}>{pt('subtotal', locale)} {fmtUsd(num(order.subtotal_cents))}{num(order.discount_cents) > 0 ? ` − ${fmtUsd(num(order.discount_cents))}` : ''}{num(order.delivery_fee_usd) > 0 ? ` + 🛵 ${fmtUsd(Math.round(num(order.delivery_fee_usd) * 100))}` : ''} = <strong>{fmtUsd(num(order.total_cents))}</strong> <span className="muted">· {fmtLbp(num(order.total_lbp), locale)}</span></div>
         {c && <div className="detail-customer">
           <span>👤 <strong>{c.name || order.customer_name}</strong> <span dir="ltr" className="muted">{c.phone}</span></span>

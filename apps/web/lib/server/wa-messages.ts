@@ -4,7 +4,7 @@ import { normalizePhone } from '@/lib/whatsapp';
 // Message copy for order notifications. Arabic first for 'ar' tenants, English otherwise.
 // Dev: sent as plain text. Production: the same wording goes into Meta utility templates (see docs).
 export type OrderEvent = {
-  event: 'order.created' | 'order.status' | 'order.edited' | 'order.driver' | 'order.coming';
+  event: 'order.created' | 'order.status' | 'order.edited' | 'order.driver' | 'order.coming' | 'order.driver_ack';
   /** order.status only: false = the same driver was already on the order before this change (he has his message). */
   driver_changed?: boolean;
   channel?: 'online' | 'walkin' | 'whatsapp' | 'phone';
@@ -98,6 +98,18 @@ export function shopCustomerComing(e: OrderEvent): string {
 export function shopCustomerComingTpl(e: OrderEvent, origin: string): Tpl {
   const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
   return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(shopCustomerComing(e).replace(/\*/g, '')), P(`${origin}/pos#orders`)] };
+}
+
+/** The shop's driver confirmed he got the order (120) → the shop. */
+export function shopDriverAck(e: OrderEvent): string {
+  const ar = (e.tenant?.default_locale ?? 'ar') === 'ar'; const o = e.order; const who = e.driver?.name || (ar ? 'السائق' : 'The driver');
+  return ar ? `🛵✅ ${who} أكّد استلام الطلب *${o.number}*${o.customer_name ? ` (${o.customer_name})` : ''} — وهو قادم.`
+            : `🛵✅ ${who} confirmed order *${o.number}*${o.customer_name ? ` (${o.customer_name})` : ''} — he is on his way.`;
+}
+/** Same, as the approved generic template (the shop's 24 h window is usually closed). */
+export function shopDriverAckTpl(e: OrderEvent, origin: string): Tpl {
+  const L = e.tenant?.default_locale ?? 'ar'; const o = e.order;
+  return { name: 'order_status', lang: 'ar', params: [P(e.shop ? t(e.shop.name, L) : e.tenant?.brand_name), P(o.number), P(shopDriverAck(e).replace(/\*/g, '')), P(`${origin}/pos#orders`)] };
 }
 
 /** Order ready → couriers (only in courier delivery mode). */

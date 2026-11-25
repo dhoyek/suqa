@@ -660,3 +660,18 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
   .pos-sell.split .item-tile { min-height: 60px; }
   .pos-sell.split .input.big, .pos-sell.split .btn.big { min-height: 40px; }
 }
+
+/* item pictures inside an order's details */
+.order-item-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.order-item-pic { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: #f3f4f6; flex: none; }
+/* favourites */
+.item-tile { position: relative; }
+.tile-fav { position: absolute; top: 2px; inset-inline-start: 4px; font-size: 12px; line-height: 1; pointer-events: none; }
+.fav-chip.active, .fav-toggle.active { background: #fff7d6; border-color: #e0b100; color: #6b5200; }
+/* notifications bell */
+.pos-bell { position: relative; }
+.notice-list { display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; }
+.notice { display: flex; justify-content: space-between; gap: 10px; align-items: center; text-align: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; cursor: pointer; }
+.notice.unread { background: #eef6ff; border-color: #b6d4fe; }
+.notice-main { min-width: 0; }
+.notice-time { font-size: 12px; white-space: nowrap; }

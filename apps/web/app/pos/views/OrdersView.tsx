@@ -225,7 +225,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                     <span className="row" style={{ gap: 4 }}><span className="pill">{pt(o.channel as Key, locale)}</span><span className="pill">{pickup ? '🛍 ' + pt('pickupBadge', locale) : '🛵 ' + pt('deliveryBadge', locale)}</span>{chip(o.status)}</span>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>{fmtTime(o.placed_at, locale)} · {o.customer_name || '—'} {o.customer_phone && <span className="row" style={{ gap: 6, display: 'inline-flex', alignItems: 'center' }}><span dir="ltr">{o.customer_phone}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(o.customer_phone)}`} title={pt('call', locale)} onClick={e => e.stopPropagation()}>📞</a><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`https://wa.me/${waDigits(o.customer_phone)}`} target="_blank" rel="noreferrer" title="WhatsApp" onClick={e => e.stopPropagation()}>💬</a></span>}</div>
-                  <div className="order-items">{ls.map(l => <div key={l.id}>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''}</div>)}</div>
+                  <div className="order-items">{ls.map(l => { const img = open && l.product_id ? index.byId.get(l.product_id)?.image_url : null; return <div key={l.id} className={img ? 'order-item-row' : undefined}>{img && <img className="order-item-pic" src={img} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }} />}<span>{num(l.quantity)}{l.unit ? ' ' + l.unit : '×'} {text(l.name, locale)}{l.notes ? <span className="muted"> ({l.notes})</span> : ''}</span></div>; })}</div>
                   {o.customer_notes && <div className="muted" style={{ fontSize: 12 }}>📝 {o.customer_notes}</div>}
                   {!pickup && o.address && Object.keys(o.address).length > 0 && <div className="muted" style={{ fontSize: 12 }}>📍 {addrLine(o.address as Record<string, unknown>)}{mapHref(o.address as Record<string, unknown>) ? <> · <a href={mapHref(o.address as Record<string, unknown>)!} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>🗺 {pt('openMap', locale)}</a></> : null}</div>}
                   {(o.reject_reason || o.cancel_reason) && <div className="bad" style={{ fontSize: 12 }}>{o.reject_reason || o.cancel_reason}</div>}
@@ -334,7 +334,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
             boot.engine.poke(); setDialog(null); await reload();
           } catch (e) { setDialog(null); await confirm((e as Error).message === 'driver_paid' ? pt('infoDriverPaid', locale) : (e as Error).message); }
         }} />}
-      {dialog?.k === 'detail' && <OrderDetailSheet sb={sb} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} payments={payments[dialog.o.id] ?? []} online={online} onCustomer={onCustomer} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'detail' && <OrderDetailSheet imageOf={id => (id ? index.byId.get(id)?.image_url : null)} sb={sb} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} payments={payments[dialog.o.id] ?? []} online={online} onCustomer={onCustomer} onClose={() => setDialog(null)} />}
       {dialog?.k === 'return' && <ReturnDialog boot={boot} locale={locale} order={dialog.o} lines={lines[dialog.o.id] ?? []} staff={staff} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
     </div>
   );

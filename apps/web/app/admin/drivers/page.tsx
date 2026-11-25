@@ -19,5 +19,5 @@ export default async function AdminDrivers() {
     return <div className="card bad">{missing ? (L === 'ar' ? 'هذه الصفحة غير مفعّلة بعد (السكريبت 116).' : 'This page is not switched on yet (script 116).') : error.message}</div>;
   }
   const d = (data ?? {}) as { drivers?: DriverRow[]; couriers?: CourierRow[] };
-  return <DriversList initial={d.drivers ?? []} couriers={d.couriers ?? []} locale={L} canEdit={role === 'admin'} />;
+  return <DriversList initial={d.drivers ?? []} couriers={d.couriers ?? []} locale={L} canEdit={role === 'admin'} tenantId={tenant.id} />;
 }

@@ -135,25 +135,25 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
           {results.length > 0 && <div className="cust-list">{results.map(p => <button key={p.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => add(p)}><strong>{text(p.name, locale)}</strong><small className="muted">{pt('lastCost', locale)} {fmtUsd(num(p.cost_cents))} · {pt('currentPrice', locale)} {fmtUsd(Math.round(num(p.price_usd) * 100))} · {pt('onHand', locale)} {num(p.on_hand)}</small></button>)}</div>}
         </div>
         {supplierItems.length > 0 && <div className="chips" style={{ marginTop: 8 }}><span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>{pt('supplierItems', locale)}:</span>{supplierItems.map(p => <button key={p.id} className="chip" onClick={() => add(p)}>＋ {text(p.name, locale)}</button>)}</div>}
-        <table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
+        <div className="pur-scroll"><table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
           <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('discount', locale)}</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('expiry', locale)}</th>}{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
           {rows.map((r, i) => {
             const am = purchaseLineAmounts(r); const netUnit = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? netUnit / rate : netUnit; const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
             return <tr key={r.product.id}>
               <td>{text(r.product.name, locale)}<div className="muted" style={{ fontSize: 11 }}>{pt('onHand', locale)} {num(r.product.on_hand)} · {pt('lastCost', locale)} {fmtUsd(num(r.product.cost_cents))}</div>
                 <input className="input pur-note" placeholder={pt('note', locale)} value={r.note ?? ''} onChange={e => upd(i, { note: e.target.value })} /></td>
-              <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 80 }} /></td>
-              <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 110 }} /></td>
+              <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 68 }} /></td>
+              <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 86 }} /></td>
               <td><div className="pur-disc"><input className="input" dir="ltr" inputMode="decimal" value={r.discount_pct != null ? r.discount_pct : (r.discount ?? '')} onChange={e => { const v = e.target.value === '' ? null : Number(e.target.value) || 0; upd(i, r.discount_pct != null ? { discount_pct: v ?? 0 } : { discount: v }); }} />
                 <button type="button" className="btn" title={pt('discount', locale)} onClick={() => upd(i, r.discount_pct != null ? { discount_pct: null, discount: null } : { discount_pct: 0, discount: null })}>{r.discount_pct != null ? '%' : sym}</button></div></td>
               <td className="num">{fmtC(am.net)}{am.discount > 0 && <div className="muted" style={{ fontSize: 11, textDecoration: 'line-through' }}>{fmtC(am.gross)}</div>}</td>
-              {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 140 }} title={pt('expiry', locale)} /></td>}
-              {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 100 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}</td>}
+              {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 128 }} title={pt('expiry', locale)} /></td>}
+              {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 80 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}</td>}
               <td><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></td>
             </tr>;
           })}
           {!rows.length && <tr><td colSpan={8} className="muted">{pt('noLines', locale)}</td></tr>}
-        </tbody></table>
+        </tbody></table></div>
         <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div><label className="label">{pt('invoiceDiscount', locale)}</label><div className="pur-disc" style={{ width: 150 }}><input className="input" dir="ltr" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)} /><button type="button" className="btn" onClick={() => setDiscPct(v => !v)}>{discPct ? '%' : sym}</button></div></div>
           <div style={{ flex: 1, minWidth: 160 }}><label className="label">{pt('invoiceNote', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} /></div>

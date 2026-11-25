@@ -290,9 +290,12 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .cust-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; background: none; text-align: start; min-height: 52px; cursor: pointer; }
 .cust-row:hover { background: #f8fafc; } .cust-row.active { border-color: var(--brand-primary); background: #eef6f8; }
 .pur-lines input.input { min-height: 38px; padding: 4px 8px; }
+.pur-scroll { overflow-x: auto; }
+.pur-lines th, .pur-lines td { padding-inline: 4px; }
+.pur-lines .pur-note { min-width: 110px; }
 .pur-lines th { font-size: 12px; white-space: nowrap; text-align: center; }
 .pur-lines td { vertical-align: top; }
-.pur-lines .pur-note { margin-top: 4px; min-height: 30px; font-size: 12px; width: 100%; min-width: 140px; }
+.pur-lines .pur-note { margin-top: 4px; min-height: 30px; font-size: 12px; width: 100%; }
 .pur-disc { display: flex; gap: 2px; align-items: stretch; }
 .pur-disc input.input { width: 64px; min-width: 0; flex: 1; }
 .pur-disc .btn { min-width: 34px; padding: 0 6px; min-height: 38px; font-weight: 700; }

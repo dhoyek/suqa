@@ -1,7 +1,7 @@
 import { usdPrice } from '@/lib/price';
 import { unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
-import type { Category, Product, Shop } from '@suqa/shared';
+import { SHOP_PUBLIC_COLS, type Category, type Product, type Shop } from '@suqa/shared';
 import { rateOf, type Rates } from '@/lib/shop-money';
 
 // Public storefront reads. Everyone sees the same data, so cache it server-side for a few seconds instead of
@@ -40,11 +40,11 @@ const PRODUCT_COLS = 'id,tenant_id,shop_id,name,description,price_usd,price_curr
 type Db = ReturnType<typeof anon>;
 /** One shop and what its customers see of it. `anyStatus`: also a shop not active yet (the owner's / admin's preview). */
 async function loadShop(sb: Db, tenantId: string, slug: string, fx: number | string | null | undefined, anyStatus = false) {
-  let q = sb.from('shops').select('*').eq('tenant_id', tenantId).eq('slug', slug);
+  let q = sb.from('shops').select(SHOP_PUBLIC_COLS).eq('tenant_id', tenantId).eq('slug', slug);      // the public card only (114)
   if (!anyStatus) q = q.eq('status', 'active');
   const { data } = await q.maybeSingle();
   if (!data) return null;
-  const shop = data as Shop & { hide_online_when_zero?: boolean };
+  const shop = data as unknown as Shop & { hide_online_when_zero?: boolean };
   const rate = rateOf(await loadRates(anon(), tenantId), shop.id, fx);      // the shop's own lira rate; the association's when it has none
   // The database API answers at most 1,000 rows per request: a shop with more items (Dekanet Jadde has 1,159) lost the rest —
   // they were neither shown nor found by the search. Read them page by page.

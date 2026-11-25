@@ -25,6 +25,12 @@ const TXT = {
   badPhone: { ar: 'رقم غير صالح.', en: 'Not a valid number.' }, badName: { ar: 'الاسم مطلوب.', en: 'A name is needed.' },
   notOn: { ar: 'التعديل غير مفعّل بعد (السكريبت 117).', en: 'Editing is not switched on yet (script 117).' },
   otherNames: { ar: 'مسجّل أيضاً باسم', en: 'Also saved as' },
+  stop: { ar: 'إيقاف', en: 'Stop' }, resume: { ar: 'تشغيل', en: 'Resume' }, remove: { ar: 'إزالة', en: 'Remove' },
+  removeAsk: { ar: 'إزالته من هذا المحل؟ إن كان قد وصّل له طلبات يبقى في السجل متوقفاً.', en: 'Remove him from this shop? If he delivered for it he stays in the records, stopped.' },
+  yes: { ar: 'نعم، إزالة', en: 'Yes, remove' }, no: { ar: 'لا', en: 'No' },
+  busyDrv: { ar: 'لديه توصيلة مفتوحة في هذا المحل — أنهِها أو انقلها أولاً.', en: 'He has an open delivery in this shop — finish or reassign it first.' },
+  kept: { ar: 'له سجل في هذا المحل، فبقي فيه متوقفاً.', en: 'He has history in this shop, so he was kept there, stopped.' },
+  notOn118: { ar: 'غير مفعّل بعد (السكريبت 118).', en: 'Not switched on yet (script 118).' },
 } as const;
 
 export default function DriversList({ initial, couriers, locale: L, canEdit, tenantId }: { initial: DriverRow[]; couriers: CourierRow[]; locale: 'ar' | 'en'; canEdit: boolean; tenantId: string }) {
@@ -52,6 +58,25 @@ export default function DriversList({ initial, couriers, locale: L, canEdit, ten
     const { error } = await sb.rpc('admin_driver_scope', { p_driver: d.id, p_scope: scope });
     if (error) setMsg(`${x('failed')}: ${error.message}`);
     else setList(l => l.map(r => r.id === d.id ? { ...r, scope } : r));
+    setBusy(null);
+  };
+
+  const [ask, setAsk] = useState<string | null>(null);      // the shop line whose removal is being confirmed
+  const fail = (m: string, code?: string) => setMsg(/driver_busy/.test(m) ? x('busyDrv') : /PGRST202|schema cache/i.test(`${code ?? ''} ${m}`) ? x('notOn118') : `${x('failed')}: ${m}`);
+  const setActive = async (d: DriverRow, active: boolean) => {
+    if (!canEdit || busy) return;
+    setBusy(d.id); setMsg(null);
+    const { error } = await sb.rpc('admin_driver_active', { p_driver: d.id, p_active: active });
+    if (error) fail(error.message, error.code); else setList(l => l.map(r => r.id === d.id ? { ...r, active } : r));
+    setBusy(null);
+  };
+  const remove = async (d: DriverRow) => {
+    if (!canEdit || busy) return;
+    setBusy(d.id); setMsg(null); setAsk(null);
+    const { data, error } = await sb.rpc('admin_driver_remove', { p_driver: d.id });
+    if (error) fail(error.message, error.code);
+    else if ((data as { deactivated?: boolean } | null)?.deactivated) { setList(l => l.map(r => r.id === d.id ? { ...r, active: false } : r)); setMsg(x('kept')); }
+    else setList(l => l.filter(r => r.id !== d.id));
     setBusy(null);
   };
 
@@ -115,6 +140,13 @@ export default function DriversList({ initial, couriers, locale: L, canEdit, ten
                 <button type="button" className={d.scope === 'shop' ? 'active' : ''} disabled={!canEdit || !!busy} onClick={() => void setScope(d, 'shop')}>{x('shopOnly')}</button>
                 <button type="button" className={d.scope === 'association' ? 'active' : ''} disabled={!canEdit || !!busy} onClick={() => void setScope(d, 'association')}>{x('shared')}</button>
               </div>
+              {canEdit && (ask === d.id
+                ? <div className="row" style={{ gap: 6, alignItems: 'center', flexBasis: '100%', flexWrap: 'wrap' }}><small>{x('removeAsk')}</small>
+                    <button type="button" className="btn drv-yes" style={{ color: 'var(--bad)' }} disabled={!!busy} onClick={() => void remove(d)}>{x('yes')}</button>
+                    <button type="button" className="btn ghost" onClick={() => setAsk(null)}>{x('no')}</button></div>
+                : <div className="row drv-acts" style={{ gap: 6 }}>
+                    <button type="button" className="btn drv-stop" disabled={!!busy} onClick={() => void setActive(d, !d.active)}>{d.active ? `⏸ ${x('stop')}` : `▶ ${x('resume')}`}</button>
+                    <button type="button" className="btn drv-remove" disabled={!!busy} onClick={() => { setMsg(null); setAsk(d.id); }}>🗑 {x('remove')}</button></div>)}
             </div>))}
         </div>); })}
       {couriers.length > 0 && <>

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { adjustSupplierBalance, commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
+import { adjustSupplierBalance, commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseLineAmounts, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
 import { MergeDialog } from './CustomersView';
 import { pt, type L, type Key } from '../i18n';
 import type { Booted } from '../lib/boot';
@@ -89,9 +89,11 @@ function SupplierDialog({ boot, locale, supplier, onClose, onDone }: { boot: Boo
 function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: () => void; onClose: () => void; onDone: () => void }) {
   const [supplier, setSupplier] = useState<Supplier | null>(suppliers.length === 1 ? suppliers[0] : null);
   useEffect(() => { if (preferId) { const s = suppliers.find(x => x.id === preferId); if (s) setSupplier(s); } }, [preferId, suppliers]); // a supplier just created from ＋ becomes the selected one
-  const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [note, setNote] = useState('');
+  const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [discPct, setDiscPct] = useState(false); const [note, setNote] = useState(''); const [nextNo, setNextNo] = useState('');
   const [rows, setRows] = useState<PurchaseDraftLine[]>(() => (initial ?? []).map(r => ({ product: r.product, qty: r.qty, unit_cost: num(r.product.cost_cents) / 100 || 0 }))); const [q, setQ] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState(false);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
+  // the reference this invoice will get when it is posted (the server confirms it)
+  useEffect(() => { boot.db.purchases.filter(p => p.kind === kind).count().then(n => setNextNo(`${kind === 'return' ? 'PR' : 'P'}-${String(n + 1).padStart(5, '0')}`)); }, [boot, kind]);
   const results = q.trim() ? index.search(q, 12) : [];
   const add = (p: Product) => {
     setRows(rs => { const i = rs.findIndex(r => r.product.id === p.id); if (i >= 0) { const c = rs.slice(); c[i] = { ...c[i], qty: c[i].qty + 1 }; return c; }
@@ -100,21 +102,26 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
   };
   useScanner(code => { const p = index.scan(code); if (p) add(p); });
   const upd = (i: number, patch: Partial<PurchaseDraftLine>) => setRows(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const t = useMemo(() => purchaseTotals(rows, currency, rate, Number(discount) || 0), [rows, currency, rate, discount]);
+  const t = useMemo(() => purchaseTotals(rows, currency, rate, discPct ? 0 : Number(discount) || 0, discPct ? Number(discount) || 0 : null), [rows, currency, rate, discount, discPct]);
   const submit = async (approvedBy: string | null) => {
     if (!supplier || !rows.length || busy) return; setBusy(true); setErr(null);
-    try { await commitPurchase(boot.db, { supplier, kind, lines: rows.filter(r => r.qty > 0), currency, rate, discount: Number(discount) || 0, invoice_no: invNo.trim() || null, invoice_date: invDate, note: note.trim() || null, user_id: staff.user_id, approved_by: approvedBy }); boot.engine.poke(); onDone(); }
+    try { await commitPurchase(boot.db, { supplier, kind, lines: rows.filter(r => r.qty > 0), currency, rate, discount: discPct ? 0 : Number(discount) || 0, discount_pct: discPct && Number(discount) ? Number(discount) : null, invoice_no: invNo.trim() || null, invoice_date: invDate, note: note.trim() || null, user_id: staff.user_id, approved_by: approvedBy }); boot.engine.poke(); onDone(); }
     catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   const marginPct = Number(boot.shop.default_margin_pct) || 0;
-  const applyMargin = () => setRows(rs => rs.map(r => { const costUsd = currency === 'lbp' ? r.unit_cost / rate : r.unit_cost; const m = r.product.margin_pct != null && r.product.margin_pct !== '' ? Number(r.product.margin_pct) : marginPct; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - m / 100)) * 4) / 4 } : r; }));
+  const applyMargin = () => setRows(rs => rs.map(r => { const am = purchaseLineAmounts(r); const nu = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? nu / rate : nu; const m = r.product.margin_pct != null && r.product.margin_pct !== '' ? Number(r.product.margin_pct) : marginPct; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - m / 100)) * 4) / 4 } : r; }));
   const supplierItems = useMemo(() => supplier ? index.byCategory(null, 100000).filter(p => p.supplier_id === supplier.id && !rows.some(r => r.product.id === p.id)).slice(0, 40) : [], [supplier, rows, index]);
   const sym = currency === 'lbp' ? 'ل.ل.' : '$';
   const fmtC = (v: number) => (currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
   return (
     <>
-      <Modal open onClose={onClose} title={pt(kind === 'return' ? 'purchaseReturn' : 'newPurchase', locale)} wide
-        footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><strong style={{ fontSize: 18 }}>{fmtC(t.total)} <span className="muted" style={{ fontSize: 12 }}>{fmtUsd(t.total_cents)}</span></strong>
+      <Modal open onClose={onClose} title={`${pt(kind === 'return' ? 'purchaseReturn' : 'newPurchase', locale)}${nextNo ? ` · ${nextNo}` : ''}`} wide
+        footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} />
+          <div className="pur-totals">
+            <div><span>{pt('subtotal', locale)}</span><span>{fmtC(t.gross)}</span></div>
+            {t.all_discount > 0 && <div className="disc"><span>{pt('discount', locale)}</span><span>− {fmtC(t.all_discount)}</span></div>}
+            <div className="tot"><span>{pt('total', locale)}</span><span>{fmtC(t.total)}{currency === 'lbp' && <small className="muted"> {fmtUsd(t.total_cents)}</small>}</span></div>
+          </div>
           <button className="btn primary big" style={{ width: 'auto', minWidth: 200 }} disabled={!supplier || !rows.length || busy} onClick={() => (staff.role === 'cashier' ? setGate(true) : submit(null))}>{pt('receiveStock', locale)}</button></>}>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: 2, minWidth: 200 }}><label className="label">{pt('supplier', locale)} *</label>
@@ -129,26 +136,28 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
         </div>
         {supplierItems.length > 0 && <div className="chips" style={{ marginTop: 8 }}><span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>{pt('supplierItems', locale)}:</span>{supplierItems.map(p => <button key={p.id} className="chip" onClick={() => add(p)}>＋ {text(p.name, locale)}</button>)}</div>}
         <table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
-          <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
+          <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('discount', locale)}</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('expiry', locale)}</th>}{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
           {rows.map((r, i) => {
-            const costUsd = currency === 'lbp' ? r.unit_cost / rate : r.unit_cost; const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
+            const am = purchaseLineAmounts(r); const netUnit = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? netUnit / rate : netUnit; const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
             return <tr key={r.product.id}>
-              <td>{text(r.product.name, locale)}<div className="muted" style={{ fontSize: 11 }}>{pt('onHand', locale)} {num(r.product.on_hand)} · {pt('lastCost', locale)} {fmtUsd(num(r.product.cost_cents))}</div></td>
+              <td>{text(r.product.name, locale)}<div className="muted" style={{ fontSize: 11 }}>{pt('onHand', locale)} {num(r.product.on_hand)} · {pt('lastCost', locale)} {fmtUsd(num(r.product.cost_cents))}</div>
+                <input className="input pur-note" placeholder={pt('note', locale)} value={r.note ?? ''} onChange={e => upd(i, { note: e.target.value })} /></td>
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 80 }} /></td>
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 110 }} /></td>
-              <td className="num">{fmtC(r.qty * r.unit_cost)}</td>
+              <td><div className="pur-disc"><input className="input" dir="ltr" inputMode="decimal" value={r.discount_pct != null ? r.discount_pct : (r.discount ?? '')} onChange={e => { const v = e.target.value === '' ? null : Number(e.target.value) || 0; upd(i, r.discount_pct != null ? { discount_pct: v ?? 0 } : { discount: v }); }} />
+                <button type="button" className="btn" title={pt('discount', locale)} onClick={() => upd(i, r.discount_pct != null ? { discount_pct: null, discount: null } : { discount_pct: 0, discount: null })}>{r.discount_pct != null ? '%' : sym}</button></div></td>
+              <td className="num">{fmtC(am.net)}{am.discount > 0 && <div className="muted" style={{ fontSize: 11, textDecoration: 'line-through' }}>{fmtC(am.gross)}</div>}</td>
               {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 140 }} title={pt('expiry', locale)} /></td>}
               {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 100 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}</td>}
               <td><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></td>
             </tr>;
           })}
-          {!rows.length && <tr><td colSpan={6} className="muted">{pt('noLines', locale)}</td></tr>}
+          {!rows.length && <tr><td colSpan={8} className="muted">{pt('noLines', locale)}</td></tr>}
         </tbody></table>
         <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div><label className="label">{pt('discount', locale)} ({sym})</label><input className="input" dir="ltr" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)} style={{ width: 120 }} /></div>
-          <div style={{ flex: 1, minWidth: 160 }}><label className="label">{pt('note', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} /></div>
+          <div><label className="label">{pt('invoiceDiscount', locale)}</label><div className="pur-disc" style={{ width: 150 }}><input className="input" dir="ltr" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)} /><button type="button" className="btn" onClick={() => setDiscPct(v => !v)}>{discPct ? '%' : sym}</button></div></div>
+          <div style={{ flex: 1, minWidth: 160 }}><label className="label">{pt('invoiceNote', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} /></div>
           {kind === 'purchase' && marginPct > 0 && <button className="btn ghost" onClick={applyMargin}>{pt('applyMargin', locale)} ({marginPct}%)</button>}
-          <div className="muted" style={{ fontSize: 13 }}>{pt('subtotal', locale)} {fmtC(t.subtotal)}</div>
         </div>
         {err && <p className="bad">{err}</p>}
       </Modal>
@@ -162,11 +171,19 @@ function PurchaseDetail({ boot, locale, purchase, lines, supplier, staff, canEdi
   const doVoid = async () => { if (!(await confirm(pt('voidPurchase', locale) + ` ${purchase.number.replace('~', '')}?`, { danger: true }))) return; await voidPurchase(boot.db, purchase, 'void', staff.user_id, staff.role === 'owner' ? staff.user_id : null); boot.engine.poke(); onChanged(); onClose(); };
   const fmtC = (v: number) => (purchase.currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
   return <Modal open onClose={onClose} title={`${purchase.number.replace('~', '')} · ${supplier}`} wide footer={<>{canEdit && purchase.status === 'posted' && <button className="btn danger" onClick={doVoid}>{pt('voidPurchase', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
-    <div className="muted" style={{ fontSize: 13 }}>{fmtTime(purchase.at, locale)} · {purchase.invoice_no ?? ''} · {purchase.invoice_date} · {pt(purchase.status === 'void' ? 'voided' : 'posted', locale)}{purchase.note ? ` · ${purchase.note}` : ''}</div>
+    <div className="pur-ref"><span>{pt('refNo', locale)} <strong dir="ltr">{purchase.number.replace('~', '')}</strong></span>{purchase.invoice_no && <span>{pt('invoiceNo', locale)} <strong dir="ltr">{purchase.invoice_no}</strong></span>}<span>{pt('invoiceDate', locale)} <strong dir="ltr">{purchase.invoice_date}</strong></span></div>
+    <div className="muted" style={{ fontSize: 13 }}>{fmtTime(purchase.at, locale)} · {pt(purchase.status === 'void' ? 'voided' : 'posted', locale)}{purchase.note ? ` · ${purchase.note}` : ''}</div>
     <table className="table" style={{ marginTop: 8 }}><tbody>
-      {lines.map(l => <tr key={l.id}><td>{text(l.name, locale)}</td><td style={{ textAlign: 'center' }}>{num(l.qty)}</td><td className="num">{fmtC(num(l.unit_cost))}</td><td className="num">{fmtUsd(num(l.line_total_cents))}</td><td className="muted">{l.new_price_usd != null ? `→ ${fmtUsd(Math.round(num(l.new_price_usd) * 100))}` : ''}</td></tr>)}
-      <tr><td colSpan={3}><strong>{pt('total', locale)}</strong>{num(purchase.discount) ? <span className="muted"> ({pt('discount', locale)} {fmtC(num(purchase.discount))})</span> : ''}</td><td className="num"><strong>{fmtUsd(num(purchase.total_cents))}</strong></td><td className="muted">{fmtC(num(purchase.total))}</td></tr>
+      {lines.map(l => { const gross = num(l.qty) * num(l.unit_cost); const d = num(l.discount ?? 0); return <tr key={l.id}><td>{text(l.name, locale)}{l.note ? <div className="muted" style={{ fontSize: 12 }}>📝 {l.note}</div> : null}</td><td style={{ textAlign: 'center' }}>{num(l.qty)}</td><td className="num">{fmtC(num(l.unit_cost))}</td>
+        <td className="num">{d > 0 ? <span className="muted">− {fmtC(d)}{l.discount_pct != null ? ` (${num(l.discount_pct)}%)` : ''}</span> : ''}</td>
+        <td className="num">{fmtC(gross - d)}</td><td className="muted">{l.new_price_usd != null ? `→ ${fmtUsd(Math.round(num(l.new_price_usd) * 100))}` : ''}</td></tr>; })}
     </tbody></table>
+    {(() => { const gross = lines.reduce((a, l) => a + num(l.qty) * num(l.unit_cost), 0); const allDisc = Math.max(0, gross - num(purchase.total)); return (
+      <div className="pur-totals" style={{ marginInlineStart: 'auto', marginTop: 10 }}>
+        <div><span>{pt('subtotal', locale)}</span><span>{fmtC(gross)}</span></div>
+        {allDisc > 0.004 && <div className="disc"><span>{pt('discount', locale)}{purchase.discount_pct != null ? ` (${num(purchase.discount_pct)}%)` : ''}</span><span>− {fmtC(allDisc)}</span></div>}
+        <div className="tot"><span>{pt('total', locale)}</span><span>{fmtC(num(purchase.total))}{purchase.currency === 'lbp' && <small className="muted"> {fmtUsd(num(purchase.total_cents))}</small>}</span></div>
+      </div>); })()}
   </Modal>;
 }
 

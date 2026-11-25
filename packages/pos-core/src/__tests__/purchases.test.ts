@@ -7,6 +7,24 @@ import { commitPurchase, paySupplier, purchaseTotals, supplierStatement, upsertS
 afterEach(wipeAll);
 
 describe('suppliers & purchases', () => {
+  it('a line has its own discount (amount or percent) and note; the invoice discount can be a percent', async () => {
+    const server = new FakeServer(); server.addProduct({ id: 'p1', price_usd: 3, on_hand: 0, track_stock: true, cost_cents: 0 }); server.addProduct({ id: 'p2', price_usd: 5, on_hand: 0, track_stock: true, cost_cents: 0 });
+    const a = await makeDevice(server, 'A'); const sup = await upsertSupplier(a.db, server.shop.id, { name: 'Rico' });
+    const p1 = (await a.db.products.get('p1'))!, p2 = (await a.db.products.get('p2'))!;
+    const lines = [{ product: p1, qty: 110, unit_cost: 2, discount_pct: 10, note: 'promo' }, { product: p2, qty: 4, unit_cost: 2.5, discount: 1 }, { product: p2, qty: 1, unit_cost: 1, discount: 50 }];
+    const t = purchaseTotals(lines, 'usd', RATE, 0, 5);
+    // gross 220 + 10 + 1 = 231; line discounts 22 + 1 + 1 (never more than the line) = 24; subtotal 207; 5% = 10.35; total 196.65
+    expect(t).toMatchObject({ gross: 231, line_discount: 24, subtotal: 207, discount: 10.35, all_discount: 34.35, total: 196.65, total_cents: 19665 });
+    const pur = await commitPurchase(a.db, { supplier: sup, lines: lines.slice(0, 2), currency: 'usd', rate: RATE, discount_pct: 5, user_id: 'u1' });
+    expect(pur).toMatchObject({ subtotal: 207, discount: 10.35, discount_pct: 5, total: 196.65 });
+    const saved = (await a.db.purchaseLines.where('purchase_id').equals(pur.id).toArray()).sort((x, y) => x.sort - y.sort);
+    expect(saved[0]).toMatchObject({ unit_cost: 2, unit_cost_cents: 180, line_total_cents: 19800, discount: 22, discount_pct: 10, note: 'promo' });
+    expect(saved[1]).toMatchObject({ unit_cost: 2.5, unit_cost_cents: 225, line_total_cents: 900, discount: 1, discount_pct: null, note: null });
+    expect((await a.db.products.get('p1'))!.cost_cents).toBe(180);       // the item's cost is what was really paid for it
+    expect((await a.db.suppliers.get(sup.id))!.balance_cents).toBe(19665);
+    const op = (await a.db.outbox.toArray()).find(o => o.kind === 'purchase.commit')!.payload as { discount_pct: number; lines: { discount: number; note: string }[] };
+    expect(op.discount_pct).toBe(5); expect(op.lines[0]).toMatchObject({ discount: 22, discount_pct: 10, note: 'promo' });
+  });
   it('receives stock at cost, sets price, tracks balance, pays from the drawer, voids', async () => {
     const server = new FakeServer(); const p = server.addProduct({ id: 'p1', price_usd: 2, on_hand: 5, track_stock: true, cost_cents: 100 });
     const a = await makeDevice(server, 'A');

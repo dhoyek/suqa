@@ -344,6 +344,7 @@ const T = {
   customerNotes: { ar: 'ملاحظات عن الزبون', en: 'Customer notes' }, noCustomers: { ar: 'لا زبائن بعد — يُضافون تلقائياً مع كل طلب', en: 'No customers yet — they are added with every order' }, newOrderFor: { ar: 'طلب جديد', en: 'New order' },
   // M10 purchases
   purchasesNav: { ar: 'المشتريات', en: 'Purchases' }, suppliers: { ar: 'الموردون', en: 'Suppliers' }, supplier: { ar: 'المورد', en: 'Supplier' }, newSupplier: { ar: 'مورد جديد', en: 'New supplier' },
+  invoiceDiscount: { ar: 'خصم على الفاتورة', en: 'Invoice discount' }, invoiceNote: { ar: 'ملاحظة على الفاتورة', en: 'Invoice note' }, refNo: { ar: 'المرجع', en: 'Ref' },
   newPurchase: { ar: 'فاتورة شراء', en: 'Purchase invoice' }, purchaseReturn: { ar: 'مرتجع للمورد', en: 'Return to supplier' }, invoiceNo: { ar: 'رقم الفاتورة', en: 'Invoice no.' }, invoiceDate: { ar: 'تاريخ الفاتورة', en: 'Invoice date' },
   newSellPrice: { ar: 'سعر البيع الجديد', en: 'New selling price' }, margin: { ar: 'الهامش', en: 'Margin' }, expiry: { ar: 'انتهاء الصلاحية', en: 'Expiry' },
   receiveStock: { ar: 'استلام وترحيل', en: 'Receive & post' }, posted: { ar: 'مرحّلة', en: 'Posted' }, voided: { ar: 'ملغاة', en: 'Void' }, voidPurchase: { ar: 'إلغاء الفاتورة', en: 'Void invoice' },

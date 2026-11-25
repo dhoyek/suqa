@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { t as tr, type Locale, type Shop } from '@suqa/shared';
 
-type Row = Shop & { categoryName: string };
+type Row = Shop & { categoryName: string; items?: number | null; itemsOnline?: number | null };
 const SHOP_STATUS_LABEL: Record<string, { en: string; ar: string }> = {
   pending: { en: 'Pending approval', ar: 'بانتظار الموافقة' }, active: { en: 'Active', ar: 'فعّال' }, paused: { en: 'Paused', ar: 'متوقف' }, disabled: { en: 'Disabled', ar: 'معطّل' },
 };
@@ -27,7 +27,7 @@ export default function ShopsList({ initial, locale: L, labels }: { initial: Row
         <div className="product" key={s.id}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Link href={`/admin/shops/${s.id}`} className="name" style={{ textDecoration: 'none' }}>{tr(s.name, L)}</Link>
-            <div className="muted" style={{ fontSize: 13 }}>{s.categoryName}{s.whatsapp ? <> · <bdi dir="ltr">{s.whatsapp}</bdi></> : ''}{s.min_order_usd > 0 ? ` · ${labels.minOrder} $${Number(s.min_order_usd).toFixed(0)}` : ''}</div>
+            <div className="muted" style={{ fontSize: 13 }}>{s.items != null && <span className="shop-items">📦 {s.items.toLocaleString('en')} {L === 'ar' ? 'صنف' : 'items'}{s.itemsOnline != null && s.itemsOnline !== s.items ? ` (${s.itemsOnline.toLocaleString('en')} ${L === 'ar' ? 'على الموقع' : 'online'})` : ''} · </span>}{s.categoryName}{s.whatsapp ? <> · <bdi dir="ltr">{s.whatsapp}</bdi></> : ''}{s.min_order_usd > 0 ? ` · ${labels.minOrder} $${Number(s.min_order_usd).toFixed(0)}` : ''}</div>
           </div>
           <span className={`badge ${badge(s.status)}`}>{(SHOP_STATUS_LABEL[s.status] as any)[L]}</span>
           <div className="row">

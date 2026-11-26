@@ -86,6 +86,11 @@ export const CONCEPTS: Concept[] = [
     say: ['dekhen', 'dikhen', 'dukhan', 'دخان', 'cigarette', 'cigarettes', 'sigara', 'sigarat', 'سيجارة', 'سجائر', 'tabac', 'tobacco', 'ma3asel', 'معسل'],
     tags: ['tabac', 'tobacco', 'cigarette', 'دخان', 'سجائر', 'سيجارة', 'marlboro', 'مارلبورو', 'cedars', 'سيدرز', 'winston', 'ونستون', 'gitanes', 'معسل', 'ma3sal', 'kent', 'davidoff'],
     food: false },
+  // 122: the water pipe and what goes with it (the pipe, its tobacco, its charcoal, its foil) — people write it many ways
+  { id: 'hookah',
+    say: ['argile', 'arguile', 'argileh', '2argile', 'arjile', 'nargile', 'narguile', 'nargileh', 'narjile', 'shisha', 'chicha', 'hookah', 'أرغيلة', 'أركيلة', 'أرجيلة', 'نرجيلة', 'نارجيلة', 'شيشة'],
+    tags: ['argile', 'arguile', 'argileh', 'nargile', 'narguile', 'hookah', 'shisha', 'أرغيلة', 'أركيلة', 'أرجيلة', 'نرجيلة', 'للأركيلة', 'للأرغيلة', 'معسل', 'ma3sal', 'maassel'],
+    food: false },
   { id: 'beer',
     say: ['beer', 'beers', 'bira', 'birra', 'بيرة', 'بيره', 'biere', 'bière'],
     tags: ['beer', 'bira', 'بيرة', 'biere', 'almaza', 'ألمازة', 'ألمازا', 'heineken', 'هاينكن', 'efes', 'إفس', 'beirut beer', 'بيرة بيروت', 'corona', 'kronenbourg', 'stella'] },

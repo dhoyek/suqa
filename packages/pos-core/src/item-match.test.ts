@@ -44,7 +44,7 @@ test('kinds of item (84): "machroub" finds the drinks by their section, "miyah" 
 test('the kinds of item are the same in the till and in the database (84)', async () => {
   const { readFileSync } = await import('node:fs');
   const { CONCEPTS } = await import('./concepts');
-  const sql = readFileSync(new URL('../../../supabase/schema/84_category_matching.sql', import.meta.url), 'utf8');
+  const sql = ['84_category_matching.sql', '122_hookah_kind.sql'].map(f => readFileSync(new URL(`../../../supabase/schema/${f}`, import.meta.url), 'utf8')).join('\n');
   const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]`;
   for (const c of CONCEPTS) expect(sql.includes(`('${c.id}',\n   ${lit(c.say)},\n   ${lit(c.tags)})`), c.id).toBe(true);
 });
@@ -80,10 +80,22 @@ test('a kind never matches in a category it cannot belong to (97); a name still 
   expect(m('khebez')(foldItem('خبز', 'bread'))).toBe(true);                                        // no category known: as before
 });
 
+test('hookah kind (122): every spelling finds the pipe, its tobacco and its charcoal; not cigarettes, not food', () => {
+  const m = (q: string) => makeMatcher(q)!;
+  for (const q of ['argile', 'arguile', 'nargile', 'shisha', 'أرغيلة', 'أركيلة', 'نرجيلة']) {
+    expect(m(q)(foldItem('أركيلة تفاحتين (راس واحد)', 'Argile 2 apples (1 head)', 'Argile')), q).toBe(true);
+    expect(m(q)(foldItem('معسل فاخر تفاحتين', 'Tobacco Al Fakher 2 apples', 'Argile Tobacco (Maassel)')), q).toBe(true);
+    expect(m(q)(foldItem('يحيى قصدير أركيلة مثقب', 'Yahya Perforated Argile Foil', 'Argile')), q).toBe(true);
+    expect(m(q)(foldItem('راس أرغيلة فخار', 'RAS ARGUILE FAKHAR', 'Tobacco')), q).toBe(true);
+    expect(m(q)(foldItem('مارلبورو أحمر', 'Marlboro Red', 'Tobacco')), q).toBe(false);
+    expect(m(q)(foldItem('بيبسي', 'Pepsi', 'Soft Drinks')), q).toBe(false);
+  }
+});
+
 test('the categories a kind never matches in are the same in the till and in the database (97)', async () => {
   const { readFileSync } = await import('node:fs');
   const { CONCEPTS, notInOf } = await import('./concepts');
-  const sql = readFileSync(new URL('../../../supabase/schema/97_kind_not_in_category.sql', import.meta.url), 'utf8');
+  const sql = ['97_kind_not_in_category.sql', '122_hookah_kind.sql'].map(f => readFileSync(new URL(`../../../supabase/schema/${f}`, import.meta.url), 'utf8')).join('\n');
   const lit = (a: string[]) => `array[${a.map(x => `'${x.replace(/'/g, "''")}'`).join(', ')}]::text[]`;
   for (const c of CONCEPTS) expect(sql.includes(`update suqa.match_concepts set not_in = ${lit(notInOf(c))} where id = '${c.id}';`), c.id).toBe(true);
 });

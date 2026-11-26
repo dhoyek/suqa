@@ -131,8 +131,10 @@ export default function PosApp({ locale: tenantLocale, brand, tenantId }: { loca
       reg.addEventListener('updatefound', () => { const nw = reg.installing; nw?.addEventListener('statechange', watch); });
       setInterval(() => void reg.update(), 30 * 60_000);
     }).catch(() => undefined);
-    let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading) { reloading = true; location.reload(); } });
+    // Reload when a NEW version takes over a page that an older one was serving. On a device's first visit there is no older one:
+    // the freshly installed worker claims the page a moment after it opens, and reloading then is just a second flash of the screen.
+    let reloading = false; let had = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!had) { had = true; return; } if (!reloading) { reloading = true; location.reload(); } });
   }, []);
   const applyUpdate = useCallback(() => { swReg.current?.waiting?.postMessage({ type: 'SKIP_WAITING' }); }, []);
   useEffect(() => {

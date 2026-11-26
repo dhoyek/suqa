@@ -64,13 +64,14 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
   const shelf = (p: Product) => num(index.byId.get(p.id)?.on_hand ?? p.on_hand);
   const cnum = (l: CountLine) => { const n = Number(l.counted); return l.counted.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : null; };
   const [counting, setCounting] = useState(false);
+  const countLock = useRef(false); const countDone = useRef(new Set<number>());     // refs, not state: two fast taps run before the screen redraws, and a count must be written once
   const applyCount = async (m: Msg) => {
-    if (!m.count || m.count.state !== 'open' || counting || !onApplyCount) return;
+    if (!m.count || m.count.state !== 'open' || !onApplyCount || countLock.current || countDone.current.has(m.id)) return;
     const lines = m.count.lines.map(l => ({ id: l.product.id, counted: cnum(l) })).filter((l): l is YorgoCountLine => l.counted != null);
     if (!lines.length) return;
-    setCounting(true); patchCount(m.id, c => ({ ...c, state: 'applied' }));                    // closed first: a second tap cannot write it again
-    try { await onApplyCount(lines); } catch { patchCount(m.id, c => ({ ...c, state: 'open' })); push({ from: 'note', text: pt('yorgoError', locale) }); }
-    setCounting(false);
+    countLock.current = true; countDone.current.add(m.id); setCounting(true); patchCount(m.id, c => ({ ...c, state: 'applied' }));                    // closed first: a second tap cannot write it again
+    try { await onApplyCount(lines); } catch { push({ from: 'note', text: pt('yorgoCountFailed', locale) }); }      // not reopened: part of it may be written; the person checks the Stock screen
+    countLock.current = false; setCounting(false);
   };
   // what became of the last suggestion on screen: Yorgo is told, so a discarded (or already added) one does not come back in the next
   const lastCard = () => [...msgs].reverse().find(x => x.draft)?.draft?.state ?? null;

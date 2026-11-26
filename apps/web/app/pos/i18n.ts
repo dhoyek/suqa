@@ -418,6 +418,7 @@ const T = {
   item: { ar: 'الصنف', en: 'Item' },
   yorgoCount: { ar: 'جردة للمراجعة', en: 'Stock count to check' }, yorgoCountDone: { ar: 'سُجّلت الجردة', en: 'Count saved' }, yorgoCountShelf: { ar: 'بالنظام', en: 'System' }, yorgoCounted: { ar: 'المعدود', en: 'Counted' },
   yorgoCountApply: { ar: 'سجّل الجردة', en: 'Save the count' }, yorgoCountHint: { ar: 'لا يتغيّر المخزون قبل أن تضغط «سجّل الجردة». صحّح أي رقم أو احذف السطر.', en: 'Stock does not change until you tap "Save the count". Fix any number or remove the line.' },
+  yorgoCountFailed: { ar: 'تعذّر تسجيل الجردة كاملة. راجع الكميات في شاشة المخزون قبل إعادة المحاولة.', en: 'The count could not be saved in full. Check the quantities on the Stock screen before trying again.' },
   yorgoCountSkipped: { ar: 'لم تُحتسب', en: 'Not counted' }, yorgoCountUntracked: { ar: 'صنف بلا مخزون متابَع', en: 'stock not tracked' },
   osTitle: { ar: 'شو لازم اطلب؟', en: 'What should I order?' }, osDays: { ar: 'مبيعات آخر (يوم)', en: 'Sales of the last (days)' }, osCover: { ar: 'لتغطية (يوم)', en: 'To cover (days)' }, osGo: { ar: 'احسب', en: 'Work it out' }, osAgain: { ar: 'احسب من جديد', en: 'Again' },
   osHint: { ar: 'يقترح الكميات من المبيعات والموجود على الرف، مجمّعة حسب المورّد. لا يُطلب شيء ولا يُسجَّل شيء من هنا.', en: 'Suggests quantities from sales and what is on the shelf, grouped by supplier. Nothing is ordered or recorded from here.' },

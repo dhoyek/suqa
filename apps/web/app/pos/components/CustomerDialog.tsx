@@ -28,6 +28,9 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
   const [zone, setZone] = useState<{ name?: Record<string, string>; fee_usd?: number; eta_minutes?: number | null; zone_id: string | null } | null>(null);
   const [asking, setAsking] = useState<'…' | 'ok' | 'failed' | null>(null); const [askedKey, setAskedKey] = useState(''); /* the number the request went to: no second message to it for a minute */ const [picker, setPicker] = useState(false);
   const [noZones, setNoZones] = useState(false);
+  // 121: a pin the customer shared on WhatsApp in the last 30 minutes — looked up once for the number typed, and every 5 s for
+  // 10 minutes after "ask for location" (the answer often comes before the order is saved). Online only; a pin already set wins.
+  const [pinWait, setPinWait] = useState(''); const [pinGot, setPinGot] = useState(false);
   // delivery-zone fee from the pin (online only; outside the zones → keep the default/typed fee)
   useEffect(() => {
     if (!coords || !online || ful !== 'delivery') { setZone(null); return; }
@@ -48,7 +51,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
     try {
       const r = await fetch('/api/pos/ask-location', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shop_id: boot.shop.id, phone: phone.trim(), name: name.trim() }) });
       setAsking(r.ok ? 'ok' : 'failed');
-      if (r.ok) { const k = key; setAskedKey(k); setTimeout(() => setAskedKey(v => (v === k ? '' : v)), 60000); }
+      if (r.ok) { const k = key; setAskedKey(k); setTimeout(() => setAskedKey(v => (v === k ? '' : v)), 60000); setPinWait(k); setTimeout(() => setPinWait(v => (v === k ? '' : v)), 10 * 60000); }
     } catch { setAsking('failed'); }
   };
   const isOrder = !!editing || channel !== 'walkin';
@@ -69,6 +72,18 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
     if (replace && isOrder && (a.line1 || a.lat != null)) setFul('delivery');
     if (closeList) setShowList(false); setPicker(false);
   };
+  useEffect(() => {
+    if (!online || ful !== 'delivery' || coords || key.length < 6) return;
+    let on = true;
+    const look = () => sb.rpc('pos_wa_pin', { p_shop: boot.shop.id, p_phone: phone.trim() }).then(({ data }) => {
+      const p = data as { lat?: number; lng?: number; label?: string | null; map_url?: string } | null;
+      if (!on || !p || p.lat == null || p.lng == null) return;
+      setCoords({ lat: p.lat, lng: p.lng }); setMap(p.map_url || mapUrlFor(p.lat, p.lng)); if (p.label) setLine1(v => v || p.label!); setPinGot(true);
+    }, () => null);
+    const first = setTimeout(look, 500);
+    const every = pinWait === key ? setInterval(look, 5000) : null;
+    return () => { on = false; clearTimeout(first); if (every) clearInterval(every); };
+  }, [online, ful, coords, key, pinWait, sb, boot.shop.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const onMapText = (v: string) => { setMap(v); const c = coordsFrom(v); if (c) setCoords(c); };
   const onPin = (p: { lat: number; lng: number }) => { setCoords(p); setMap(mapUrlFor(p.lat, p.lng)); setPickMap(false); };
   const address: CustomerAddress = useMemo(() => ({ ...(line1.trim() ? { line1: line1.trim() } : {}), ...(map.trim() ? { map_url: map.trim() } : {}), ...(coords ? { lat: coords.lat, lng: coords.lng } : {}) }), [line1, map, coords]);
@@ -190,6 +205,7 @@ export default function CustomerDialog({ boot, sb, locale, draft, fee, online, c
                 {asking === 'ok' && askedKey === key && <div className="pill ok" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>✓ {pt('locationAsked', locale)}</div>}
                 {asking === 'failed' && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('sendFailed', locale)}</div>}
               </>}
+              {pinGot && coords && <div className="pill ok pin-got" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>📍 {pt('pinReceived', locale)}</div>}
               {coords && <small className="muted" dir="ltr">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} · <a href={mapUrlFor(coords.lat, coords.lng)} target="_blank" rel="noreferrer">{pt('openMap', locale)}</a></small>}
               <label className="label">{pt('deliveryFee', locale)} ($)</label>
               <input className="input" dir="ltr" inputMode="decimal" value={f} disabled={!!editing?.amountLocked} onChange={e => { feeTouched.current = true; setF(e.target.value); }} />

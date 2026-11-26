@@ -339,7 +339,7 @@ const T = {
   receiptFooter: { ar: 'تذييل الإيصال', en: 'Receipt footer' }, 
   askLocation: { ar: 'اطلب الموقع عبر واتساب', en: 'Ask for location on WhatsApp' }, locationAsked: { ar: 'أُرسلت الرسالة إلى الزبون على واتساب (من رقم السوق). عندما يشارك موقعه يُضاف تلقائياً.', en: 'Sent to the customer on WhatsApp (from the market\'s number). The pin is attached automatically when they share it.' },
   openChat: { ar: 'افتح المحادثة', en: 'Open chat' }, openChatHint: { ar: 'يفتح واتساب على هذا الجهاز مع هذا الزبون', en: 'Opens WhatsApp on this device with this customer' },
-  sendFailed: { ar: 'تعذّر الإرسال', en: 'Could not send' }, outsideZones: { ar: 'خارج مناطق التوصيل', en: 'Outside the delivery zones' }, min: { ar: 'د', en: 'min' },
+  sendFailed: { ar: 'تعذّر الإرسال', en: 'Could not send' }, pinReceived: { ar: 'وصل موقع الزبون من واتساب وأُضيف.', en: 'The customer\'s WhatsApp location arrived and was added.' }, outsideZones: { ar: 'خارج مناطق التوصيل', en: 'Outside the delivery zones' }, min: { ar: 'د', en: 'min' },
   newCustomer: { ar: 'زبون جديد', en: 'New customer' }, balance: { ar: 'الرصيد (دين)', en: 'Balance (debt)' }, 
   customerNotes: { ar: 'ملاحظات عن الزبون', en: 'Customer notes' }, noCustomers: { ar: 'لا زبائن بعد — يُضافون تلقائياً مع كل طلب', en: 'No customers yet — they are added with every order' }, newOrderFor: { ar: 'طلب جديد', en: 'New order' },
   // M10 purchases

@@ -19,7 +19,7 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
   const [tab, setTab] = useState<Tab>('invoices'); const [supQ, setSupQ] = useState('');
   const supMatch = (s: Supplier) => { const n = supQ.trim().toLowerCase(); const d = supQ.replace(/\D/g, ''); return !n || s.name.toLowerCase().includes(n) || (s.contact ?? '').toLowerCase().includes(n) || (!!d && (s.phone_key ?? '').includes(d)); };
   const [suppliers, setSuppliers] = useState<Supplier[]>([]); const [purchases, setPurchases] = useState<Purchase[]>([]); const [rate, setRate] = useState(89500);
-  const [entry, setEntry] = useState<{ kind: 'purchase' | 'return' } | null>(null); const [selSup, setSelSup] = useState<Supplier | null>(null); const [editSup, setEditSup] = useState<Supplier | 'new' | null>(null); const [lastSup, setLastSup] = useState<string | null>(null);
+  const [entry, setEntry] = useState<{ kind: 'purchase' | 'return' } | null>(null); const [selSup, setSelSup] = useState<Supplier | null>(null); const [editSup, setEditSup] = useState<Supplier | 'new' | null>(null); const [lastSup, setLastSup] = useState<string | null>(null); const [newSupName, setNewSupName] = useState('');
   const [openPur, setOpenPur] = useState<Purchase | null>(null); const [lines, setLines] = useState<PurchaseLine[]>([]);
   const canEdit = staff.role !== 'cashier';
   const [initial, setInitial] = useState<{ product: Product; qty: number }[] | null>(null);
@@ -67,16 +67,16 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
         </tbody></table>
       </section>}
 
-      {entry && <PurchaseEntry key={initial ? `r${preset?.n}` : 'e'} boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} initial={initial} onNewSupplier={() => setEditSup('new')} onClose={() => { setEntry(null); setInitial(null); }} onDone={() => { setEntry(null); setInitial(null); reindex(); }} />}
-      {editSup && <SupplierDialog boot={boot} locale={locale} supplier={editSup === 'new' ? null : editSup} onClose={() => setEditSup(null)} onDone={s => { setEditSup(null); setLastSup(s.id); setSuppliers(x => [...x.filter(y => y.id !== s.id), s].sort((a, b) => a.name.localeCompare(b.name))); }} />}
+      {entry && <PurchaseEntry key={initial ? `r${preset?.n}` : 'e'} boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} initial={initial} onNewSupplier={(name?: string) => { setNewSupName(name ?? ''); setEditSup('new'); }} onClose={() => { setEntry(null); setInitial(null); }} onDone={() => { setEntry(null); setInitial(null); reindex(); }} />}
+      {editSup && <SupplierDialog boot={boot} locale={locale} presetName={editSup === 'new' ? newSupName : ''} supplier={editSup === 'new' ? null : editSup} onClose={() => setEditSup(null)} onDone={s => { setEditSup(null); setLastSup(s.id); setSuppliers(x => [...x.filter(y => y.id !== s.id), s].sort((a, b) => a.name.localeCompare(b.name))); }} />}
       {selSup && <SupplierCard boot={boot} locale={locale} supplier={suppliers.find(s => s.id === selSup.id) ?? selSup} staff={staff} rate={rate} canEdit={canEdit} onEdit={() => setEditSup(selSup)} onClose={() => setSelSup(null)} onChanged={() => boot.db.suppliers.orderBy('name').toArray().then(setSuppliers)} />}
       {openPur && <PurchaseDetail boot={boot} locale={locale} purchase={purchases.find(p => p.id === openPur.id) ?? openPur} lines={lines} supplier={supName(openPur.supplier_id)} staff={staff} canEdit={canEdit} onClose={() => setOpenPur(null)} onChanged={() => { boot.db.purchases.orderBy('at').reverse().limit(200).toArray().then(setPurchases); reindex(); }} />}
     </div>
   );
 }
 
-function SupplierDialog({ boot, locale, supplier, onClose, onDone }: { boot: Booted; locale: L; supplier: Supplier | null; onClose: () => void; onDone: (s: Supplier) => void }) {
-  const [name, setName] = useState(supplier?.name ?? ''); const [phone, setPhone] = useState(supplier?.phone ?? ''); const [contact, setContact] = useState(supplier?.contact ?? ''); const [notes, setNotes] = useState(supplier?.notes ?? ''); const [active, setActive] = useState(supplier?.active ?? true);
+function SupplierDialog({ boot, locale, supplier, presetName, onClose, onDone }: { boot: Booted; locale: L; supplier: Supplier | null; presetName?: string; onClose: () => void; onDone: (s: Supplier) => void }) {
+  const [name, setName] = useState(supplier?.name ?? presetName ?? ''); const [phone, setPhone] = useState(supplier?.phone ?? ''); const [contact, setContact] = useState(supplier?.contact ?? ''); const [notes, setNotes] = useState(supplier?.notes ?? ''); const [active, setActive] = useState(supplier?.active ?? true);
   const save = async () => { const s = await upsertSupplier(boot.db, boot.shop.id, { id: supplier?.id, name, phone, contact, notes, active }); boot.engine.poke(); onDone(s); };
   return <Modal open onClose={onClose} title={supplier ? supplier.name : pt('newSupplier', locale)} footer={<><button className="btn ghost" onClick={onClose}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!name.trim()} onClick={save}>{pt('save', locale)}</button></>}>
     <label className="label">{pt('supplier', locale)} *</label><input className="input" value={name} onChange={e => setName(e.target.value)} autoFocus />
@@ -87,7 +87,7 @@ function SupplierDialog({ boot, locale, supplier, onClose, onDone }: { boot: Boo
   </Modal>;
 }
 
-function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: () => void; onClose: () => void; onDone: () => void }) {
+function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: (name?: string) => void; onClose: () => void; onDone: () => void }) {
   const [supplier, setSupplier] = useState<Supplier | null>(suppliers.length === 1 ? suppliers[0] : null);
   useEffect(() => { if (preferId) { const s = suppliers.find(x => x.id === preferId); if (s) setSupplier(s); } }, [preferId, suppliers]); // a supplier just created from ＋ becomes the selected one
   const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [discPct, setDiscPct] = useState(false); const [note, setNote] = useState(''); const [nextNo, setNextNo] = useState('');
@@ -164,11 +164,11 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
           <button type="button" className="btn" disabled={photo.busy} onClick={() => fileRef.current?.click()}>{photo.busy ? `⏳ ${pt('photoInvReading', locale)}` : `📷✨ ${pt('photoInv', locale)}`}</button>
           <small className="muted">{pt('photoInvHint', locale)}</small>
           {photo.msg && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{photo.msg}</div>}
-          {photo.supplier && !supplier && <div className="pill warn" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('photoInvSupplier', locale)}: <strong>{photo.supplier}</strong> — {pt('photoInvPickSupplier', locale)}</div>}
+          {photo.supplier && !supplier && <div className="pill warn" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('photoInvSupplier', locale)}: <strong>{photo.supplier}</strong> — {pt('photoInvPickSupplier', locale)} <button type="button" className="btn sm pur-newsup" style={{ marginInlineStart: 6 }} onClick={() => onNewSupplier(photo.supplier)}>＋ {pt('photoInvCreateSupplier', locale)}</button></div>}
         </div>}
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: 2, minWidth: 200 }}><label className="label">{pt('supplier', locale)} *</label>
-            <div className="row" style={{ gap: 6 }}><select className="input" value={supplier?.id ?? ''} onChange={e => setSupplier(suppliers.find(s => s.id === e.target.value) ?? null)} style={{ flex: 1 }}><option value="">{pt('pickSupplier', locale)}</option>{suppliers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="btn" onClick={onNewSupplier}>＋</button></div></div>
+            <div className="row" style={{ gap: 6 }}><select className="input" value={supplier?.id ?? ''} onChange={e => setSupplier(suppliers.find(s => s.id === e.target.value) ?? null)} style={{ flex: 1 }}><option value="">{pt('pickSupplier', locale)}</option>{suppliers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="btn" onClick={() => onNewSupplier()}>＋</button></div></div>
           <div style={{ minWidth: 120 }}><label className="label">{pt('invoiceNo', locale)}</label><input className="input" value={invNo} onChange={e => setInvNo(e.target.value)} /></div>
           <div><label className="label">{pt('invoiceDate', locale)}</label><input className="input" type="date" dir="ltr" value={invDate} onChange={e => setInvDate(e.target.value)} /></div>
           <div><label className="label">{pt('currency', locale)}</label><div className="seg"><button className={currency === 'usd' ? 'active' : ''} onClick={() => setCurrency('usd')}>$</button><button className={currency === 'lbp' ? 'active' : ''} onClick={() => setCurrency('lbp')}>ل.ل.</button></div></div>

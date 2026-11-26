@@ -353,7 +353,7 @@ const T = {
   photoInvNothing: { ar: 'لم تُقرأ أصناف في الصورة. جرّب صورة أوضح.', en: 'No item lines could be read. Try a clearer photo.' }, photoInvTooBig: { ar: 'الصورة كبيرة جداً.', en: 'The photo is too large.' },
   photoInvRate: { ar: 'طلبات كثيرة، انتظر دقيقة.', en: 'Too many requests, wait a minute.' }, photoInvCap: { ar: 'بلغ يورغو حدّه لهذا الشهر.', en: 'Yorgo reached its limit for this month.' },
   photoInvOff: { ar: 'غير متاح الآن.', en: 'Not available right now.' }, photoInvFailed: { ar: 'تعذّرت قراءة الفاتورة. حاول مرة أخرى.', en: 'The invoice could not be read. Try again.' },
-  photoInvSupplier: { ar: 'المورّد على الفاتورة', en: 'Supplier on the invoice' }, photoInvPickSupplier: { ar: 'اختره من القائمة أو أضفه بـ ＋.', en: 'pick it from the list or add it with ＋.' },
+  photoInvSupplier: { ar: 'المورّد على الفاتورة', en: 'Supplier on the invoice' }, photoInvPickSupplier: { ar: 'غير موجود في قائمتك. اختره من القائمة أو', en: 'not in your list. Pick it from the list or' }, photoInvCreateSupplier: { ar: 'أضفه كمورّد جديد', en: 'add it as a new supplier' },
   photoInvLeft: { ar: 'أسطر لم يُعرف صنفها', en: 'Lines with no matching item' }, photoInvLeftHint: { ar: 'اضغط «اختر الصنف» ثم اختره من البحث، أو ✕ لتجاهل السطر.', en: 'Tap "pick the item" and choose it from the search, or ✕ to skip the line.' },
   photoInvPick: { ar: 'اختر الصنف', en: 'Pick the item' }, photoInvTotal: { ar: 'إجمالي الفاتورة في الصورة', en: 'Total on the photo' }, photoInvRows: { ar: 'إجمالي الأسطر هنا', en: 'total of the rows here' },
   photoInvPrinted: { ar: 'الاسم كما في الفاتورة', en: 'The name as printed on the invoice' },

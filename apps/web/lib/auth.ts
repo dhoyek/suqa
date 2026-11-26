@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from './supabase-server';
-import type { Shop } from '@suqa/shared';
+import { SHOP_PUBLIC_COLS, type Shop } from '@suqa/shared';
 
 export type SessionUser = { id: string; email: string | null };
 
@@ -28,14 +28,14 @@ export const getMyShops = cache(async (): Promise<(Shop & { role: 'owner' | 'sta
   if (!user) return [];
   // the two lookups go out together (each is a round trip to the database)
   const [{ data }, { data: tm }] = await Promise.all([
-    sb.from('shop_members').select('role, active, shop:shops(*)').eq('user_id', user.id),
+    sb.from('shop_members').select(`role, active, shop:shops(${SHOP_PUBLIC_COLS})`).eq('user_id', user.id),      // the public card: a shop's private settings are read by its till only (124)
     sb.from('tenant_members').select('tenant_id, role').eq('user_id', user.id).eq('role', 'admin'),
   ]);
   const mine = ((data as any[]) ?? []).filter(r => r.shop && r.active !== false).map(r => ({ ...(r.shop as Shop), role: r.role as 'owner' | 'staff' }));
   // association admins can open every shop's dashboard (as owner); RLS already lets them read/write tenant data
   {
-    const lists = await Promise.all(((tm as { tenant_id: string }[]) ?? []).map(t => sb.from('shops').select('*').eq('tenant_id', t.tenant_id)));
-    for (const { data: all } of lists) for (const s of (all as Shop[]) ?? []) if (!mine.some(m => m.id === s.id)) mine.push({ ...s, role: 'owner' });
+    const lists = await Promise.all(((tm as { tenant_id: string }[]) ?? []).map(t => sb.from('shops').select(SHOP_PUBLIC_COLS).eq('tenant_id', t.tenant_id)));
+    for (const { data: all } of lists) for (const s of (all as unknown as Shop[]) ?? []) if (!mine.some(m => m.id === s.id)) mine.push({ ...s, role: 'owner' });
   }
   return mine.sort((a, b) => a.sort_order - b.sort_order);
 });

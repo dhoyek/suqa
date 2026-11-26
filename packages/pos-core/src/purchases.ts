@@ -20,7 +20,8 @@ export async function upsertSupplier(db: PosDb, shopId: string, input: { id?: st
 }
 
 export interface PurchaseDraftLine { product: Product; qty: number; unit_cost: number; new_price_usd?: number | null; new_price_lbp?: number | null; expiry?: string | null;
-  /** this line's discount: an amount in the invoice currency, or a percent of the line when discount_pct is set */ discount?: number | null; discount_pct?: number | null; note?: string | null }
+  /** this line's discount: an amount in the invoice currency, or a percent of the line when discount_pct is set */ discount?: number | null; discount_pct?: number | null; note?: string | null;
+  /** screen only: the item's name as printed on the supplier's invoice, when the row came from a photo (never stored) */ photo_name?: string | null }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 /** One line: what the supplier's price gives (gross), its own discount (never more than the line), and what is paid for it (net). */

@@ -675,3 +675,15 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .notice.unread { background: #eef6ff; border-color: #b6d4fe; }
 .notice-main { min-width: 0; }
 .notice-time { font-size: 12px; white-space: nowrap; }
+
+/* purchase invoice from a photo; price check */
+.pur-photo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.pur-photo small { flex: 1; min-width: 180px; }
+.pur-photo .pill { flex-basis: 100%; }
+.pur-printed { font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }
+.pur-left { margin-top: 10px; padding: 10px; border: 1px solid #f0c36d; background: #fff8e6; border-radius: 10px; display: grid; gap: 6px; }
+.pur-left-row { display: flex; gap: 6px; align-items: center; }
+.pur-left-row.active { outline: 2px solid var(--brand-primary); border-radius: 8px; }
+.pur-left-row .btn { min-height: 36px; padding: 4px 10px; white-space: nowrap; }
+.pur-rose { font-size: 11px; color: #b45309; white-space: nowrap; }
+.pur-keep { font-size: 11px; padding: 2px 8px; margin-top: 2px; white-space: nowrap; }

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getTenant } from '@/lib/tenant';
 import { supabaseServer } from '@/lib/supabase-server';
 import { ui } from '@/lib/ui-text';
-import { pointFromEwkb, t as tr, type Category, type Shop } from '@suqa/shared';
+import { SHOP_PUBLIC_COLS, pointFromEwkb, t as tr, type Category, type Shop } from '@suqa/shared';
 import ShopEditor from './ShopEditor';
 
 export const dynamic = 'force-dynamic';
@@ -14,14 +14,21 @@ export default async function AdminShop({ params }: { params: Promise<{ id: stri
   const L = tenant.default_locale;
   const isNew = id === 'new';
   const [{ data: shop }, { data: cats }, { data: zones }, { data: served }, { data: people }] = await Promise.all([
-    isNew ? Promise.resolve({ data: null }) : sb.from('shops').select('*').eq('id', id).eq('tenant_id', tenant.id).maybeSingle(),
+    isNew ? Promise.resolve({ data: null }) : sb.from('shops').select(SHOP_PUBLIC_COLS).eq('id', id).eq('tenant_id', tenant.id).maybeSingle(),
     sb.from('categories').select('id,name').eq('tenant_id', tenant.id).order('sort_order'),
     sb.from('delivery_zones').select('id,name,fee_usd').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
     isNew ? Promise.resolve({ data: [] }) : sb.from('shop_delivery_zones').select('zone_id,fee_usd').eq('shop_id', id),
     isNew ? Promise.resolve({ data: [] }) : sb.rpc('tenant_people', { p_tenant: tenant.id }),
   ]);
   if (!isNew && !shop) notFound();
-  const s = shop as Shop | null;
+  // the shop's commission is the association's own figure: read through a function that checks the caller (124); before 124 the column itself
+  let commission: number | null = null;
+  if (!isNew && shop) {
+    const c = await sb.rpc('admin_commission', { p_tenant: tenant.id, p_shop: id });
+    if (!c.error) { const v = (c.data as { shop?: number | string | null } | null)?.shop; commission = v == null ? null : Number(v); }
+    else { const d = await sb.from('shops').select('commission_rate').eq('id', id).maybeSingle(); const v = (d.data as { commission_rate?: number | string | null } | null)?.commission_rate; commission = v == null ? null : Number(v); }
+  }
+  const s = shop ? ({ ...(shop as unknown as Shop), commission_rate: commission }) : null;
   const center = pointFromEwkb((tenant as any).center) ?? { lat: 34.2553, lng: 35.6581 };
   const loc = s ? (pointFromEwkb((s as any).location) ?? center) : center;
   const members = ((people as any[]) ?? []).filter(p => p.shop_id === id).map(p => ({ user_id: p.user_id, full_name: p.full_name, email: p.email, role: p.shop_role }));

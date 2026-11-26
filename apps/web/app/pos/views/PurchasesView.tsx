@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { compressImage } from '@/lib/upload';
 import { adjustSupplierBalance, commitPurchase, currentShift, fmtLbp, fmtPhone, fmtUsd, num, paySupplier, purchaseLineAmounts, purchaseTotals, roundLbp, supplierStatement, text, upsertSupplier, mergeSuppliers, deleteSupplier, supplierHasHistory, usdToLbp, voidPurchase, type CatalogIndex, type Currency, type Product, type Purchase, type PurchaseDraftLine, type PurchaseLine, type Rate, type Staff, type Supplier, type SupplierPayment } from '@suqa/pos-core';
 import { MergeDialog } from './CustomersView';
 import { pt, type L, type Key } from '../i18n';
@@ -92,10 +93,45 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
   const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [discPct, setDiscPct] = useState(false); const [note, setNote] = useState(''); const [nextNo, setNextNo] = useState('');
   const [rows, setRows] = useState<PurchaseDraftLine[]>(() => (initial ?? []).map(r => ({ product: r.product, qty: r.qty, unit_cost: num(r.product.cost_cents) / 100 || 0 }))); const [q, setQ] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [members, setMembers] = useState<Staff[]>([]); const [gate, setGate] = useState(false);
   useEffect(() => { boot.db.staff.toArray().then(setMembers); }, [boot]);
+  // 📷✨ a photo of the supplier's invoice → rows. The model reads the paper; the till matches each line to the shop's own items
+  // HERE (barcode first, then the same search as the box above). A line it cannot match waits in "not matched" for the person
+  // to pick its item. Nothing is posted until "Receive & post"; every filled row shows the name as printed, to check.
+  type PhotoLine = { name: string; barcode: string; qty: number; unit_cost: number; discount: number | null; discount_pct: number | null; total: number | null };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<{ busy: boolean; msg: string | null; supplier: string; total: number | null; left: PhotoLine[]; pending: PhotoLine | null }>({ busy: false, msg: null, supplier: '', total: null, left: [], pending: null });
+  const rowOf = (p: Product, l: PhotoLine): PurchaseDraftLine => ({ product: p, qty: l.qty, unit_cost: l.unit_cost, discount: l.discount_pct != null ? null : l.discount, discount_pct: l.discount_pct, photo_name: l.name });
+  const readPhoto = async (file: File | undefined) => {
+    if (!file || photo.busy) return;
+    setPhoto(v => ({ ...v, busy: true, msg: null }));
+    try {
+      const blob = await compressImage(file, 2000, 0.85);
+      const form = new FormData(); form.set('shop_id', boot.shop.id); form.set('image', new File([blob], 'invoice.jpg', { type: 'image/jpeg' }));
+      const res = await fetch('/api/pos/purchase-photo', { method: 'POST', body: form });
+      const j = await res.json().catch(() => ({})) as { status?: string; reason?: string; error?: string; invoice?: { supplier: string; invoice_no: string; date: string; currency: Currency | null; discount: number | null; total: number | null; lines: PhotoLine[] } };
+      if (j.status !== 'ok' || !j.invoice) {
+        const why = j.reason === 'nothing' ? 'photoInvNothing' : j.reason === 'too_big' ? 'photoInvTooBig' : j.reason === 'rate' ? 'photoInvRate' : j.reason === 'cap' ? 'photoInvCap' : j.reason === 'off' || j.error === 'forbidden' ? 'photoInvOff' : 'photoInvFailed';
+        setPhoto(v => ({ ...v, busy: false, msg: pt(why as Key, locale) })); return;
+      }
+      const inv = j.invoice; const taken = new Set(rows.map(r => r.product.id)); const fresh: PurchaseDraftLine[] = []; const left: PhotoLine[] = [];
+      for (const l of inv.lines) {
+        const p = (l.barcode ? index.scan(l.barcode) : null) ?? index.search(l.name, 1)[0] ?? null;
+        if (p && p.is_active !== false && !taken.has(p.id)) { taken.add(p.id); fresh.push(rowOf(p, l)); } else left.push(l);
+      }
+      if (inv.currency) setCurrency(inv.currency);
+      setRows(rs => [...rs, ...fresh]);
+      if (inv.invoice_no && !invNo.trim()) setInvNo(inv.invoice_no);
+      if (inv.date) setInvDate(inv.date);
+      if (inv.discount && !discount) { setDiscPct(false); setDiscount(String(inv.discount)); }
+      if (!supplier && inv.supplier) { const n = inv.supplier.toLowerCase(); const hit = suppliers.filter(x => x.active).find(x => { const m = x.name.toLowerCase().trim(); return m.length >= 3 && (n.includes(m) || m.includes(n)); }); if (hit) setSupplier(hit); }
+      setPhoto({ busy: false, msg: null, supplier: inv.supplier, total: inv.total, left, pending: null });
+    } catch { setPhoto(v => ({ ...v, busy: false, msg: pt('photoInvFailed', locale) })); }
+  };
   // the reference this invoice will get when it is posted (the server confirms it)
   useEffect(() => { boot.db.purchases.filter(p => p.kind === kind).count().then(n => setNextNo(`${kind === 'return' ? 'PR' : 'P'}-${String(n + 1).padStart(5, '0')}`)); }, [boot, kind]);
   const results = q.trim() ? index.search(q, 12) : [];
   const add = (p: Product) => {
+    // an invoice line waiting for its item: the picked item takes that line's quantity, price and discount
+    if (photo.pending && !rows.some(r => r.product.id === p.id)) { const l = photo.pending; setRows(rs => [...rs, rowOf(p, l)]); setPhoto(v => ({ ...v, pending: null, left: v.left.filter(x => x !== l) })); setQ(''); return; }
     setRows(rs => { const i = rs.findIndex(r => r.product.id === p.id); if (i >= 0) { const c = rs.slice(); c[i] = { ...c[i], qty: c[i].qty + 1 }; return c; }
       const cost = currency === 'lbp' ? Math.round((num(p.cost_cents) / 100) * rate) : num(p.cost_cents) / 100; return [...rs, { product: p, qty: 1, unit_cost: cost || 0 }]; });
     setQ('');
@@ -123,6 +159,13 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
             <div className="tot"><span>{pt('total', locale)}</span><span>{fmtC(t.total)}{currency === 'lbp' && <small className="muted"> {fmtUsd(t.total_cents)}</small>}</span></div>
           </div>
           <button className="btn primary big" style={{ width: 'auto', minWidth: 200 }} disabled={!supplier || !rows.length || busy} onClick={() => (staff.role === 'cashier' ? setGate(true) : submit(null))}>{pt('receiveStock', locale)}</button></>}>
+        {kind === 'purchase' && (staff.role === 'owner' || staff.role === 'stock') && <div className="pur-photo">
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; void readPhoto(f); }} />
+          <button type="button" className="btn" disabled={photo.busy} onClick={() => fileRef.current?.click()}>{photo.busy ? `⏳ ${pt('photoInvReading', locale)}` : `📷✨ ${pt('photoInv', locale)}`}</button>
+          <small className="muted">{pt('photoInvHint', locale)}</small>
+          {photo.msg && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{photo.msg}</div>}
+          {photo.supplier && !supplier && <div className="pill warn" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('photoInvSupplier', locale)}: <strong>{photo.supplier}</strong> — {pt('photoInvPickSupplier', locale)}</div>}
+        </div>}
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: 2, minWidth: 200 }}><label className="label">{pt('supplier', locale)} *</label>
             <div className="row" style={{ gap: 6 }}><select className="input" value={supplier?.id ?? ''} onChange={e => setSupplier(suppliers.find(s => s.id === e.target.value) ?? null)} style={{ flex: 1 }}><option value="">{pt('pickSupplier', locale)}</option>{suppliers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className="btn" onClick={onNewSupplier}>＋</button></div></div>
@@ -138,9 +181,14 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
         <div className="pur-scroll"><table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
           <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('discount', locale)}</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('expiry', locale)}</th>}{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
           {rows.map((r, i) => {
-            const am = purchaseLineAmounts(r); const netUnit = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? netUnit / rate : netUnit; const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
+            const am = purchaseLineAmounts(r); const netUnit = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? netUnit / rate : netUnit;
+              // price check: this cost is above the item's last cost → the price that keeps the margin the item had (rounded up to 5 cents); a tap fills it
+              const lastCost = num(r.product.cost_cents) / 100; const oldPrice = num(r.product.price_usd); const rose = kind === 'purchase' && lastCost > 0 && costUsd > lastCost * 1.01;
+              const keep = rose && r.product.price_currency !== 'lbp' && oldPrice > lastCost ? Math.ceil((costUsd / (lastCost / oldPrice)) * 20 - 1e-9) / 20 : null;
+              const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
             return <tr key={r.product.id}>
               <td>{text(r.product.name, locale)}<div className="muted" style={{ fontSize: 11 }}>{pt('onHand', locale)} {num(r.product.on_hand)} · {pt('lastCost', locale)} {fmtUsd(num(r.product.cost_cents))}</div>
+                {r.photo_name && <div className="muted pur-printed" title={pt('photoInvPrinted', locale)}>📷 {r.photo_name}</div>}
                 <input className="input pur-note" placeholder={pt('note', locale)} value={r.note ?? ''} onChange={e => upd(i, { note: e.target.value })} /></td>
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 68 }} /></td>
               <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 86 }} /></td>
@@ -148,12 +196,25 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
                 <button type="button" className="btn" title={pt('discount', locale)} onClick={() => upd(i, r.discount_pct != null ? { discount_pct: null, discount: null } : { discount_pct: 0, discount: null })}>{r.discount_pct != null ? '%' : sym}</button></div></td>
               <td className="num">{fmtC(am.net)}{am.discount > 0 && <div className="muted" style={{ fontSize: 11, textDecoration: 'line-through' }}>{fmtC(am.gross)}</div>}</td>
               {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 128 }} title={pt('expiry', locale)} /></td>}
-              {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 80 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}</td>}
+              {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 80 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}
+                {rose && <div className="pur-rose" title={pt('costRoseHint', locale)}>↑ {pt('costRose', locale)} {fmtUsd(Math.round(lastCost * 100))} → {fmtUsd(Math.round(costUsd * 100))}</div>}
+                {keep != null && keep > oldPrice && r.new_price_usd !== keep && <button type="button" className="chip pur-keep" onClick={() => upd(i, { new_price_usd: keep })}>{pt('keepMargin', locale)} {fmtUsd(Math.round(keep * 100))}</button>}</td>}
               <td><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></td>
             </tr>;
           })}
           {!rows.length && <tr><td colSpan={8} className="muted">{pt('noLines', locale)}</td></tr>}
         </tbody></table></div>
+        {photo.left.length > 0 && <div className="pur-left">
+          <strong>{pt('photoInvLeft', locale)} ({photo.left.length})</strong> <small className="muted">{pt('photoInvLeftHint', locale)}</small>
+          {photo.left.map((l, i) => <div key={i} className={`pur-left-row ${photo.pending === l ? 'active' : ''}`}>
+            <span style={{ flex: 1, minWidth: 0 }}>{l.name}<small className="muted"> · {l.qty} × {fmtC(l.unit_cost)}{l.discount_pct != null ? ` · −${l.discount_pct}%` : l.discount ? ` · −${fmtC(l.discount)}` : ''}</small></span>
+            <button type="button" className="btn" onClick={() => { setPhoto(v => ({ ...v, pending: l })); setQ(l.name.split(' ').slice(0, 3).join(' ')); }}>{pt('photoInvPick', locale)}</button>
+            <button type="button" className="btn ghost" title="✕" onClick={() => setPhoto(v => ({ ...v, left: v.left.filter(x => x !== l), pending: v.pending === l ? null : v.pending }))}>✕</button>
+          </div>)}
+        </div>}
+        {photo.total != null && rows.length > 0 && (() => { const same = Math.abs(photo.total - t.total) <= Math.max(0.01, photo.total * 0.002); return (
+          <div className={`pill ${same && !photo.left.length ? 'ok' : 'warn'} pur-check`} style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal', marginTop: 8 }}>
+            {same && !photo.left.length ? '✓' : '⚠'} {pt('photoInvTotal', locale)}: <strong>{fmtC(photo.total)}</strong> · {pt('photoInvRows', locale)}: <strong>{fmtC(t.total)}</strong></div>); })()}
         <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div><label className="label">{pt('invoiceDiscount', locale)}</label><div className="pur-disc" style={{ width: 150 }}><input className="input" dir="ltr" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)} /><button type="button" className="btn" onClick={() => setDiscPct(v => !v)}>{discPct ? '%' : sym}</button></div></div>
           <div style={{ flex: 1, minWidth: 160 }}><label className="label">{pt('invoiceNote', locale)}</label><input className="input" value={note} onChange={e => setNote(e.target.value)} /></div>

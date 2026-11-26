@@ -23,8 +23,8 @@ begin
   assert ok, 'no write grant';
   reset role;
   set local role authenticated;
-  perform s.* from suqa.shops s limit 1;                                          -- signed-in accounts: unchanged
-  perform commission_rate from suqa.tenants limit 1;
+  perform id, slug, name, opening_hours from suqa.shops limit 1;                  -- signed-in accounts: the public card (their private read was closed by 124; see staff_columns.sql)
+  perform id, brand_name from suqa.tenants limit 1;
   reset role;
 end $$;
 rollback;

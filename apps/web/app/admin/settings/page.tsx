@@ -11,8 +11,12 @@ export const dynamic = 'force-dynamic';
 export default async function AdminSettings() {
   const base = await getTenant();
   // the commission is not part of what visitors read of the association (114): the signed-in admin reads it here
-  const { data: own } = await (await supabaseServer()).from('tenants').select('commission_rate').eq('id', base.id).maybeSingle();
-  const tenant = { ...base, commission_rate: Number((own as { commission_rate?: number | string } | null)?.commission_rate ?? 0) };
+  const sb = await supabaseServer();
+  let rate = 0;
+  const c = await sb.rpc('admin_commission', { p_tenant: base.id, p_shop: null });        // 124: through a function that checks the caller; before 124 the column itself
+  if (!c.error) rate = Number((c.data as { tenant?: number | string | null } | null)?.tenant ?? 0);
+  else { const { data: own } = await sb.from('tenants').select('commission_rate').eq('id', base.id).maybeSingle(); rate = Number((own as { commission_rate?: number | string } | null)?.commission_rate ?? 0); }
+  const tenant = { ...base, commission_rate: rate };
   const role = await getTenantRole(tenant.id);
   const L = tenant.default_locale;
   const keys = ['settings', 'brandName', 'fxRate', 'displayCurrencyLabel', 'defaultCommission', 'supportPhone', 'whatsapp', 'primaryColor', 'accentColor', 'save', 'saved', 'notAllowed', 'multiShopCart', 'deliveryMode', 'perShopDelivery', 'courierDelivery', 'courierFee', 'couriersEnabled', 'legalOperator', 'legalEmail', 'legalSection', 'waTestSection', 'waTestPhone', 'waTestSend', 'waTestSent', 'maxOpenOrders', 'notifyStages'] as const;

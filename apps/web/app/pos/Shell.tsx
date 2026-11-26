@@ -7,6 +7,7 @@ import type { Booted } from './lib/boot';
 import { fmtTime } from './lib/boot';
 import AccountMenu from './components/AccountMenu';
 import YorgoPanel, { type YorgoCartLine } from './components/YorgoPanel';
+import { recordStockMove } from '@suqa/pos-core';
 import { initApproval, refreshApproval } from './lib/approval';
 import { roleOf, viewsFor } from './lib/perm';
 import { newOrderChime } from './lib/chime';
@@ -144,7 +145,7 @@ export default function Shell(props: {
         {/* الدين: the signed-in person's own PIN again each time it is opened (a short grace after a correct one) */}
         {view === 'debts' && (debtOk ? <DebtsView {...props} onCustomer={openCustomer} /> : <PinGate locale={locale} me={staff} title={pt('debtsNav', locale)} onOk={() => { debtUntil.current = Date.now() + DEBT_GRACE_MS; setDebtOk(true); }} onCancel={() => setView('sell')} />)}
         {view === 'items' && <ItemsView {...props} />}
-        {view === 'stock' && <StockView {...props} focus={stockFocus} onReorder={allowed.includes('purchases') ? (supplierId, items) => { setPurPreset(p => ({ supplierId, items, n: (p?.n ?? 0) + 1 })); setView('purchases'); } : undefined} />}
+        {view === 'stock' && <StockView {...props} online={online} focus={stockFocus} onReorder={allowed.includes('purchases') ? (supplierId, items) => { setPurPreset(p => ({ supplierId, items, n: (p?.n ?? 0) + 1 })); setView('purchases'); } : undefined} />}
         {view === 'purchases' && <PurchasesView {...props} preset={purPreset} />}
         {view === 'shift' && <ShiftView {...props} />}
         {view === 'reports' && <ReportsView {...props} />}
@@ -152,6 +153,11 @@ export default function Shell(props: {
         {view === 'settings' && <SettingsView {...props} />}
       </main>
       {canYorgo && <YorgoPanel open={yorgoOpen} onClose={() => setYorgoOpen(false)} shopId={boot.shop.id} locale={locale} index={props.index} online={online} sells={yorgoSells} sb={props.sb as never} canReview={['owner', 'stock', 'setup'].includes(roleOf(staff) ?? '')}
+        onApplyCount={['owner', 'stock'].includes(roleOf(staff) ?? '') ? async lines => {
+          // the till's own stock count, one move per item, from the shelf figure of THIS moment (a count is absolute: writing it twice changes nothing)
+          for (const l of lines) { const p = await boot.db.products.get(l.id); if (p && p.track_stock) await recordStockMove(boot.db, p, { kind: 'count', qty: l.counted, note: 'Yorgo', user_id: staff.user_id }); }
+          props.reindex(); boot.engine.poke();
+        } : undefined}
         onAddToCart={(lines, conversation, order) => { setYorgoCart(c => ({ lines, conversation, order, n: (c?.n ?? 0) + 1 })); setYorgoOpen(false); setView('sell'); }} />}
     </div>
   );

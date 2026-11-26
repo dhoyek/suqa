@@ -8,6 +8,8 @@ import { useScanner } from '../lib/useScanner';
 import Modal, { NumPad } from '../components/Modal';
 import OwnerPin from '../components/OwnerPin';
 import ItemEditor from '../components/ItemEditor';
+import OrderSuggest from '../components/OrderSuggest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 type Mode = 'receive' | 'count' | 'damaged' | 'adjust';
 
@@ -16,7 +18,7 @@ type Mode = 'receive' | 'count' | 'damaged' | 'adjust';
  * WhatsApp-shareable reorder list; negative-stock review; movement history per item. Everything offline (stock.move ops).
  * Cashiers need an owner PIN for adjustments (server enforces); stock role and owner work freely.
  */
-export default function StockView({ boot, locale, index, tick, staff, reindex, focus, onReorder }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; focus?: { id: string; n: number } | null; onReorder?: (supplierId: string | null, items: { id: string; qty: number }[]) => void }) {
+export default function StockView({ boot, locale, index, tick, staff, reindex, focus, onReorder, sb, online }: { sb: SupabaseClient; online?: boolean; boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; focus?: { id: string; n: number } | null; onReorder?: (supplierId: string | null, items: { id: string; qty: number }[]) => void }) {
   const [mode, setMode] = useState<Mode>('receive');
   const [q, setQ] = useState(''); const [sel, setSel] = useState<Product | null>(null);
   const [members, setMembers] = useState<Staff[]>([]);
@@ -73,6 +75,7 @@ export default function StockView({ boot, locale, index, tick, staff, reindex, f
           {soon.map(p => { const past = (p.next_expiry ?? '') < new Date().toISOString().slice(0, 10); return <tr key={p.id}><td>{text(p.name, locale)}</td><td className={`num ${past ? 'bad' : ''}`} dir="ltr">{p.next_expiry}{past ? ` · ${pt('expired', locale)}` : ''}</td><td className="muted num">{num(p.on_hand)}{p.unit ? ' ' + p.unit : ''}</td></tr>; })}
         </tbody></table>
       </section>}
+      {(staff.role === 'owner' || staff.role === 'stock') && <OrderSuggest boot={boot} sb={sb} locale={locale} online={online !== false} suppliers={suppliers} onReorder={onReorder} />}
       <section className="card">
         <div className="row spread" style={{ alignItems: 'center' }}><strong>{pt('lowStockList', locale)} ({low.length})</strong>{!!low.length && <button className="btn" onClick={shareReorder}>💬 {pt('shareReorder', locale)}</button>}</div>
         {!low.length && <p className="muted" style={{ margin: 0 }}>—</p>}

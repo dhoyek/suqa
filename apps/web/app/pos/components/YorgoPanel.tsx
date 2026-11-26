@@ -9,11 +9,15 @@ import { MicIcon, useVoiceRecorder } from '@/components/useVoiceRecorder';
 // The assistant never sells: a draft carries item ids and quantities only — names, prices and stock shown here come from the catalog on
 // this device, and the sale itself goes through the cart and the pay dialog like any other. Needs internet; the till works without it.
 export type YorgoCartLine = { product: Product; quantity: number; note?: string };
-type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string }[]; choices?: { phrase: string; quantity: number; options: string[]; note?: string }[]; not_found?: string[] };
+type DraftIn = { kind?: string; add?: boolean; lines?: { product_id: string; quantity: number; note?: string; counted?: number }[]; choices?: { phrase: string; quantity: number; options: string[]; note?: string }[]; not_found?: string[] };
 type Line = { key: string; product: Product; quantity: number; note?: string };
 type Choice = { key: string; phrase: string; quantity: number; options: Product[]; picked?: number; note?: string };
 type Draft = { lines: Line[]; choices: Choice[]; notFound: string[]; state: 'open' | 'added' | 'discarded' };
-type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; mid?: number | null; fb?: 1 | -1 };
+/** a stock count said or typed: shown next to what the shelf holds; the till's own stock count is written only on confirm */
+type CountLine = { key: string; product: Product; counted: string };
+type Count = { lines: CountLine[]; notFound: string[]; state: 'open' | 'applied' | 'discarded' };
+export type YorgoCountLine = { id: string; counted: number };
+type Msg = { id: number; from: 'me' | 'yorgo' | 'note'; text: string; draft?: Draft; count?: Count; mid?: number | null; fb?: 1 | -1 };
 type Sb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: unknown }>; from: (t: string) => any };   // eslint-disable-line @typescript-eslint/no-explicit-any
 type Suggestion = { id: string; phrase: string; picks: number; product_id: string };
 type Miss = { id: string; phrase: string; times: number };
@@ -21,10 +25,12 @@ type Reply = { status: 'ok'; conversation_id: string; reply: string; drafts: Dra
 
 const price = (p: Product, locale: L) => (p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100)));
 
-export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, sb, canReview, onAddToCart }: {
+export default function YorgoPanel({ open, onClose, shopId, locale, index, online, sells, sb, canReview, onAddToCart, onApplyCount }: {
   open: boolean; onClose: () => void; shopId: string; locale: L; index: CatalogIndex; online: boolean; sells: boolean; sb: Sb; canReview: boolean;
   /** asOrder: the lines become a delivery / pickup order (the customer box opens next) instead of a sale at the counter */
   onAddToCart: (lines: YorgoCartLine[], conversationId: string | null, asOrder: boolean) => void;
+  /** owner / stock keeper: write the confirmed count through the till's own stock count (works offline once the card is on screen) */
+  onApplyCount?: (lines: YorgoCountLine[]) => Promise<void>;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState(''); const [busy, setBusy] = useState(false);
@@ -47,6 +53,25 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
     return lines.length || choices.length || notFound.length ? { lines, choices, notFound, state: 'open' } : undefined;
   };
 
+  const toCount = (d: DraftIn): Count | undefined => {
+    const lines: CountLine[] = []; const notFound = [...(d.not_found ?? [])];
+    (d.lines ?? []).forEach((l, i) => { const p = sellable(l.product_id); const n = Number(l.counted);
+      if (p && p.track_stock && Number.isFinite(n) && n >= 0) lines.push({ key: `k${i}`, product: p, counted: String(n) });
+      else if (p) notFound.push(`${text(p.name, locale)} (${pt('yorgoCountUntracked', locale)})`); });
+    return lines.length || notFound.length ? { lines, notFound, state: 'open' } : undefined;
+  };
+  const patchCount = (id: number, f: (c: Count) => Count) => setMsgs(ms => ms.map(m => (m.id === id && m.count ? { ...m, count: f(m.count) } : m)));
+  const shelf = (p: Product) => num(index.byId.get(p.id)?.on_hand ?? p.on_hand);
+  const cnum = (l: CountLine) => { const n = Number(l.counted); return l.counted.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : null; };
+  const [counting, setCounting] = useState(false);
+  const applyCount = async (m: Msg) => {
+    if (!m.count || m.count.state !== 'open' || counting || !onApplyCount) return;
+    const lines = m.count.lines.map(l => ({ id: l.product.id, counted: cnum(l) })).filter((l): l is YorgoCountLine => l.counted != null);
+    if (!lines.length) return;
+    setCounting(true); patchCount(m.id, c => ({ ...c, state: 'applied' }));                    // closed first: a second tap cannot write it again
+    try { await onApplyCount(lines); } catch { patchCount(m.id, c => ({ ...c, state: 'open' })); push({ from: 'note', text: pt('yorgoError', locale) }); }
+    setCounting(false);
+  };
   // what became of the last suggestion on screen: Yorgo is told, so a discarded (or already added) one does not come back in the next
   const lastCard = () => [...msgs].reverse().find(x => x.draft)?.draft?.state ?? null;
   const send = async () => {
@@ -89,6 +114,9 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
         if (cleared || drafts.length) setMsgs(ms => ms.map(x => (x.draft?.state === 'open' ? { ...x, draft: { ...x.draft, state: 'discarded' } } : x)));
         if (r.reply) push({ from: 'yorgo', text: r.reply, mid: r.message_id ?? null });
         drafts.forEach(draft => push({ from: 'yorgo', text: '', draft }));
+        const counts = (r.drafts ?? []).filter(d => d.kind === 'draft_count').map(toCount).filter((c): c is Count => !!c);
+        if (counts.length) setMsgs(ms => ms.map(x => (x.count?.state === 'open' ? { ...x, count: { ...x.count, state: 'discarded' } } : x)));      // a new count replaces the one still open
+        counts.forEach(count => push({ from: 'yorgo', text: '', count }));
         if (adds.length) setMsgs(ms => {
           const open = [...ms].reverse().find(x => x.draft?.state === 'open');
           let d: Draft = open?.draft ?? { lines: [], choices: [], notFound: [], state: 'open' };
@@ -99,7 +127,7 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
           });
           return [...ms.filter(x => x !== open), { id: ++seq.current, from: 'yorgo' as const, text: '', draft: d }];
         });
-        if (!r.reply && !drafts.length && !adds.length && !cleared) push({ from: 'note', text: pt('yorgoError', locale) });
+        if (!r.reply && !drafts.length && !adds.length && !cleared && !counts.length) push({ from: 'note', text: pt('yorgoError', locale) });
       } else if (r.status === 'paused') {
         push({ from: 'note', text: pt(r.reason === 'rate' ? 'yorgoRate' : r.reason === 'off' ? 'yorgoOff' : 'yorgoCap', locale) });
       } else {
@@ -214,6 +242,26 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
               <button className="btn primary" disabled={!m.draft.lines.length} title={pt('yorgoToOrderHint', locale)} onClick={() => accept(m, true)}>📥 {pt('yorgoToOrder', locale)} ({m.draft.lines.length})</button>
             </div>}
             {m.draft.state === 'open' && !!m.draft.choices.length && <small className="muted">{pt('yorgoPickFirst', locale)}</small>}
+          </div>
+        ) : m.count ? (
+          <div key={m.id} className={`yorgo-draft yorgo-count ${m.count.state === 'applied' ? 'added' : m.count.state}`}>
+            <div className="yorgo-draft-head">📦 {pt('yorgoCount', locale)}{m.count.state === 'applied' && <span className="pill ok">✓ {pt('yorgoCountDone', locale)}</span>}{m.count.state === 'discarded' && <span className="pill">{pt('yorgoDiscarded', locale)}</span>}</div>
+            {!!m.count.lines.length && <div className="yorgo-count-head muted"><span>{pt('yorgoCountShelf', locale)}</span><span>{pt('yorgoCounted', locale)}</span><span>±</span></div>}
+            {m.count.lines.map(l => { const n = cnum(l); const now = shelf(l.product); const diff = n == null ? null : Math.round((n - now) * 1000) / 1000; return (
+              <div key={l.key} className="yorgo-line yorgo-count-line">
+                <div className="yorgo-line-name">{text(l.product.name, locale)}{l.product.unit && <small className="muted"> · {l.product.unit}</small>}</div>
+                <span className="num muted">{m.count!.state === 'applied' ? '' : now}</span>
+                {m.count!.state === 'open' ? <input className="input yorgo-count-in" inputMode="decimal" value={l.counted} onChange={e => patchCount(m.id, c => ({ ...c, lines: c.lines.map(x => (x.key === l.key ? { ...x, counted: e.target.value.replace(/[^\d.]/g, '').slice(0, 8) } : x)) }))} /> : <strong className="num">{l.counted}</strong>}
+                <span className={`num yorgo-count-diff ${diff != null && diff < 0 ? 'bad' : ''}`}>{m.count!.state === 'applied' || diff == null ? '' : diff === 0 ? '=' : `${diff > 0 ? '+' : ''}${diff}`}</span>
+                {m.count!.state === 'open' && <button className="btn icon" onClick={() => patchCount(m.id, c => ({ ...c, lines: c.lines.filter(x => x.key !== l.key) }))}>✕</button>}
+              </div>); })}
+            {!!m.count.notFound.length && <div className="yorgo-missing">⚠ {pt('yorgoCountSkipped', locale)}: <span dir="auto">{m.count.notFound.join('، ')}</span></div>}
+            {m.count.state === 'open' && <div className="yorgo-draft-actions">
+              <button className="btn ghost" onClick={() => patchCount(m.id, c => ({ ...c, state: 'discarded' }))}>{pt('yorgoDiscard', locale)}</button>
+              <span style={{ flex: 1 }} />
+              <button className="btn primary" disabled={counting || !onApplyCount || !m.count.lines.some(l => cnum(l) != null)} onClick={() => applyCount(m)}>✓ {pt('yorgoCountApply', locale)} ({m.count.lines.filter(l => cnum(l) != null).length})</button>
+            </div>}
+            {m.count.state === 'open' && <small className="muted">{pt('yorgoCountHint', locale)}</small>}
           </div>
         ) : (
           <div key={m.id} className={`yorgo-msg ${m.from}`} dir="auto">{m.text}{m.from === 'yorgo' && !!m.mid && <span className="yorgo-thumbs" dir="ltr">

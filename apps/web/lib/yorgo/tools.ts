@@ -254,7 +254,73 @@ const stockWatch: Tool = {
   },
 };
 
-const ALL: Tool[] = [matchItems, draftOrder, draftBasket, clearDraft, stockOf, stockWatch];
+/** "Shou lazem otlob?" — what to buy, per supplier, from what sold and what is left (125). Owner and stock keeper. */
+const orderSuggest: Tool = {
+  name: 'order_suggest',
+  description: 'What the shop should order from its suppliers ("shou lazem otlob", "shou bade jib", "what should I order", "شو لازم اطلب", optionally "from <supplier>"). '
+    + 'For each counted item: what sold in the last `days` (default 14), scaled to `cover_days` (default 7), never under the item\'s minimum, less what is free on the shelf. '
+    + 'Returns the suppliers with their item count and first lines (name — suggested quantity, sold, on the shelf). Quantities only: no cost, no prices. Nothing is ordered. '
+    + 'The full list, with editing and "send to the supplier on WhatsApp", is on the Stock screen under "What should I order?".',
+  input_schema: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      days: { type: 'integer', minimum: 1, maximum: 90, description: 'Sales window in days (default 14).' },
+      cover_days: { type: 'integer', minimum: 1, maximum: 60, description: 'Days of sales to cover (default 7).' },
+      supplier: { type: 'string', maxLength: 60, description: 'Only this supplier (part of its name), when the person named one.' },
+    },
+  },
+  modes: ['seller'], roles: ['owner', 'stock'],
+  async run(input, ctx) {
+    if (!ctx.shopId) throw new Error('no_shop');
+    const int = (v: unknown, d: number, max: number) => (Number.isFinite(Number(v)) ? Math.min(max, Math.max(1, Math.round(Number(v)))) : d);
+    const { data, error } = await ctx.sb.rpc('pos_order_suggest', { p_shop: ctx.shopId, p_days: int(input.days, 14, 90), p_cover: int(input.cover_days, 7, 60) });
+    if (error) { if (/PGRST202|schema cache|pos_order_suggest/i.test(error.message)) return { unavailable: 'The order suggestions are not switched on for this shop yet.' }; throw new Error(error.message); }
+    type R = { name: Record<string, string> | null; unit: string | null; sold: number; free: number; suggest: number; supplier: string | null };
+    const d = (data ?? {}) as { days?: number; cover?: number; rows?: R[] };
+    const want = str(input.supplier, 60).toLowerCase();
+    const groups = new Map<string, R[]>();
+    for (const r of d.rows ?? []) { const k = r.supplier ?? ''; if (want && !k.toLowerCase().includes(want)) continue; groups.set(k, [...(groups.get(k) ?? []), r]); }
+    const TOP = want ? 40 : 8; const MAX_SUPPLIERS = 12;
+    const list = [...groups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || b[1].length - a[1].length);
+    return { sales_window_days: d.days ?? null, cover_days: d.cover ?? null, items_total: list.reduce((n, g) => n + g[1].length, 0), suppliers_total: list.length,
+      ...(want && !list.length ? { no_supplier_or_nothing_to_order_for: want } : {}),
+      suppliers: list.slice(0, MAX_SUPPLIERS).map(([name, rows]) => ({ supplier: name || '(no supplier set on these items)', items: rows.length, shown: Math.min(TOP, rows.length),
+        lines: rows.slice(0, TOP).map(r => ({ name_ar: r.name?.ar ?? null, name_en: r.name?.en ?? null, order: n3(r.suggest), unit: r.unit, sold: n3(r.sold), on_shelf: n3(r.free) })) })),
+      full_list_on: 'Stock screen → What should I order?' };
+  },
+};
+
+// A stock count said or typed ("3ed: pepsi 12, labne 5"). Like an order draft, it is a proposal: ids and counted numbers only. The till
+// shows it with what the shelf holds now and the difference, and writes its usual stock count only when the person confirms.
+export type CountDraft = { lines: { product_id: string; counted: number }[]; not_found: string[] };
+const draftCount: Tool = {
+  name: 'draft_count',
+  description: 'Prepare a STOCK COUNT for the staff member to check and confirm: they counted the shelf and say or type what they found ("3ed: pepsi 12, labne 5", "jaradet: ...", "count: ...", "عدّيت ..."). '
+    + 'Call it ONCE per message, after match_items, with every counted item: a sure match goes in "lines" with the number they counted (0 is a valid count); '
+    + 'an item with no sure single match, or not found, goes in "not_found" with their own words (never guess between two sizes or flavours — a wrong count changes the stock). '
+    + 'Use only product_id values returned by match_items. This changes nothing: the till shows the count next to what the shelf holds and the person confirms.',
+  input_schema: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      lines: { type: 'array', maxItems: 40, items: { type: 'object', additionalProperties: false, required: ['product_id', 'counted'], properties: {
+        product_id: { type: 'string' }, counted: { type: 'number', minimum: 0, description: 'What they counted on the shelf, as said.' } } } },
+      not_found: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
+    },
+  },
+  modes: ['seller'], roles: ['owner', 'stock'],
+  async run(input) {
+    const seen = new Set<string>();
+    const lines = (Array.isArray(input.lines) ? input.lines : []).slice(0, 40).map(l => l as Record<string, unknown>)
+      .filter(l => typeof l.product_id === 'string' && UUID.test(l.product_id) && Number.isFinite(Number(l.counted)) && Number(l.counted) >= 0 && Number(l.counted) <= 100000)
+      .map(l => ({ product_id: (l.product_id as string).toLowerCase(), counted: Math.round(Number(l.counted) * 1000) / 1000 }))
+      .filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));        // one count per item: a repeat would be ambiguous
+    const not_found = (Array.isArray(input.not_found) ? input.not_found : []).map(n => str(n, 80)).filter(Boolean).slice(0, 20);
+    if (!lines.length && !not_found.length) throw new Error('empty_count');
+    return { ok: true, shown_to_staff: true, nothing_changed_until_they_confirm: true, lines: lines.length, not_found: not_found.length, draft: { lines, not_found } satisfies CountDraft };
+  },
+};
+
+const ALL: Tool[] = [matchItems, draftOrder, draftBasket, clearDraft, stockOf, stockWatch, orderSuggest, draftCount];
 
 /** The tools this person may use. The model is never shown a tool outside this list, and a call to one is refused. */
 export function toolsFor(mode: Mode, role: Role | null): Tool[] {

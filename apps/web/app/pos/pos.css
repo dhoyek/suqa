@@ -687,3 +687,14 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .pur-left-row .btn { min-height: 36px; padding: 4px 10px; white-space: nowrap; }
 .pur-rose { font-size: 11px; color: #b45309; white-space: nowrap; }
 .pur-keep { font-size: 11px; padding: 2px 8px; margin-top: 2px; white-space: nowrap; }
+
+/* Yorgo: stock count card; Stock: what to order */
+.yorgo-count-head { display: grid; grid-template-columns: 1fr 52px 76px 52px 34px; gap: 6px; font-size: 12px; text-align: center; }
+.yorgo-count-head span:first-child { grid-column: 2; }
+.yorgo-count-line { display: grid; grid-template-columns: 1fr 52px 76px 52px 34px; gap: 6px; align-items: center; }
+.yorgo-count-line .num { text-align: center; }
+.yorgo-count-in { min-height: 36px; padding: 4px 6px; text-align: center; width: 100%; }
+.yorgo-count-line .btn.icon { min-height: 32px; width: 32px; padding: 0; }
+.order-suggest .os-num { width: 64px; min-height: 34px; padding: 4px 6px; text-align: center; display: inline-block; }
+.order-suggest .os-scroll { overflow-x: auto; }
+.order-suggest .os-table td, .order-suggest .os-table th { padding: 6px 6px; }

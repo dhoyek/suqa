@@ -128,14 +128,14 @@ function DriverSheet({ boot, locale, staff, d, rule, rate, from, to, orders, pay
     `${pt('drvEarned', locale)}: ${fmtUsd(d.earned_cents)}`,
     `${pt('drvCash', locale)}: ${cashText(d.cash_usd_cents ?? 0, d.cash_lbp ?? 0, locale)}`,
     `${pt('drvOwed', locale)}: ${fmtUsd(d.owed_cents)}`,
-    `${pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)}: ${fmtUsd(Math.abs(net))}`,
+    `${pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)}: ${fmtUsd(Math.abs(net))} ≈ ${fmtLbp(roundLbp(usdToLbp(Math.abs(net), rate), step), locale)}`,
   ].join('\n');
   const state = (o: DrvOrder) => o.status === 'out_for_delivery' ? (o.handed_at ? pt('drvHandedNotPaid', locale) : pt('drvOnRoad', locale)) : o.due_cents > 0 ? pt('unpaid', locale) : pt('customerPaid', locale);
   return (
     <Modal open onClose={onClose} wide title={`🛵 ${d.name}`}
       footer={<><button className="btn" onClick={() => doPrint(driverStatementHtml(d.name, { from, to, deliveries: d.deliveries, value_cents: d.value_cents, earned_cents: d.earned_cents, holding_cents: cash + d.holding_cents, owed_cents: d.owed_cents }, done.map(o => ({ at: o.at, number: o.number ?? '', total_cents: o.total_cents, pay_cents: o.pay_cents, settled: !!o.paid_at })), boot.shop, locale, loadPrintSettings()))}>🖨 {pt('drvStatement', locale)}</button>
         <a className="btn" href={`https://wa.me/${waDigits(d.phone)}?text=${encodeURIComponent(statementText())}`} target="_blank" rel="noreferrer">💬 WhatsApp</a>
-        <span style={{ flex: 1 }} /><button className="btn primary" disabled={!chosen.length && !chosenCash.length} onClick={() => setSettle(true)}>💵 {pt('settleSelected', locale)} · {chosenCash.length ? `${pt(chosenNet >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)} ${fmtUsd(Math.abs(chosenNet))}` : fmtUsd(chosenCents)}</button></>}>
+        <span style={{ flex: 1 }} /><button className="btn primary" disabled={!chosen.length && !chosenCash.length} onClick={() => setSettle(true)}>💵 {pt('settleSelected', locale)} · {chosenCash.length ? `${pt(chosenNet >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)} ${fmtUsd(Math.abs(chosenNet))} ≈ ${fmtLbp(roundLbp(usdToLbp(Math.abs(chosenNet), rate), step), locale)}` : `${fmtUsd(chosenCents)} ≈ ${fmtLbp(roundLbp(usdToLbp(chosenCents, rate), step), locale)}`}</button></>}>
       <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="muted" dir="ltr">{fmtPhone(d.phone)}</span><a className="btn ghost" style={{ minHeight: 0, padding: '2px 8px' }} href={`tel:+${waDigits(d.phone)}`}>📞</a>
         <span className="pill">{rule}</span>
@@ -243,7 +243,8 @@ function SettleDialog({ boot, locale, staff, d, orders, cents, cashOrders, cashC
           {netUsd !== 0 && side(netUsd, fmtUsd(Math.abs(netUsd)))}
           {netLbp !== 0 && side(netLbp, fmtLbp(Math.abs(netLbp), locale))}
           {netUsd === 0 && netLbp === 0 && <div className="row spread"><span>{pt('drvNet', locale)}</span><strong>{fmtUsd(0)}</strong></div>}
-          {(cashLbp !== 0 || cur === 'lbp') && <small className="muted">{pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)} ≈ {fmtUsd(Math.abs(net))}</small>}
+          {/* the whole settlement as ONE figure, in each currency: he can hand it all in dollars or all in lira */}
+          <div className="row spread" style={{ borderTop: '1px dashed var(--line)', paddingTop: 4 }}><small className="muted">{pt(net >= 0 ? 'drvNet' : 'drvNetWeOwe', locale)} ≈</small><strong dir="ltr" style={{ fontSize: 13 }}>{fmtUsd(Math.abs(net))} · {fmtLbp(roundLbp(usdToLbp(Math.abs(net), rate), step), locale)}</strong></div>
         </div>
         <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="seg"><button className={drawer ? 'active' : ''} disabled={!shift} onClick={() => setDrawer(true)}>{pt(net >= 0 ? 'settleToDrawer' : 'settleFromDrawer', locale)}</button><button className={!drawer ? 'active' : ''} onClick={() => setDrawer(false)}>{pt('settleOutside', locale)}</button></div>

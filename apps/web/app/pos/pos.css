@@ -698,3 +698,6 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .order-suggest .os-num { width: 64px; min-height: 34px; padding: 4px 6px; text-align: center; display: inline-block; }
 .order-suggest .os-scroll { overflow-x: auto; }
 .order-suggest .os-table td, .order-suggest .os-table th { padding: 6px 6px; }
+
+.pur-price { width: 132px; }
+.pur-price .btn { min-width: 44px; padding: 4px 6px; }

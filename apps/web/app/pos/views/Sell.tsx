@@ -223,6 +223,8 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
     await editOrder(boot.db, o, adds, undefined, o.notify_customer !== false);
     await dropDraft(boot.db, draft.id); boot.engine.poke(); await startNew(); flash(`${pt('addedToOrder', locale)} ${o.number ?? o.local_number ?? ''}`);
   };
+  // a counter cart that is really an order: the same items become a delivery / pickup order — the customer box opens, then "save to orders"
+  const toOrders = () => { if (!live.length || isOrder) return; setDraft(d => ({ ...d, channel: 'whatsapp', fulfillment: d.fulfillment ?? 'delivery' })); setDialog({ k: 'customer' }); };
   const saveToOrders = async () => {
     if (!live.length || !isOrder) return;
     if (!draft.customer_phone) { setDialog({ k: 'customer' }); return; }
@@ -315,7 +317,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             <button className={`btn ${isOrder ? 'primary' : ''} icon`} title={pt('customer', locale)} onClick={() => setDialog({ k: 'customer' })}>👤{draft.customer_phone || isOrder ? '✓' : ''}</button>
             {!!live.length && (isOrder
               ? <button className="btn primary" onClick={saveToOrders}>📥 {pt('saveToOrders', locale)}</button>
-              : <button className="btn primary" onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)}</button>)}
+              : <><button className="btn icon" title={pt('toOrdersHint', locale)} aria-label={pt('toOrders', locale)} onClick={toOrders}>📥</button><button className="btn primary" onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)}</button></>)}
             {!!live.length && <button className="btn icon" title={pt('cart', locale)} onClick={() => setCartOpen(true)}>▴</button>}
           </span>
         </div>}
@@ -372,6 +374,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           <button className="btn" disabled={!live.length && !parked.length} onClick={() => setDialog({ k: 'park' })}>{pt('park', locale)}{!!parked.length && <span className="badge">{parked.length}</span>} <kbd>F9</kbd></button>
           <button className="btn danger" disabled={!live.length} onClick={() => setDialog({ k: 'cancel' })}>✕</button>
           {isOrder && <button className="btn primary pay" disabled={!live.length} onClick={saveToOrders}>📥 {pt('saveToOrders', locale)} · {fmtUsd(grand)} <span style={{ fontSize: 12, opacity: .85, fontWeight: 400 }}>({pt('payAtHandover', locale)})</span></button>}
+          {!isOrder && <button className="btn" disabled={!live.length} title={pt('toOrdersHint', locale)} onClick={toOrders}>📥 {pt('toOrders', locale)}</button>}
           <button className={`btn ${isOrder ? '' : 'primary'} pay`} disabled={!live.length} onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)} {fmtUsd(grand)} <kbd>F8</kbd></button>
         </div>
       </aside>

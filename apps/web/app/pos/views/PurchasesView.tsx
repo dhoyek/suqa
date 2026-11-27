@@ -8,6 +8,8 @@ import type { Booted } from '../lib/boot';
 import { fmtTime } from '../lib/boot';
 import { useScanner } from '../lib/useScanner';
 import Modal, { NumPad } from '../components/Modal';
+import NumInput from '../components/NumInput';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import OwnerPin from '../components/OwnerPin';
 import { doPrint, loadPrintSettings, supplierStatementHtml } from '../lib/print';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -15,7 +17,7 @@ import { useConfirm } from '@/components/ConfirmProvider';
 type Tab = 'invoices' | 'suppliers';
 
 /** المشتريات — suppliers with balances, purchase invoices (stock in at cost), returns, payments, statements. */
-export default function PurchasesView({ boot, locale, index, tick, staff, reindex, preset }: { boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; /** from Stock → reorder list: open a purchase invoice for this supplier with these items */ preset?: { supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null }) {
+export default function PurchasesView({ boot, sb, locale, index, tick, staff, reindex, preset }: { sb: SupabaseClient; boot: Booted; locale: L; index: CatalogIndex; tick: number; staff: Staff; reindex: () => void; /** from Stock → reorder list: open a purchase invoice for this supplier with these items */ preset?: { supplierId: string | null; items: { id: string; qty: number }[]; n: number } | null }) {
   const [tab, setTab] = useState<Tab>('invoices'); const [supQ, setSupQ] = useState('');
   const supMatch = (s: Supplier) => { const n = supQ.trim().toLowerCase(); const d = supQ.replace(/\D/g, ''); return !n || s.name.toLowerCase().includes(n) || (s.contact ?? '').toLowerCase().includes(n) || (!!d && (s.phone_key ?? '').includes(d)); };
   const [suppliers, setSuppliers] = useState<Supplier[]>([]); const [purchases, setPurchases] = useState<Purchase[]>([]); const [rate, setRate] = useState(89500);
@@ -67,10 +69,10 @@ export default function PurchasesView({ boot, locale, index, tick, staff, reinde
         </tbody></table>
       </section>}
 
-      {entry && <PurchaseEntry key={initial ? `r${preset?.n}` : 'e'} boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} initial={initial} onNewSupplier={(name?: string) => { setNewSupName(name ?? ''); setEditSup('new'); }} onClose={() => { setEntry(null); setInitial(null); }} onDone={() => { setEntry(null); setInitial(null); reindex(); }} />}
+      {entry && <PurchaseEntry key={initial ? `r${preset?.n}` : 'e'} sb={sb} boot={boot} locale={locale} index={index} staff={staff} suppliers={suppliers} rate={rate} kind={entry.kind} preferId={lastSup} initial={initial} onNewSupplier={(name?: string) => { setNewSupName(name ?? ''); setEditSup('new'); }} onClose={() => { setEntry(null); setInitial(null); }} onDone={() => { setEntry(null); setInitial(null); reindex(); }} />}
       {editSup && <SupplierDialog boot={boot} locale={locale} presetName={editSup === 'new' ? newSupName : ''} supplier={editSup === 'new' ? null : editSup} onClose={() => setEditSup(null)} onDone={s => { setEditSup(null); setLastSup(s.id); setSuppliers(x => [...x.filter(y => y.id !== s.id), s].sort((a, b) => a.name.localeCompare(b.name))); }} />}
       {selSup && <SupplierCard boot={boot} locale={locale} supplier={suppliers.find(s => s.id === selSup.id) ?? selSup} staff={staff} rate={rate} canEdit={canEdit} onEdit={() => setEditSup(selSup)} onClose={() => setSelSup(null)} onChanged={() => boot.db.suppliers.orderBy('name').toArray().then(setSuppliers)} />}
-      {openPur && <PurchaseDetail boot={boot} locale={locale} purchase={purchases.find(p => p.id === openPur.id) ?? openPur} lines={lines} supplier={supName(openPur.supplier_id)} staff={staff} canEdit={canEdit} onClose={() => setOpenPur(null)} onChanged={() => { boot.db.purchases.orderBy('at').reverse().limit(200).toArray().then(setPurchases); reindex(); }} />}
+      {openPur && <PurchaseDetail sb={sb} boot={boot} locale={locale} purchase={purchases.find(p => p.id === openPur.id) ?? openPur} lines={lines} supplier={supName(openPur.supplier_id)} staff={staff} canEdit={canEdit} onClose={() => setOpenPur(null)} onChanged={() => { boot.db.purchases.orderBy('at').reverse().limit(200).toArray().then(setPurchases); reindex(); }} />}
     </div>
   );
 }
@@ -87,7 +89,7 @@ function SupplierDialog({ boot, locale, supplier, presetName, onClose, onDone }:
   </Modal>;
 }
 
-function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: (name?: string) => void; onClose: () => void; onDone: () => void }) {
+function PurchaseEntry({ sb, boot, locale, index, staff, suppliers, rate, kind, preferId, initial, onNewSupplier, onClose, onDone }: { sb: SupabaseClient; initial?: { product: Product; qty: number }[] | null; boot: Booted; locale: L; index: CatalogIndex; staff: Staff; suppliers: Supplier[]; rate: number; kind: 'purchase' | 'return'; preferId: string | null; onNewSupplier: (name?: string) => void; onClose: () => void; onDone: () => void }) {
   const [supplier, setSupplier] = useState<Supplier | null>(suppliers.length === 1 ? suppliers[0] : null);
   useEffect(() => { if (preferId) { const s = suppliers.find(x => x.id === preferId); if (s) setSupplier(s); } }, [preferId, suppliers]); // a supplier just created from ＋ becomes the selected one
   const [currency, setCurrency] = useState<Currency>('usd'); const [invNo, setInvNo] = useState(''); const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10)); const [discount, setDiscount] = useState(''); const [discPct, setDiscPct] = useState(false); const [note, setNote] = useState(''); const [nextNo, setNextNo] = useState('');
@@ -98,6 +100,8 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
   // to pick its item. Nothing is posted until "Receive & post"; every filled row shows the name as printed, to check.
   type PhotoLine = { name: string; barcode: string; qty: number; unit_cost: number; discount: number | null; discount_pct: number | null; total: number | null };
   const fileRef = useRef<HTMLInputElement>(null);
+  // 126: the photo itself is kept with the invoice (private storage, owner and stock keeper only). 'no' = it could not be kept.
+  const [photoPath, setPhotoPath] = useState<string | null>(null); const [photoKept, setPhotoKept] = useState<null | 'yes' | 'no'>(null);
   const [photo, setPhoto] = useState<{ busy: boolean; msg: string | null; supplier: string; total: number | null; left: PhotoLine[]; pending: PhotoLine | null }>({ busy: false, msg: null, supplier: '', total: null, left: [], pending: null });
   const rowOf = (p: Product, l: PhotoLine): PurchaseDraftLine => ({ product: p, qty: l.qty, unit_cost: l.unit_cost, discount: l.discount_pct != null ? null : l.discount, discount_pct: l.discount_pct, photo_name: l.name });
   const readPhoto = async (file: File | undefined) => {
@@ -112,6 +116,8 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
         const why = j.reason === 'nothing' ? 'photoInvNothing' : j.reason === 'too_big' ? 'photoInvTooBig' : j.reason === 'rate' ? 'photoInvRate' : j.reason === 'cap' ? 'photoInvCap' : j.reason === 'off' || j.error === 'forbidden' ? 'photoInvOff' : 'photoInvFailed';
         setPhoto(v => ({ ...v, busy: false, msg: pt(why as Key, locale) })); return;
       }
+      { const path = `${boot.shop.id}/${crypto.randomUUID()}.jpg`;      // kept while the lines are being matched; the invoice carries the path when it is posted
+        void sb.storage.from('invoices').upload(path, blob, { contentType: 'image/jpeg', upsert: false }).then(({ error }) => { if (error) setPhotoKept('no'); else { setPhotoPath(path); setPhotoKept('yes'); } }, () => setPhotoKept('no')); }
       const inv = j.invoice; const taken = new Set(rows.map(r => r.product.id)); const fresh: PurchaseDraftLine[] = []; const left: PhotoLine[] = [];
       for (const l of inv.lines) {
         const p = (l.barcode ? index.scan(l.barcode) : null) ?? index.search(l.name, 1)[0] ?? null;
@@ -141,11 +147,14 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
   const t = useMemo(() => purchaseTotals(rows, currency, rate, discPct ? 0 : Number(discount) || 0, discPct ? Number(discount) || 0 : null), [rows, currency, rate, discount, discPct]);
   const submit = async (approvedBy: string | null) => {
     if (!supplier || !rows.length || busy) return; setBusy(true); setErr(null);
-    try { await commitPurchase(boot.db, { supplier, kind, lines: rows.filter(r => r.qty > 0), currency, rate, discount: discPct ? 0 : Number(discount) || 0, discount_pct: discPct && Number(discount) ? Number(discount) : null, invoice_no: invNo.trim() || null, invoice_date: invDate, note: note.trim() || null, user_id: staff.user_id, approved_by: approvedBy }); boot.engine.poke(); onDone(); }
+    try { await commitPurchase(boot.db, { supplier, kind, lines: rows.filter(r => r.qty > 0), currency, rate, discount: discPct ? 0 : Number(discount) || 0, discount_pct: discPct && Number(discount) ? Number(discount) : null, invoice_no: invNo.trim() || null, invoice_date: invDate, note: note.trim() || null, user_id: staff.user_id, approved_by: approvedBy, photo_path: photoPath }); boot.engine.poke(); onDone(); }
     catch (e) { setErr((e as Error).message); setBusy(false); }
   };
-  const marginPct = Number(boot.shop.default_margin_pct) || 0;
-  const applyMargin = () => setRows(rs => rs.map(r => { const am = purchaseLineAmounts(r); const nu = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? nu / rate : nu; const m = r.product.margin_pct != null && r.product.margin_pct !== '' ? Number(r.product.margin_pct) : marginPct; return costUsd > 0 ? { ...r, new_price_usd: Math.ceil((costUsd / (1 - m / 100)) * 4) / 4 } : r; }));
+  const marginPct = Number(boot.shop.default_margin_pct) || 0; const lbpStep = boot.shop.lbp_rounding_step ?? 5000;
+  // the currency the new selling price of a row is typed in: the item's own until the person switches it ($ ⇄ L.L.)
+  const curOf = (r: PurchaseDraftLine): Currency => r.price_cur ?? (r.product.price_currency === 'lbp' ? 'lbp' : 'usd');
+  const applyMargin = () => setRows(rs => rs.map(r => { const am = purchaseLineAmounts(r); const nu = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? nu / rate : nu; const m = r.product.margin_pct != null && r.product.margin_pct !== '' ? Number(r.product.margin_pct) : marginPct; if (!(costUsd > 0)) return r; const usd = Math.ceil((costUsd / (1 - m / 100)) * 4) / 4;
+    return curOf(r) === 'lbp' ? { ...r, new_price_usd: null, new_price_lbp: roundLbp(usd * rate, lbpStep, 'up') } : { ...r, new_price_lbp: null, new_price_usd: usd }; }));
   const supplierItems = useMemo(() => supplier ? index.byCategory(null, 100000).filter(p => p.supplier_id === supplier.id && !rows.some(r => r.product.id === p.id)).slice(0, 40) : [], [supplier, rows, index]);
   const sym = currency === 'lbp' ? 'ل.ل.' : '$';
   const fmtC = (v: number) => (currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
@@ -163,6 +172,7 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; void readPhoto(f); }} />
           <button type="button" className="btn" disabled={photo.busy} onClick={() => fileRef.current?.click()}>{photo.busy ? `⏳ ${pt('photoInvReading', locale)}` : `📷✨ ${pt('photoInv', locale)}`}</button>
           <small className="muted">{pt('photoInvHint', locale)}</small>
+          {photoKept && <small className={photoKept === 'yes' ? 'muted' : 'bad'}>{photoKept === 'yes' ? `📎 ${pt('photoInvKept', locale)}` : pt('photoInvNotKept', locale)}</small>}
           {photo.msg && <div className="pill bad" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{photo.msg}</div>}
           {photo.supplier && !supplier && <div className="pill warn" style={{ display: 'block', padding: '6px 10px', whiteSpace: 'normal' }}>{pt('photoInvSupplier', locale)}: <strong>{photo.supplier}</strong> — {pt('photoInvPickSupplier', locale)} <button type="button" className="btn sm pur-newsup" style={{ marginInlineStart: 6 }} onClick={() => onNewSupplier(photo.supplier)}>＋ {pt('photoInvCreateSupplier', locale)}</button></div>}
         </div>}
@@ -179,24 +189,27 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
         </div>
         {supplierItems.length > 0 && <div className="chips" style={{ marginTop: 8 }}><span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>{pt('supplierItems', locale)}:</span>{supplierItems.map(p => <button key={p.id} className="chip" onClick={() => add(p)}>＋ {text(p.name, locale)}</button>)}</div>}
         <div className="pur-scroll"><table className="table pur-lines" style={{ marginTop: 10 }}><tbody>
-          <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('discount', locale)}</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('expiry', locale)}</th>}{kind === 'purchase' && <th>{pt('newSellPrice', locale)} ($)</th>}<th></th></tr>
+          <tr><th style={{ textAlign: 'start' }}>{pt('items', locale)}</th><th>{pt('qty', locale)}</th><th>{pt('unitCost', locale)} ({sym})</th><th>{pt('discount', locale)}</th><th>{pt('total', locale)}</th>{kind === 'purchase' && <th>{pt('expiry', locale)}</th>}{kind === 'purchase' && <th>{pt('newSellPrice', locale)}</th>}<th></th></tr>
           {rows.map((r, i) => {
             const am = purchaseLineAmounts(r); const netUnit = r.qty ? am.net / r.qty : r.unit_cost; const costUsd = currency === 'lbp' ? netUnit / rate : netUnit;
               // price check: this cost is above the item's last cost → the price that keeps the margin the item had (rounded up to 5 cents); a tap fills it
               const lastCost = num(r.product.cost_cents) / 100; const oldPrice = num(r.product.price_usd); const rose = kind === 'purchase' && lastCost > 0 && costUsd > lastCost * 1.01;
-              const keep = rose && r.product.price_currency !== 'lbp' && oldPrice > lastCost ? Math.ceil((costUsd / (lastCost / oldPrice)) * 20 - 1e-9) / 20 : null;
-              const price = r.new_price_usd ?? num(r.product.price_usd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
+              const pc = curOf(r); const keep = rose && pc === 'usd' && r.product.price_currency !== 'lbp' && oldPrice > lastCost ? Math.ceil((costUsd / (lastCost / oldPrice)) * 20 - 1e-9) / 20 : null;
+              const itemUsd = r.product.price_currency === 'lbp' ? num(r.product.price_lbp) / rate : num(r.product.price_usd);
+              const price = pc === 'lbp' ? (r.new_price_lbp != null ? r.new_price_lbp / rate : itemUsd) : (r.new_price_usd ?? itemUsd); const margin = costUsd > 0 && price > 0 ? Math.round(((price - costUsd) / price) * 100) : null;
             return <tr key={r.product.id}>
               <td>{text(r.product.name, locale)}<div className="muted" style={{ fontSize: 11 }}>{pt('onHand', locale)} {num(r.product.on_hand)} · {pt('lastCost', locale)} {fmtUsd(num(r.product.cost_cents))}</div>
                 {r.photo_name && <div className="muted pur-printed" title={pt('photoInvPrinted', locale)}>📷 {r.photo_name}</div>}
                 <input className="input pur-note" placeholder={pt('note', locale)} value={r.note ?? ''} onChange={e => upd(i, { note: e.target.value })} /></td>
-              <td><input className="input" dir="ltr" inputMode="decimal" value={r.qty} onChange={e => upd(i, { qty: Number(e.target.value) || 0 })} style={{ width: 68 }} /></td>
-              <td><input className="input" dir="ltr" inputMode="decimal" value={r.unit_cost} onChange={e => upd(i, { unit_cost: Number(e.target.value) || 0 })} style={{ width: 86 }} /></td>
-              <td><div className="pur-disc"><input className="input" dir="ltr" inputMode="decimal" value={r.discount_pct != null ? r.discount_pct : (r.discount ?? '')} onChange={e => { const v = e.target.value === '' ? null : Number(e.target.value) || 0; upd(i, r.discount_pct != null ? { discount_pct: v ?? 0 } : { discount: v }); }} />
+              <td><NumInput value={r.qty} onChange={n => upd(i, { qty: n ?? 0 })} style={{ width: 68 }} /></td>
+              <td><NumInput value={r.unit_cost} onChange={n => upd(i, { unit_cost: n ?? 0 })} style={{ width: 86 }} /></td>
+              <td><div className="pur-disc"><NumInput key={r.discount_pct != null ? 'p' : 'a'} empty value={r.discount_pct != null ? (r.discount_pct || null) : (r.discount ?? null)} onChange={v => upd(i, r.discount_pct != null ? { discount_pct: v ?? 0 } : { discount: v })} />
                 <button type="button" className="btn" title={pt('discount', locale)} onClick={() => upd(i, r.discount_pct != null ? { discount_pct: null, discount: null } : { discount_pct: 0, discount: null })}>{r.discount_pct != null ? '%' : sym}</button></div></td>
               <td className="num">{fmtC(am.net)}{am.discount > 0 && <div className="muted" style={{ fontSize: 11, textDecoration: 'line-through' }}>{fmtC(am.gross)}</div>}</td>
               {kind === 'purchase' && <td><input className="input" type="date" dir="ltr" value={r.expiry ?? ''} onChange={e => upd(i, { expiry: e.target.value || null })} style={{ width: 128 }} title={pt('expiry', locale)} /></td>}
-              {kind === 'purchase' && <td><input className="input" dir="ltr" inputMode="decimal" placeholder={String(num(r.product.price_usd))} value={r.new_price_usd ?? ''} onChange={e => upd(i, { new_price_usd: e.target.value === '' ? null : Number(e.target.value) })} style={{ width: 80 }} />{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}
+              {kind === 'purchase' && <td><div className="pur-disc pur-price"><NumInput key={pc} empty value={pc === 'lbp' ? (r.new_price_lbp ?? null) : (r.new_price_usd ?? null)} onChange={n => upd(i, pc === 'lbp' ? { new_price_lbp: n == null ? null : Math.round(n), new_price_usd: null } : { new_price_usd: n, new_price_lbp: null })}
+                  placeholder={pc === (r.product.price_currency === 'lbp' ? 'lbp' : 'usd') ? String(pc === 'lbp' ? num(r.product.price_lbp) : num(r.product.price_usd)) : ''} />
+                <button type="button" className="btn" title={pt('priceCurHint', locale)} onClick={() => upd(i, { price_cur: pc === 'lbp' ? 'usd' : 'lbp', new_price_usd: null, new_price_lbp: null })}>{pc === 'lbp' ? 'ل.ل.' : '$'}</button></div>{margin != null && <div className={`muted ${margin < 0 ? 'bad' : ''}`} style={{ fontSize: 11 }}>{pt('margin', locale)} {margin}%</div>}
                 {rose && <div className="pur-rose" title={pt('costRoseHint', locale)}>↑ {pt('costRose', locale)} {fmtUsd(Math.round(lastCost * 100))} → {fmtUsd(Math.round(costUsd * 100))}</div>}
                 {keep != null && keep > oldPrice && r.new_price_usd !== keep && <button type="button" className="chip pur-keep" onClick={() => upd(i, { new_price_usd: keep })}>{pt('keepMargin', locale)} {fmtUsd(Math.round(keep * 100))}</button>}</td>}
               <td><button className="btn icon" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>✕</button></td>
@@ -227,17 +240,25 @@ function PurchaseEntry({ boot, locale, index, staff, suppliers, rate, kind, pref
   );
 }
 
-function PurchaseDetail({ boot, locale, purchase, lines, supplier, staff, canEdit, onClose, onChanged }: { boot: Booted; locale: L; purchase: Purchase; lines: PurchaseLine[]; supplier: string; staff: Staff; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
+function PurchaseDetail({ sb, boot, locale, purchase, lines, supplier, staff, canEdit, onClose, onChanged }: { sb: SupabaseClient; boot: Booted; locale: L; purchase: Purchase; lines: PurchaseLine[]; supplier: string; staff: Staff; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
   const confirm = useConfirm();
   const doVoid = async () => { if (!(await confirm(pt('voidPurchase', locale) + ` ${purchase.number.replace('~', '')}?`, { danger: true }))) return; await voidPurchase(boot.db, purchase, 'void', staff.user_id, staff.role === 'owner' ? staff.user_id : null); boot.engine.poke(); onChanged(); onClose(); };
   const fmtC = (v: number) => (purchase.currency === 'lbp' ? fmtLbp(Math.round(v), locale) : fmtUsd(Math.round(v * 100)));
-  return <Modal open onClose={onClose} title={`${purchase.number.replace('~', '')} · ${supplier}`} wide footer={<>{canEdit && purchase.status === 'posted' && <button className="btn danger" onClick={doVoid}>{pt('voidPurchase', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
+  // the supplier's paper as photographed: a link that works for a few minutes, made for the shop's owner / stock keeper only
+  const [shot, setShot] = useState<{ url?: string; err?: boolean; busy?: boolean } | null>(null);
+  const canPhoto = !!purchase.photo_path && (staff.role === 'owner' || staff.role === 'stock');
+  const openPhoto = async () => { if (!purchase.photo_path || shot?.busy) return; setShot({ busy: true });
+    const { data, error } = await sb.storage.from('invoices').createSignedUrl(purchase.photo_path, 600).then(r => r, () => ({ data: null, error: true }));
+    setShot(error || !data?.signedUrl ? { err: true } : { url: data.signedUrl }); };
+  return <Modal open onClose={onClose} title={`${purchase.number.replace('~', '')} · ${supplier}`} wide footer={<>{canPhoto && <button className="btn" disabled={shot?.busy} onClick={openPhoto}>📷 {pt('photoInvOpen', locale)}</button>}{canEdit && purchase.status === 'posted' && <button className="btn danger" onClick={doVoid}>{pt('voidPurchase', locale)}</button>}<span style={{ flex: 1 }} /><button className="btn primary" onClick={onClose}>{pt('ok', locale)}</button></>}>
+    {shot?.err && <div className="pill bad" style={{ display: 'block', marginBottom: 6 }}>{pt('photoInvOpenFailed', locale)}</div>}
+    {shot?.url && <Modal open onClose={() => setShot(null)} title={`📷 ${purchase.number.replace('~', '')}`} wide><a href={shot.url} target="_blank" rel="noreferrer"><img src={shot.url} alt="" style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }} /></a></Modal>}
     <div className="pur-ref"><span>{pt('refNo', locale)} <strong dir="ltr">{purchase.number.replace('~', '')}</strong></span>{purchase.invoice_no && <span>{pt('invoiceNo', locale)} <strong dir="ltr">{purchase.invoice_no}</strong></span>}<span>{pt('invoiceDate', locale)} <strong dir="ltr">{purchase.invoice_date}</strong></span></div>
     <div className="muted" style={{ fontSize: 13 }}>{fmtTime(purchase.at, locale)} · {pt(purchase.status === 'void' ? 'voided' : 'posted', locale)}{purchase.note ? ` · ${purchase.note}` : ''}</div>
     <table className="table" style={{ marginTop: 8 }}><tbody>
       {lines.map(l => { const gross = num(l.qty) * num(l.unit_cost); const d = num(l.discount ?? 0); return <tr key={l.id}><td>{text(l.name, locale)}{l.note ? <div className="muted" style={{ fontSize: 12 }}>📝 {l.note}</div> : null}</td><td style={{ textAlign: 'center' }}>{num(l.qty)}</td><td className="num">{fmtC(num(l.unit_cost))}</td>
         <td className="num">{d > 0 ? <span className="muted">− {fmtC(d)}{l.discount_pct != null ? ` (${num(l.discount_pct)}%)` : ''}</span> : ''}</td>
-        <td className="num">{fmtC(gross - d)}</td><td className="muted">{l.new_price_usd != null ? `→ ${fmtUsd(Math.round(num(l.new_price_usd) * 100))}` : ''}</td></tr>; })}
+        <td className="num">{fmtC(gross - d)}</td><td className="muted">{l.new_price_lbp != null ? `→ ${fmtLbp(num(l.new_price_lbp), locale)}` : l.new_price_usd != null ? `→ ${fmtUsd(Math.round(num(l.new_price_usd) * 100))}` : ''}</td></tr>; })}
     </tbody></table>
     {(() => { const gross = lines.reduce((a, l) => a + num(l.qty) * num(l.unit_cost), 0); const allDisc = Math.max(0, gross - num(purchase.total)); return (
       <div className="pur-totals" style={{ marginInlineStart: 'auto', marginTop: 10 }}>

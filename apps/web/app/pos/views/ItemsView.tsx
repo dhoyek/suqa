@@ -33,6 +33,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
   const role = roleOf(staff); const canEdit = can(role, 'items.edit'); const showCost = can(role, 'items.cost'); const tools = can(role, 'items.tools');
   useEffect(() => { boot.db.staff.toArray().then(setMembers); boot.db.conflicts.where('seen').equals(0 as never).toArray().catch(() => []).then(c => setConflicts(c.filter(x => !x.seen))); boot.db.products.filter(p => !p.is_active).toArray().then(setArchived); }, [boot, tick]);
   const list = useMemo(() => (showArchived ? archived.filter(p => !q || text(p.name, locale).includes(q)) : q.trim() ? index.search(q, 200, cat) : index.byCategory(cat, 500)), [q, cat, index, tick, showArchived, archived, locale]);
+  const counts = useMemo(() => { let all = 0, online = 0; for (const p of index.byId.values()) { if (p.is_active === false) continue; all++; if (p.visible_online && p.is_available) online++; } return { all, online }; }, [index, tick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const cats = useMemo(() => [...index.categories.values()].sort((a, b) => a.sort_order - b.sort_order), [index, tick]);
 
   return (
@@ -47,6 +48,7 @@ export default function ItemsView({ boot, sb, locale, index, tick, staff, reinde
         {tools && <button className="btn" onClick={() => setImportOpen(true)}>📥 {locale === 'ar' ? 'استيراد' : 'Import'}</button>}
         <label className="muted" style={{ fontSize: 13 }}><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> {pt('archived', locale)} ({archived.length})</label>
       </div>
+      <div className="muted items-count" style={{ fontSize: 13 }}>📦 {pt('itemsTotal', locale)}: <strong style={{ color: 'var(--ink, inherit)' }}>{counts.all}</strong> · {counts.online} {pt('itemsOnline', locale)}{(q.trim() || cat.size > 0) && !showArchived ? <> · {list.length} {pt('itemsShown', locale)}</> : null}</div>
       {!canEdit && <p className="muted" style={{ margin: 0 }}>{pt('readOnly', locale)}</p>}
       <CategoryChips cats={cats} selected={cat} onChange={setCat} locale={locale} />
       {!!conflicts.length && tools && (

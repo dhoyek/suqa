@@ -19,7 +19,7 @@ export async function upsertSupplier(db: PosDb, shopId: string, input: { id?: st
   return row;
 }
 
-export interface PurchaseDraftLine { product: Product; qty: number; unit_cost: number; new_price_usd?: number | null; new_price_lbp?: number | null; expiry?: string | null;
+export interface PurchaseDraftLine { product: Product; qty: number; unit_cost: number; new_price_usd?: number | null; new_price_lbp?: number | null; /** screen only: the currency the new selling price is being typed in */ price_cur?: Currency; expiry?: string | null;
   /** this line's discount: an amount in the invoice currency, or a percent of the line when discount_pct is set */ discount?: number | null; discount_pct?: number | null; note?: string | null;
   /** screen only: the item's name as printed on the supplier's invoice, when the row came from a photo (never stored) */ photo_name?: string | null }
 
@@ -52,29 +52,30 @@ export function purchaseTotals(lines: PurchaseDraftLine[], currency: Currency, r
 export async function commitPurchase(db: PosDb, input: {
   supplier: Supplier; kind?: 'purchase' | 'return'; lines: PurchaseDraftLine[]; currency: Currency; rate: number; discount?: number; discount_pct?: number | null;
   invoice_no?: string | null; invoice_date?: string; note?: string | null; user_id: string; approved_by?: string | null;
+  /** 126: where the photo of the supplier's paper was kept ("<shop id>/<id>.jpg" in the private invoices bucket) */ photo_path?: string | null;
 }): Promise<Purchase> {
   const kind = input.kind ?? 'purchase'; if (!input.lines.length) throw new Error('no_lines');
   const t = purchaseTotals(input.lines, input.currency, input.rate, input.discount ?? 0, input.discount_pct ?? null);
   const now = new Date().toISOString(); const id = newId();
   const deviceId = (await db.meta.get(META.deviceId))?.value as string | undefined;
   const n = (await db.purchases.filter(p => p.kind === kind).count()) + 1;
-  const purchase: Purchase = { id, shop_id: input.supplier.shop_id, supplier_id: input.supplier.id, number: `${kind === 'return' ? 'PR' : 'P'}-${String(n).padStart(5, '0')}~`, kind, invoice_no: input.invoice_no ?? null, invoice_date: input.invoice_date ?? now.slice(0, 10), currency: input.currency, rate: input.rate, subtotal: t.subtotal, discount: t.discount, discount_pct: input.discount_pct ?? null, total: t.total, total_cents: t.total_cents, note: input.note ?? null, status: 'posted', user_id: input.user_id, approved_by: input.approved_by ?? null, device_id: deviceId ?? null, at: now };
+  const purchase: Purchase = { id, shop_id: input.supplier.shop_id, supplier_id: input.supplier.id, number: `${kind === 'return' ? 'PR' : 'P'}-${String(n).padStart(5, '0')}~`, kind, invoice_no: input.invoice_no ?? null, invoice_date: input.invoice_date ?? now.slice(0, 10), currency: input.currency, rate: input.rate, subtotal: t.subtotal, discount: t.discount, discount_pct: input.discount_pct ?? null, total: t.total, total_cents: t.total_cents, note: input.note ?? null, status: 'posted', user_id: input.user_id, approved_by: input.approved_by ?? null, device_id: deviceId ?? null, at: now, photo_path: kind === 'purchase' ? input.photo_path ?? null : null };
   // unit_cost = the supplier's price; unit_cost_cents / line_total_cents = after the line's own discount (what the item really cost)
   const lines: PurchaseLine[] = input.lines.map((l, i) => { const a = purchaseLineAmounts(l); const netUnit = l.qty ? a.net / l.qty : l.unit_cost;
     return { id: newId(), purchase_id: id, shop_id: purchase.shop_id, product_id: l.product.id, name: l.product.name, qty: l.qty, unit_cost: l.unit_cost, unit_cost_cents: t.unitCents(netUnit), line_total_cents: t.unitCents(a.net),
-      new_price_usd: l.new_price_usd ?? null, new_price_lbp: l.new_price_lbp ?? null, expiry: l.expiry ?? null, discount: a.discount || null, discount_pct: a.discount && l.discount_pct != null ? l.discount_pct : null, note: l.note?.trim() || null, sort: i + 1 }; });
+      new_price_usd: l.new_price_lbp != null ? null : l.new_price_usd ?? null, new_price_lbp: l.new_price_lbp ?? null, expiry: l.expiry ?? null, discount: a.discount || null, discount_pct: a.discount && l.discount_pct != null ? l.discount_pct : null, note: l.note?.trim() || null, sort: i + 1 }; });
   await db.transaction('rw', [db.purchases, db.purchaseLines, db.products, db.stockMoves, db.suppliers, db.outbox], async () => {
     await db.purchases.put(purchase); await db.purchaseLines.bulkPut(lines);
     for (const l of lines) {
       const p = await db.products.get(l.product_id); if (!p) continue;
       const delta = kind === 'return' ? -Math.abs(l.qty) : l.qty;
       await db.stockMoves.put({ id: newId(), shop_id: p.shop_id, product_id: p.id, qty: delta, kind: kind === 'return' ? 'purchase_return' : 'purchase', ref_id: id, unit_cost_cents: l.unit_cost_cents, note: purchase.number, device_id: deviceId ?? null, user_id: input.user_id, at: now });
-      await db.products.put({ ...p, on_hand: p.track_stock ? Math.round((num(p.on_hand) + delta) * 1000) / 1000 : p.on_hand, ...(kind === 'purchase' ? { cost_cents: l.unit_cost_cents, ...(l.new_price_usd != null ? { price_usd: l.new_price_usd } : {}), ...(l.new_price_lbp != null ? { price_lbp: l.new_price_lbp } : {}),
+      await db.products.put({ ...p, on_hand: p.track_stock ? Math.round((num(p.on_hand) + delta) * 1000) / 1000 : p.on_hand, ...(kind === 'purchase' ? { cost_cents: l.unit_cost_cents, ...(l.new_price_lbp != null ? { price_lbp: l.new_price_lbp, price_currency: 'lbp' as const } : l.new_price_usd != null ? { price_usd: l.new_price_usd, price_currency: 'usd' as const } : {}),
         supplier_id: p.supplier_id ?? purchase.supplier_id, next_expiry: l.expiry ? (p.next_expiry && p.next_expiry < l.expiry ? p.next_expiry : l.expiry) : p.next_expiry ?? null } : {}) });
     }
     const s = await db.suppliers.get(input.supplier.id); if (s) await db.suppliers.put({ ...s, balance_cents: num(s.balance_cents) + (kind === 'return' ? -t.total_cents : t.total_cents) });
-    await enqueue(db, 'purchase.commit', { id, supplier_id: input.supplier.id, kind, invoice_no: purchase.invoice_no, invoice_date: purchase.invoice_date, currency: purchase.currency, rate: purchase.rate, subtotal: purchase.subtotal, discount: purchase.discount, discount_pct: purchase.discount_pct ?? null, total: purchase.total, total_cents: purchase.total_cents, note: purchase.note, approved_by: purchase.approved_by, at: now,
-      lines: lines.map(l => ({ id: l.id, product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, unit_cost_cents: l.unit_cost_cents, line_total_cents: l.line_total_cents, new_price_usd: l.new_price_usd, new_price_lbp: l.new_price_lbp, expiry: l.expiry, discount: l.discount ?? null, discount_pct: l.discount_pct ?? null, note: l.note ?? null })) });
+    await enqueue(db, 'purchase.commit', { id, supplier_id: input.supplier.id, kind, photo_path: purchase.photo_path ?? null, invoice_no: purchase.invoice_no, invoice_date: purchase.invoice_date, currency: purchase.currency, rate: purchase.rate, subtotal: purchase.subtotal, discount: purchase.discount, discount_pct: purchase.discount_pct ?? null, total: purchase.total, total_cents: purchase.total_cents, note: purchase.note, approved_by: purchase.approved_by, at: now,
+      lines: lines.map(l => ({ id: l.id, product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, unit_cost_cents: l.unit_cost_cents, line_total_cents: l.line_total_cents, new_price_usd: l.new_price_usd, new_price_lbp: l.new_price_lbp, new_price_currency: l.new_price_lbp != null ? 'lbp' : l.new_price_usd != null ? 'usd' : null, expiry: l.expiry, discount: l.discount ?? null, discount_pct: l.discount_pct ?? null, note: l.note ?? null })) });
   });
   return purchase;
 }

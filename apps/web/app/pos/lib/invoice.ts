@@ -9,13 +9,13 @@ import { pt, type L } from '../i18n';
  */
 
 /** The cart shaped as an order + lines, so the receipt printer and the text below serve both. Nothing is saved. */
-export function draftAsOrder(d: Draft, rate: number, lbpStep: number, feeCents: number, totals: { subtotal_cents: number; discount_cents: number; total_cents: number }): { order: Order; lines: OrderLine[] } {
+export function draftAsOrder(d: Draft, rate: number, lbpStep: number, feeCents: number, totals: { subtotal_cents: number; discount_cents: number; total_cents: number; total_lbp?: number }): { order: Order; lines: OrderLine[] } {
   const total = totals.total_cents + feeCents;
   const order = {
     id: d.id, number: null, local_number: null, placed_at: new Date().toISOString(), rate_lbp_per_usd: rate,
     customer_name: d.customer_name || null, customer_phone: d.customer_phone || null,
     subtotal_cents: totals.subtotal_cents, discount_cents: totals.discount_cents, discount_reason: d.discount_reason ?? null,
-    total_cents: total, total_lbp: roundLbp(usdToLbp(total, rate), lbpStep), change_usd_cents: 0, change_lbp: 0,
+    total_cents: total, total_lbp: roundLbp(totals.total_lbp != null ? totals.total_lbp + usdToLbp(feeCents, rate) : usdToLbp(total, rate), lbpStep), change_usd_cents: 0, change_lbp: 0,
   } as unknown as Order;
   const lines = d.lines.filter(l => !l.voided).map(l => ({
     id: l.id, order_id: d.id, product_id: l.product_id, name: l.name, unit: l.unit ?? null, quantity: l.quantity, notes: l.notes ?? null,

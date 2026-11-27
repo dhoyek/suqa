@@ -20,13 +20,32 @@ export function lineTotalCents(l: { price_currency: Currency; unit_price_cents: 
 }
 
 export interface Totals { subtotal_cents: number; discount_cents: number; total_cents: number; total_lbp: number; total_lbp_rounded: number }
+/**
+ * Totals of a cart. Lines priced in lira stay in lira: their lira amounts are added up as they are and only that SUM is turned
+ * into cents, so the lira total of a lira-priced cart is exactly the sum of its prices (no per-item rounding, nothing lost in a
+ * round trip through cents) and paying that lira amount closes the sale. Dollar lines and discounts are converted at the rate.
+ * The note step (lbpStep) rounds the final total only — `total_lbp_rounded`; step 1 = no rounding.
+ */
 export function totals(lines: Array<{ price_currency: Currency; unit_price_cents: number; unit_price_lbp: number; quantity: number; discount_cents?: number; voided?: boolean }>,
                        orderDiscountCents: number, rate: number, lbpStep: number): Totals {
-  const subtotal = lines.filter(l => !l.voided).reduce((s, l) => s + lineTotalCents(l, rate), 0);
+  const live = lines.filter(l => !l.voided);
+  const perLine = live.reduce((s, l) => s + lineTotalCents(l, rate), 0);
+  // lira lines whose line discount does not eat the whole line (those keep the plain per-line amount)
+  const lira = live.filter(l => l.price_currency !== 'usd' && lbpToCents(Math.round(l.unit_price_lbp * l.quantity), rate) >= (l.discount_cents ?? 0));
+  const liraLbp = lira.reduce((s, l) => s + Math.round(l.unit_price_lbp * l.quantity), 0);
+  const liraCents = lbpToCents(liraLbp, rate);
+  const subtotal = Math.max(0, perLine + liraCents - lira.reduce((s, l) => s + lbpToCents(Math.round(l.unit_price_lbp * l.quantity), rate), 0));
   const discount = Math.min(subtotal, Math.max(0, orderDiscountCents));
   const total = subtotal - discount;
-  const lbp = usdToLbp(total, rate);
+  const lbp = Math.max(0, liraLbp + usdToLbp(total - liraCents, rate));
   return { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp: lbp, total_lbp_rounded: roundLbp(lbp, lbpStep) };
+}
+/** The lira to ask for: the order's own lira total on the note step — but never an amount that, counted back in cents, leaves the order short. */
+export function dueLbp(totalCents: number, totalLbp: number | null | undefined, rate: number, lbpStep: number, mode: 'nearest' | 'up' = 'up'): number {
+  const viaCents = roundLbp(usdToLbp(totalCents, rate), lbpStep, mode);
+  if (!totalLbp || totalLbp <= 0) return viaCents;
+  const own = roundLbp(totalLbp, lbpStep, mode);
+  return mode === 'up' && lbpToCents(own, rate) < totalCents ? roundLbp(usdToLbp(totalCents, rate), lbpStep, 'up') : own;
 }
 
 /** USD-equivalent cents a payment contributes. 'unpaid' contributes nothing paid. */

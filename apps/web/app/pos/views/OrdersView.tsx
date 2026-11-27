@@ -313,7 +313,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
       {dialog?.k === 'merge' && mergeable[dialog.o.id] && <MergeDialog locale={locale} order={dialog.o} others={mergeable[dialog.o.id]} lines={lines} pair={mergePair} step={boot.shop.lbp_rounding_step ?? 5000}
         onDone={async (t, x) => { await mergeOrders(boot.db, t, x); boot.engine.poke(); setDialog(null); await reload(); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'edit' && <EditOrderDialog boot={boot} locale={locale} index={index} order={dialog.o} lines={lines[dialog.o.id] ?? []} paidCents={paidCents(dialog.o)} onDone={() => { setDialog(null); reload(); }} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
+      {dialog?.k === 'pay' && <PayDialog totalCents={num(dialog.o.total_cents) - paidCents(dialog.o)} totalLbp={paidCents(dialog.o) ? null : num(dialog.o.total_lbp)} rate={num(dialog.o.rate_lbp_per_usd) || rate} lbpStep={boot.shop.lbp_rounding_step ?? 5000} locale={locale}
         boot={boot} isOwner={staff.role === 'owner'} me={staff} customer={{ name: dialog.o.customer_name ?? undefined, phone: dialog.o.customer_phone ?? undefined }} courier={dialog.o.fulfillment === 'delivery' ? { name: dialog.o.courier_name, driver: !!dialog.o.driver_id && !dialog.o.driver_paid_at, fee_cents: dialog.fee } : null} title={dialog.o.fulfillment === 'delivery' ? pt('codSettle', locale) : undefined}
         onConfirm={async (pays, changeIn: Currency, extra) => {
           const shift = await currentShift(boot.db); const r = num(dialog.o.rate_lbp_per_usd) || rate;

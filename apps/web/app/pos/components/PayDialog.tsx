@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender , debtLines, findCustomer, normPhone, searchCustomers, type ShopCustomer, type Staff } from '@suqa/pos-core';
+import { dueLbp, fmtLbp, fmtUsd, roundLbp, settle, usdToLbp, type Currency, type Payment, type Tender , debtLines, findCustomer, normPhone, searchCustomers, type ShopCustomer, type Staff } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import type { Booted } from '../lib/boot';
 import Modal, { NumPad } from './Modal';
@@ -19,8 +19,8 @@ const LBP_NOTES = [50000, 100000, 500000, 1000000];
  * customer would hand over for what remains. The layout never reflows when switching tender or currency.
  */
 export type CourierExtra = { courier_name: string | null; courier_fee_cents: number; fee_currency: Currency; fee_amount: number; /** the fee is handed to the driver now, out of the drawer; false = it stays owed and is settled later (السائقون) */ pay_now: boolean };
-export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm, onClose, customer, onCustomer, courier, title, boot, isOwner, me }: {
-  totalCents: number; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
+export default function PayDialog({ totalCents, totalLbp, rate, lbpStep, locale, onConfirm, onClose, customer, onCustomer, courier, title, boot, isOwner, me }: {
+  totalCents: number; /** the order's own lira total (lira-priced items added up in lira) — what is asked for in lira while nothing is paid yet */ totalLbp?: number | null; rate: number; lbpStep: number; locale: L; customer?: { name?: string; phone?: string };
   /** sale in progress: the customer shown here IS the cart's customer — picking / clearing it here changes the cart (one field, two places to reach it) */
   onCustomer?: (c: { name: string; phone: string } | null) => void;
   /** delivery handover: ask who delivered and the driver's fee (recorded as cash out of the drawer) */
@@ -47,7 +47,8 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
 
   const cur: Currency = tender === 'cash_lbp' ? 'lbp' : 'usd';
   const committed = useMemo(() => settle(totalCents, rows, rate, lbpStep, changeIn), [totalCents, rows, rate, lbpStep, changeIn]);
-  const remainingIn = (c: Currency) => (c === 'lbp' ? roundLbp(usdToLbp(committed.remaining_cents, rate), lbpStep, 'up') : committed.remaining_cents / 100);
+  const lbpLeft = (remaining: number, mode: 'nearest' | 'up' = 'up') => (remaining === totalCents ? dueLbp(totalCents, totalLbp, rate, lbpStep, mode) : roundLbp(usdToLbp(remaining, rate), lbpStep, mode));
+  const remainingIn = (c: Currency) => (c === 'lbp' ? lbpLeft(committed.remaining_cents) : committed.remaining_cents / 100);
   const n = Number(amount) || 0;
   const pending: TenderRow | null = n > 0 ? { tender, currency: cur, amount: cur === 'lbp' ? Math.round(n) : Math.round(n * 100), reference: ref.trim() || null, unpaid_name: tender === 'unpaid' ? uName.trim() : null, unpaid_phone: tender === 'unpaid' ? uPhone.trim() : null } : null;
   const live = useMemo(() => settle(totalCents, pending ? [...rows, pending] : rows, rate, lbpStep, changeIn), [totalCents, rows, pending, rate, lbpStep, changeIn]);
@@ -131,12 +132,12 @@ export default function PayDialog({ totalCents, rate, lbpStep, locale, onConfirm
       <div className="pay-grid">
         <div className="stack">
           <div className="pay-due">
-            <div><span className="muted">{pt('due', locale)}</span><strong>{fmtUsd(totalCents)}</strong><strong>{fmtLbp(roundLbp(usdToLbp(totalCents, rate), lbpStep), locale)}</strong></div>
+            <div><span className="muted">{pt('due', locale)}</span><strong>{fmtUsd(totalCents)}</strong><strong>{fmtLbp(lbpLeft(totalCents, 'nearest'), locale)}</strong></div>
             <div><span className="muted">{pt('paid', locale)}</span><span>{fmtUsd(live.paid_cents + live.unpaid_cents)}</span></div>
             <div className={live.remaining_cents > 0 ? 'bad' : 'ok'}>
               <span>{live.remaining_cents > 0 ? pt('remaining', locale) : pt('change', locale)}</span>
               <strong>{live.remaining_cents > 0 ? fmtUsd(live.remaining_cents) : changeIn === 'usd' ? fmtUsd(live.change_usd_cents) : fmtLbp(live.change_lbp, locale)}</strong>
-              <strong>{live.remaining_cents > 0 ? fmtLbp(roundLbp(usdToLbp(live.remaining_cents, rate), lbpStep, 'up'), locale) : changeIn === 'usd' ? fmtLbp(usdToLbp(live.change_usd_cents, rate), locale) : fmtUsd(live.change_cents)}</strong>
+              <strong>{live.remaining_cents > 0 ? fmtLbp(lbpLeft(live.remaining_cents), locale) : changeIn === 'usd' ? fmtLbp(usdToLbp(live.change_usd_cents, rate), locale) : fmtUsd(live.change_cents)}</strong>
             </div>
             {courier && <div className="cod-driver">
               <div className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted" style={{ minWidth: 80 }}>{pt('driverName', locale)}</span><input className="input" value={drvName} onChange={e => setDrvName(e.target.value)} style={{ flex: 1 }} /></div>

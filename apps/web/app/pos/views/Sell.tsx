@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
+import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, roundLbp, usdToLbp, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs , type QuickButton } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
 import { pt, daysLabel, type L } from '../i18n';
@@ -106,6 +106,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const isOrder = draft.channel !== 'walkin';
   const feeCents = isOrder && draft.fulfillment === 'delivery' ? fee : 0;
   const grand = totals.total_cents + feeCents;
+  const grandLbp = totals.total_lbp + usdToLbp(feeCents, rate);     // lira-priced items stay in lira: the exact sum, rounded (if the shop rounds) only here on the total
   const [pop, setPop] = useState<Map<string, number>>(new Map());
   const [pop30, setPop30] = useState<Map<string, number>>(new Map());
   useEffect(() => { void (async () => {
@@ -308,7 +309,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         {mini && <div className="cart-mini" onClick={() => { if (live.length) setCartOpen(true); }}>
           <span className="cart-mini-count" aria-label={pt('cart', locale)}>🛒<b>{live.length}</b></span>
           {live.length
-            ? <span className="cart-mini-total">{justAdded ? <span className="cart-mini-added">＋ {justAdded}</span> : <><strong>{fmtUsd(grand)}</strong><small className="muted">{fmtLbp(Math.round((grand * rate) / 100 / lbpStep) * lbpStep, locale)}</small></>}</span>
+            ? <span className="cart-mini-total">{justAdded ? <span className="cart-mini-added">＋ {justAdded}</span> : <><strong>{fmtUsd(grand)}</strong><small className="muted">{fmtLbp(roundLbp(grandLbp, lbpStep), locale)}</small></>}</span>
             : <span className="cart-mini-total muted">{pt('emptyCart', locale)}</span>}
           <span className="row" style={{ gap: 6, flex: 'none' }} onClick={e => e.stopPropagation()}>
             {!live.length && lastSale && <button className="btn ghost icon" title={pt('lastSale', locale)} onClick={() => { setReopened(true); setServerNo(lastSale.no); setReceipt(lastSale.r); }}>🧾</button>}
@@ -365,7 +366,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           {totals.discount_cents > 0 && <div><span>{pt('discount', locale)}{draft.discount_reason ? ` · ${draft.discount_reason}` : ''}</span><span>−{fmtUsd(totals.discount_cents)}</span></div>}
           {feeCents > 0 && <div><span>{pt('deliveryFee', locale)}</span><span>{fmtUsd(feeCents)}</span></div>}
           <div className="big"><span>{pt('total', locale)}</span><span>{fmtUsd(grand)}</span></div>
-          <div className="big lbp"><span></span><span>{fmtLbp(Math.round((grand * rate) / 100 / lbpStep) * lbpStep, locale)}</span></div>
+          <div className="big lbp"><span></span><span>{fmtLbp(roundLbp(grandLbp, lbpStep), locale)}</span></div>
           <div className="muted num" style={{ fontSize: 11 }}><span>{pt('rate', locale)}</span><span>$1 = {rate.toLocaleString('en-US')} ل.ل.</span></div>
         </div>
         <div className="cart-actions">
@@ -386,7 +387,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
           onChange={updateLine} onVoid={r => voidLine(l.id, r)} onClose={() => setDialog(null)} />) : null; })()}
       {dialog?.k === 'preview' && <InvoicePreview draft={draft} shop={shop} locale={locale} rate={rate} lbpStep={lbpStep} feeCents={feeCents} totals={totals} cashier={staff.display_name || staff.full_name || ''}
         onPay={() => setDialog({ k: 'pay' })} onClose={() => setDialog(null)} />}
-      {dialog?.k === 'pay' && <PayDialog totalCents={grand} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} boot={boot} isOwner={staff.role === 'owner'} me={staff} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
+      {dialog?.k === 'pay' && <PayDialog totalCents={grand} totalLbp={grandLbp} rate={rate} lbpStep={lbpStep} locale={locale} customer={{ name: draft.customer_name, phone: draft.customer_phone }} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} boot={boot} isOwner={staff.role === 'owner'} me={staff} onConfirm={confirmPay} onClose={() => setDialog(null)} />}
       {dialog?.k === 'newItem' && <ItemEditor boot={boot} locale={locale} index={index} product={null} presetBarcode={dialog.code} staff={members} me={staff} onDone={p => { setDialog(null); reindex(); add(p); }} onClose={() => setDialog(null)} />}
       {dialog?.k === 'oos' && <Modal open onClose={() => setDialog(null)} title={text(dialog.p.name, locale)}
         footer={<><button className="btn ghost" onClick={() => setDialog(null)}>{pt('cancel', locale)}</button><span style={{ flex: 1 }} /><button className="btn primary" autoFocus onClick={() => { const p = dialog.p; setDialog(null); add(p, 1, { weigh: true }); }}>＋ {pt('addAnyway', locale)}</button></>}>

@@ -16,6 +16,7 @@ create or replace function t_dc.balance(p uuid) returns jsonb language sql secur
 create or replace function t_dc.info(p uuid) returns jsonb language sql security definer as $$ select suqa.driver_pay_info(p) $$;
 create or replace function t_dc.limit_of(p_shop uuid, p_phone text, p_cents int) returns void language sql security definer as $$
   update suqa.shop_customers set credit_limit_cents = p_cents where shop_id = p_shop and phone_key = suqa._phone_key(p_phone) $$;
+create or replace function t_dc.debt(p_shop uuid, p_phone text) returns bigint language sql security definer as $$ select suqa._customer_debt_cents(p_shop, p_phone) $$;
 grant execute on all functions in schema t_dc to authenticated;
 
 set local role authenticated; set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';   -- shop owner
@@ -73,6 +74,34 @@ begin
   r := pg_temp.push('driver.payout', jsonb_build_object('id', gen_random_uuid(), 'driver_id', v_drv, 'order_ids', to_jsonb(v[1:3]), 'currency', 'usd', 'amount', 300, 'rate', 90000));
   assert r->>'status' <> 'ok' or (r->'result'->>'orders')::int = 0, 'paid once: ' || r;
   assert (select count(*) from suqa.orders where id = any(v[1:3]) and driver_payout_id = v_pay) = 3, 'still the first settlement';
+  -- an order that already carries a debt line (saved "unpaid" at the till before it went out)
+  declare w uuid[] := array[gen_random_uuid(), gen_random_uuid(), gen_random_uuid()]; v_before bigint;
+  begin
+    for i in 1..3 loop
+      r := pg_temp.push('sale.commit', jsonb_build_object('id', w[i], 'local_number', 'K-10000' || i, 'channel', 'whatsapp', 'status', 'accepted', 'rate_lbp_per_usd', 90000,
+            'customer_name', 'Debtor', 'customer_phone', '70555666', 'fulfillment', 'delivery', 'address', '{"line1":"x"}'::jsonb, 'delivery_fee_cents', 200,
+            'subtotal_cents', 600, 'total_cents', 800, 'total_lbp', 720000, 'placed_at', now(),
+            'payments', jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'tender', 'unpaid', 'amount', 800, 'currency', 'usd', 'unpaid_name', 'Debtor', 'unpaid_phone', '70555666')),
+            'lines', jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'product_id', v_prod, 'name', '{"en":"x"}'::jsonb, 'qty', 2, 'unit_price_cents', 300, 'line_total_cents', 600))));
+      assert r->>'status' = 'ok', 'debt order: ' || r;
+      assert (select count(*) from suqa.payments where order_id = w[i] and tender = 'unpaid' and amount = 800) = 1, 'the till saved it as debt';
+      r := pg_temp.push('order.status', jsonb_build_object('id', w[i], 'status', 'accepted', 'driver_id', v_drv));
+      r := t_dc.step(w[i], 'picked'); assert r->>'ok' = 'true', 'picked: ' || r;
+    end loop;
+    v_before := (select d from t_dc.debt(v_shop, '70555666') d); assert v_before = 2400, 'three debts of $8: ' || v_before;
+    assert (t_dc.info(w[1])->>'due_cents')::int = 800, 'a debt is still to collect';
+    -- a: he pays it all by Whish → the debt of that order is gone, one payment, nothing owed twice
+    r := t_dc.step(w[1], 'delivered', '{"wallet":800}'); assert r->>'ok' = 'true', 'a: ' || r;
+    assert (select coalesce(sum(amount), 0) from suqa.payments where order_id = w[1] and tender = 'unpaid') = 0 and (select sum(amount) from suqa.payments where order_id = w[1] and tender = 'wallet') = 800, 'a: debt closed by the payment';
+    assert (select d from t_dc.debt(v_shop, '70555666') d) = 1600, 'a: customer owes two orders now';
+    -- b: still not paid → the same debt stays, no second one
+    r := t_dc.step(w[2], 'delivered', '{"unpaid":800}'); assert r->>'ok' = 'true', 'b: ' || r;
+    assert (select count(*) from suqa.payments where order_id = w[2]) = 1 and (select sum(amount) from suqa.payments where order_id = w[2] and tender = 'unpaid') = 800, 'b: one debt, not two';
+    -- c: $3 cash, the rest stays debt → debt 5, cash 3 with the driver
+    r := t_dc.step(w[3], 'delivered', '{"usd":300,"unpaid":500}'); assert r->>'ok' = 'true', 'c: ' || r;
+    assert (select sum(amount) from suqa.payments where order_id = w[3] and tender = 'unpaid') = 500 and (select sum(amount) from suqa.payments where order_id = w[3] and tender = 'driver') = 300, 'c: debt reduced by the cash';
+    assert (select d from t_dc.debt(v_shop, '70555666') d) = 1300, 'customer owes 8 + 5';
+  end;
   raise notice 'driver pay card ok';
 end $$;
 rollback;

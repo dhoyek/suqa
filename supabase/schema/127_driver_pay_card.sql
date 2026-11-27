@@ -7,6 +7,9 @@
 --                                (orders.courier_fee_cents) stays owed to him by the shop until a settlement, as for every delivery.
 --   driver_step      = 81 + pay.card (cents, >= 0): counted in what covers the order, stored as a 'card' payment, in paid_usd_cents.
 --                      A screen that sends no card (older version) behaves exactly as before.
+--   ALSO FIXED (a customer could be left owing what he had paid): when the order already carries a debt line — it was saved at the
+--     till as "unpaid" before going out — the money the driver records now comes off that debt first, and "still not paid" does
+--     not add a second debt on top. Before, the old debt stayed open next to the new payment.
 --   driver_pay_info  = 81 + 'card_ok': true, so the screen offers the card only where the database takes it.
 -- No table change. Safe to run twice.
 
@@ -28,6 +31,7 @@ create or replace function suqa.driver_step(p_order uuid, p_step text, p_pay jso
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare o suqa.orders; v_driver text; v_note text; v_due bigint := 0; v_rate numeric; v_step int; v_tol bigint; v_limit bigint;
         v_usd bigint := 0; v_lbp bigint := 0; v_cusd bigint := 0; v_clbp bigint := 0; v_wallet bigint := 0; v_unpaid bigint := 0; v_card bigint := 0;
+        v_debt bigint := 0; v_take bigint; v_left bigint; v_val bigint; v_new_debt bigint; r record;
         v_net_usd bigint; v_net_lbp bigint; v_cash bigint; v_cover bigint;
 begin
   if p_step not in ('ack', 'picked', 'delivered') then raise exception 'bad_step'; end if;
@@ -69,12 +73,28 @@ begin
     v_cover := v_cash + v_wallet + v_card + v_unpaid;
     if v_cover < v_due - 1 then raise exception 'not_covered' using detail = (v_due - v_cover)::text; end if;
     if v_cover > v_due + v_tol then raise exception 'too_much' using detail = (v_cover - v_due)::text; end if;
-    if v_unpaid > 0 then
+    -- 127: an order can already carry a DEBT line (saved at the till as "unpaid" before it went out). What the customer pays now is
+    -- that same money: it comes off the debt first, so he is not left owing what he just paid; and "still not paid" adds no second debt.
+    select greatest(0, coalesce(sum(case when pm.currency = 'lbp' then round(pm.amount * 100.0 / v_rate) else pm.amount end), 0)
+                       - coalesce((select sum(a.amount_cents) from suqa.debt_allocations a where a.order_id = o.id), 0))
+      into v_debt from suqa.payments pm where pm.order_id = o.id and pm.tender = 'unpaid' and pm.amount > 0;
+    v_left := least(v_debt, v_cash + v_wallet + v_card);                  -- how much of the old debt is paid by this delivery
+    v_debt := v_debt - v_left;
+    for r in select * from suqa.payments where order_id = o.id and tender = 'unpaid' and amount > 0 order by at desc for update loop
+      exit when v_left <= 0;
+      v_val := case when r.currency = 'lbp' then round(r.amount * 100.0 / v_rate) else r.amount end;
+      v_take := least(v_left, v_val);
+      update suqa.payments set amount = case when v_take >= v_val then 0 when r.currency = 'lbp' then r.amount - round(v_take * v_rate / 100.0) else r.amount - v_take end,
+             note = concat_ws(' · ', nullif(note, ''), '🛵 دُفع عند التسليم'), updated_at = now() where id = r.id;
+      v_left := v_left - v_take;
+    end loop;
+    v_new_debt := greatest(0, v_unpaid - v_debt);                          -- debt this delivery ADDS (what is already on the order stays as it is)
+    if v_new_debt > 0 then
       if length(coalesce(suqa._phone_key(o.customer_phone), '')) < 6 then raise exception 'debt_needs_customer'; end if;
       select nullif(credit_limit_cents, 0) into v_limit from suqa.shop_customers where shop_id = o.shop_id and phone_key = suqa._phone_key(o.customer_phone);
-      if v_limit is not null and suqa._customer_debt_cents(o.shop_id, o.customer_phone) + v_unpaid > v_limit then raise exception 'over_credit_limit'; end if;
+      if v_limit is not null and suqa._customer_debt_cents(o.shop_id, o.customer_phone) + v_new_debt > v_limit then raise exception 'over_credit_limit'; end if;
       insert into suqa.payments (id, order_id, shop_id, tenant_id, tender, amount, currency, unpaid_name, unpaid_phone, note, at)
-      values (gen_random_uuid(), o.id, o.shop_id, o.tenant_id, 'unpaid', v_unpaid, 'usd', o.customer_name, o.customer_phone, '🛵 ' || coalesce(v_driver, ''), now());
+      values (gen_random_uuid(), o.id, o.shop_id, o.tenant_id, 'unpaid', v_new_debt, 'usd', o.customer_name, o.customer_phone, '🛵 ' || coalesce(v_driver, ''), now());
     end if;
     if v_net_usd <> 0 then insert into suqa.payments (id, order_id, shop_id, tenant_id, tender, amount, currency, note, at) values (gen_random_uuid(), o.id, o.shop_id, o.tenant_id, 'driver', v_net_usd, 'usd', v_driver, now()); end if;
     if v_net_lbp <> 0 then insert into suqa.payments (id, order_id, shop_id, tenant_id, tender, amount, currency, note, at) values (gen_random_uuid(), o.id, o.shop_id, o.tenant_id, 'driver', v_net_lbp, 'lbp', v_driver, now()); end if;

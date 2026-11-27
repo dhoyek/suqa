@@ -40,26 +40,32 @@ export function totals(lines: Array<{ price_currency: Currency; unit_price_cents
   const lbp = Math.max(0, liraLbp + usdToLbp(total - liraCents, rate));
   return { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp: lbp, total_lbp_rounded: roundLbp(lbp, lbpStep) };
 }
+/** Cents of a saved order line. A lira-priced line is worth its lira (price × quantity at the order's rate), whatever dollar price is stored next to it. */
+export function orderLineCents(l: { price_currency?: Currency | null; unit_price_lbp?: number | string | null; unit_price_cents?: number | string | null; discount_cents?: number | string | null }, quantity: number, rate: number): number {
+  const n = (v: unknown) => Number(v) || 0;
+  const gross = l.price_currency === 'lbp' && n(l.unit_price_lbp) > 0 && rate > 0 ? lbpToCents(Math.round(n(l.unit_price_lbp) * quantity), rate) : Math.round(n(l.unit_price_cents) * quantity);
+  return l.price_currency === 'lbp' && n(l.unit_price_lbp) > 0 && rate > 0 ? Math.max(0, gross - n(l.discount_cents)) : gross - n(l.discount_cents);
+}
 /**
  * Re-total of a saved order after an edit, a merge or a fee change — the till's copy of the server's `_order_recalc` (script 128).
- * Lira-priced lines are added up in lira and only the sum is turned into cents, when their stored cents agree with their lira
- * prices up to rounding (half a cent per unit + one per line); otherwise everything is computed from the stored cents (as before 128).
+ * Lira-priced lines count by their lira: they are added up in lira and only the sum is turned into cents, so the order's lira
+ * total is the exact sum of its lira prices. Dollar lines keep their stored cents; discount and fee are converted at the rate.
  */
-export function orderRetotal(lines: Array<{ voided?: boolean; price_currency?: Currency | null; unit_price_lbp?: number | string | null; quantity: number | string; discount_cents?: number | string | null; line_total_cents?: number | string | null }>,
+export function orderRetotal(lines: Array<{ voided?: boolean; price_currency?: Currency | null; unit_price_lbp?: number | string | null; unit_price_cents?: number | string | null; quantity: number | string; discount_cents?: number | string | null; line_total_cents?: number | string | null }>,
                              orderDiscountCents: number, feeCents: number, rate: number): { subtotal_cents: number; discount_cents: number; total_cents: number; total_lbp: number } {
   const n = (v: unknown) => Number(v) || 0;
   const live = lines.filter(l => !l.voided);
-  let sub = live.reduce((s, l) => s + n(l.line_total_cents), 0);
-  const lira = rate > 0 ? live.filter(l => l.price_currency === 'lbp' && n(l.unit_price_lbp) > 0 && n(l.line_total_cents) > 0) : [];
+  const isLira = (l: typeof live[number]) => rate > 0 && l.price_currency === 'lbp' && n(l.unit_price_lbp) > 0;
+  const cents = (l: typeof live[number]) => (isLira(l) ? orderLineCents(l, n(l.quantity), rate) : n(l.line_total_cents));
+  let sub = live.reduce((s, l) => s + cents(l), 0);
+  const lira = live.filter(l => isLira(l) && cents(l) > 0);                    // a line eaten whole by its discount keeps its plain amount
   const L = lira.reduce((s, l) => s + Math.round(n(l.unit_price_lbp) * n(l.quantity)), 0);
-  const stored = lira.reduce((s, l) => s + n(l.line_total_cents) + n(l.discount_cents), 0);
-  const tol = lira.reduce((s, l) => s + 0.5 * n(l.quantity) + 1, 0);
+  const perLine = lira.reduce((s, l) => s + cents(l) + n(l.discount_cents), 0);
   const lc = L > 0 ? lbpToCents(L, rate) : 0;
-  const native = L > 0 && Math.abs(lc - stored) <= tol;
-  if (native) sub = Math.max(0, sub + lc - stored);
+  if (L > 0) sub = Math.max(0, sub + lc - perLine);
   const discount = Math.min(Math.max(0, orderDiscountCents), sub);
   const total = sub - discount + feeCents;
-  return { subtotal_cents: sub, discount_cents: discount, total_cents: total, total_lbp: native ? Math.max(0, L + usdToLbp(total - lc, rate)) : Math.round((total * rate) / 100) };
+  return { subtotal_cents: sub, discount_cents: discount, total_cents: total, total_lbp: L > 0 ? Math.max(0, L + usdToLbp(total - lc, rate)) : Math.round((total * rate) / 100) };
 }
 /** The lira to ask for: the order's own lira total on the note step — but never an amount that, counted back in cents, leaves the order short. */
 export function dueLbp(totalCents: number, totalLbp: number | null | undefined, rate: number, lbpStep: number, mode: 'nearest' | 'up' = 'up'): number {

@@ -40,11 +40,12 @@ begin
   perform suqa._order_recalc(v_id); select * into o from suqa.orders where id = v_id;
   assert o.total_lbp = 549990 + 415395 + 890000, 'voided line out, got ' || o.total_lbp;
 
-  -- 5. lira lines whose cents were set on another basis (far from the lira price): computed as before (24)
-  update suqa.order_items set line_total_cents = 900, unit_price_cents = 900 where order_id = v_id and unit_price_lbp = 274995;
+  -- 5. a lira line whose cents were re-priced from its dollar price by an edit: it counts by its lira again, and the line is corrected
+  update suqa.order_items set line_total_cents = 900, unit_price_cents = 450 where order_id = v_id and unit_price_lbp = 274995;
   perform suqa._order_recalc(v_id); select * into o from suqa.orders where id = v_id;
-  assert o.total_cents = 900 + 467 + 1000, 'old way cents ' || o.total_cents;
-  assert o.total_lbp = round(2367 * 890.0), 'old way lira ' || o.total_lbp;
+  assert (select line_total_cents from suqa.order_items where order_id = v_id and unit_price_lbp = 274995) = 618, 'line back on its lira';
+  assert o.total_lbp = 549990 + 415395 + 890000, 'lira still exact, got ' || o.total_lbp;
+  assert o.total_cents = round(965385 * 100.0 / 89000) + 1000, 'cents ' || o.total_cents;
 
   -- 6. a dollar-only order: exactly as before
   delete from suqa.order_items where order_id = v_id and price_currency = 'lbp';

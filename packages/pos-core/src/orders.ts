@@ -1,6 +1,6 @@
 import { META, type PosDb } from './db';
 import { enqueue, newId } from './sale';
-import { orderRetotal, settle, type Settlement } from './money';
+import { orderLineCents, orderRetotal, settle, type Settlement } from './money';
 import { driverPayOf } from './drivers';
 import { num, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product } from './types';
 
@@ -52,12 +52,12 @@ export async function editOrder(db: PosDb, order: Order, edits: LineEdit[], note
     if (e.id) {
       const l = lines.find(x => x.id === e.id); if (!l) continue;
       if (e.voided) { l.voided = true; l.void_reason = e.void_reason ?? null; payloadLines.push({ id: l.id, voided: true, void_reason: e.void_reason ?? null }); }
-      else if (e.qty != null && e.qty !== num(l.quantity)) { l.quantity = e.qty; l.line_total_cents = Math.round(num(l.unit_price_cents) * e.qty) - num(l.discount_cents); payloadLines.push({ id: l.id, qty: e.qty }); }
+      else if (e.qty != null && e.qty !== num(l.quantity)) { l.quantity = e.qty; l.line_total_cents = orderLineCents(l, e.qty, rate); payloadLines.push({ id: l.id, qty: e.qty }); }
     } else if (e.product) {
       const p = e.product; const qty = e.new_qty ?? 1;
       const unit_cents = e.unit_price_cents ?? Math.round(num(p.price_usd) * 100); const unit_lbp = e.unit_price_lbp ?? num(p.price_lbp);
       const disc = Math.max(0, Math.min(Math.round(e.discount_cents ?? 0), Math.round(unit_cents * qty)));
-      const nl: OrderLine = { id: newId(), order_id: order.id, product_id: p.id, name: p.name, unit: p.unit ?? null, quantity: qty, price_currency: p.price_currency ?? 'usd', unit_price_cents: unit_cents, unit_price_lbp: unit_lbp, discount_cents: disc, line_total_cents: Math.round(unit_cents * qty) - disc, notes: e.notes?.trim() || null, voided: false };
+      const nl: OrderLine = { id: newId(), order_id: order.id, product_id: p.id, name: p.name, unit: p.unit ?? null, quantity: qty, price_currency: p.price_currency ?? 'usd', unit_price_cents: unit_cents, unit_price_lbp: unit_lbp, discount_cents: disc, line_total_cents: orderLineCents({ price_currency: p.price_currency ?? 'usd', unit_price_lbp: unit_lbp, unit_price_cents: unit_cents, discount_cents: disc }, qty, rate), notes: e.notes?.trim() || null, voided: false };
       newLines.push(nl);
       payloadLines.push({ new_id: nl.id, product_id: p.id, name: p.name, unit: nl.unit, qty, price_currency: nl.price_currency, unit_price_cents: unit_cents, unit_price_lbp: nl.unit_price_lbp, discount_cents: disc, line_total_cents: nl.line_total_cents, notes: nl.notes });
     }

@@ -1,7 +1,7 @@
 'use client';
 import NumInput from '../components/NumInput';
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
-import { backBlock, backTargets, stepBackOrder, returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
+import { orderLineCents, orderRetotal, backBlock, backTargets, stepBackOrder, returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
 import { pointFromEwkb } from '@suqa/shared';
 import OrderThread from '@/components/OrderThread';
@@ -369,11 +369,14 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
   const [q, setQ] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
   const scanned = q.trim().length >= 6 && /^\d+$/.test(q.trim()) ? index.scan(q.trim()) : null;
   const results = q.trim() ? (scanned ? [scanned, ...index.search(q, 11).filter(p => p.id !== scanned.id)] : index.search(q, 12)) : [];
-  const lineTotal = (r: typeof rows[number]) => Math.round(num(r.l.unit_price_cents) * r.qty) - num(r.l.discount_cents);
+  const oRate = num(order.rate_lbp_per_usd) || 89500;
+  const lineTotal = (r: typeof rows[number]) => orderLineCents(r.l, r.qty, oRate);          // a lira-priced line is worth its lira, not the dollar price stored next to it
+  const addLine = (a: { p: Product; qty: number }) => ({ price_currency: a.p.price_currency ?? 'usd', unit_price_lbp: num(a.p.price_lbp), unit_price_cents: Math.round(num(a.p.price_usd) * 100), discount_cents: 0, quantity: a.qty });
   const oldSubtotal = rows.reduce((s, r) => s + num(r.l.line_total_cents), 0);
-  const subtotal = rows.filter(r => !r.voided).reduce((s, r) => s + lineTotal(r), 0) + adds.reduce((s, a) => s + Math.round(num(a.p.price_usd) * 100 * a.qty), 0);
-  const fee = Math.round(num(order.delivery_fee_usd) * 100); const discount = Math.min(num(order.discount_cents), subtotal);
-  const total = subtotal - discount + fee; const oldTotal = num(order.total_cents);
+  const fee = Math.round(num(order.delivery_fee_usd) * 100);
+  // same sum as the save (pos-core orderRetotal) and the server (128)
+  const { subtotal_cents: subtotal, total_cents: total } = orderRetotal([...rows.filter(r => !r.voided).map(r => ({ ...r.l, quantity: r.qty, line_total_cents: lineTotal(r) })), ...adds.map(a => ({ ...addLine(a), line_total_cents: orderLineCents(addLine(a), a.qty, oRate) }))], num(order.discount_cents), fee, oRate);
+  const discount = Math.min(num(order.discount_cents), subtotal); const oldTotal = num(order.total_cents);
   const removed = rows.filter(r => r.voided).length, changed = rows.filter(r => !r.voided && r.qty !== num(r.l.quantity)).length, added = adds.length;
   const dirty = removed + changed + added > 0;
   const refund = paidCents - total;                                                  // > 0 → the customer already paid more than the new total
@@ -399,7 +402,7 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
         {rows.map((r, i) => <div key={r.l.id} className={`edit-line ${r.voided ? 'voided' : ''}`}>
           <div className="edit-line-name">
             <div className={r.voided ? 'strike' : ''}>{text(r.l.name, locale)}</div>
-            <div className="muted num" style={{ fontSize: 12 }}>{fmtUsd(num(r.l.unit_price_cents))}{unitOf(r.l) ? ` /${r.l.unit}` : ''} × {r.qty}{unitOf(r.l)} = <strong>{fmtUsd(lineTotal(r))}</strong>
+            <div className="muted num" style={{ fontSize: 12 }}>{r.l.price_currency === 'lbp' && num(r.l.unit_price_lbp) > 0 ? fmtLbp(num(r.l.unit_price_lbp), locale) : fmtUsd(num(r.l.unit_price_cents))}{unitOf(r.l) ? ` /${r.l.unit}` : ''} × {r.qty}{unitOf(r.l)} = <strong>{fmtUsd(lineTotal(r))}</strong>
               {!r.voided && r.qty !== num(r.l.quantity) && <span style={{ textDecoration: 'line-through', marginInlineStart: 6 }}>{fmtUsd(num(r.l.line_total_cents))}</span>}</div>
           </div>
           <div className="qty-btns">
@@ -410,7 +413,7 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
           <button className={`btn ${r.voided ? '' : 'danger'}`} disabled={locked} onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, voided: !y.voided } : y)))}>{r.voided ? '↶ ' + pt('restoreLine', locale) : pt('removeLine', locale)}</button>
         </div>)}
         {adds.map((a, i) => <div key={'a' + i} className="edit-line added">
-          <div className="edit-line-name"><div>＋ {text(a.p.name, locale)}</div><div className="muted num" style={{ fontSize: 12 }}>{fmtUsd(Math.round(num(a.p.price_usd) * 100))} × {a.qty}{a.p.unit ? ' ' + a.p.unit : ''} = <strong>{fmtUsd(Math.round(num(a.p.price_usd) * 100 * a.qty))}</strong></div></div>
+          <div className="edit-line-name"><div>＋ {text(a.p.name, locale)}</div><div className="muted num" style={{ fontSize: 12 }}>{a.p.price_currency === 'lbp' && num(a.p.price_lbp) > 0 ? fmtLbp(num(a.p.price_lbp), locale) : fmtUsd(Math.round(num(a.p.price_usd) * 100))} × {a.qty}{a.p.unit ? ' ' + a.p.unit : ''} = <strong>{fmtUsd(orderLineCents(addLine(a), a.qty, oRate))}</strong></div></div>
           <div className="qty-btns">
             <button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), Math.round((y.qty - stepOf(!!a.p.decimal_qty)) * 1000) / 1000) } : y)))}>−</button>
             <NumInput className="qty-in num" empty value={a.qty} onChange={v => { if (v != null) setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), a.p.decimal_qty ? v : Math.round(v)) } : y))); }} />

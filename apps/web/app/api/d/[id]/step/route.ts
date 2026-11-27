@@ -14,7 +14,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (step === 'delivered') {
     try {
       const raw = JSON.parse(String(form?.get('pay') ?? 'null')) as Record<string, unknown> | null;
-      if (raw && typeof raw === 'object') { pay = {}; for (const k of ['usd', 'lbp', 'change_usd', 'change_lbp', 'wallet', 'unpaid']) { const n = Math.round(Number(raw[k] ?? 0)); pay[k] = Number.isFinite(n) && n > 0 && n < 1e12 ? n : 0; } }
+      if (raw && typeof raw === 'object') { pay = {}; for (const k of ['usd', 'lbp', 'change_usd', 'change_lbp', 'wallet', 'card', 'unpaid']) { const n = Math.round(Number(raw[k] ?? 0)); pay[k] = Number.isFinite(n) && n > 0 && n < 1e12 ? n : 0; } }
     } catch { pay = null; }
   }
   const admin = supabaseAdmin(); if (!admin) return NextResponse.json({ error: 'not_configured' }, { status: 500 });

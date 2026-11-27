@@ -10,6 +10,7 @@ import { ui } from '@/lib/ui-text';
 import RestorePanel from './RestorePanel';
 import ShareButton from '@/components/ShareButton';
 import { pointToEwkt, type Locale, type Shop } from '@suqa/shared';
+import { intlPhone } from '@suqa/pos-core';   // a number typed without a country code gets +961, as sign-ins are stored (an invite saved without it never matches)
 
 type Member = { user_id: string; full_name: string | null; email: string; role: 'owner' | 'staff' };
 type Labels = Record<'save' | 'saved' | 'nameAr' | 'nameEn' | 'shopSlug' | 'category' | 'phone' | 'whatsapp' | 'addressText' | 'minOrder' | 'prepMinutes' | 'commissionRate' | 'shopLocation'
@@ -102,7 +103,7 @@ export default function ShopEditor(props: {
     if (!shop) return;
     // a phone / WhatsApp number: attach that account now, or keep the role waiting for the number's first sign-in
     if (!email.includes('@')) {
-      const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: email.trim(), p_name: null, p_tenant_role: null, p_shop: shop.id, p_shop_role: role });
+      const { data, error } = await sb.rpc('admin_account_invite', { p_tenant: tenantId, p_phone: intlPhone(email), p_name: null, p_tenant_role: null, p_shop: shop.id, p_shop_role: role });
       if (error) { notify(error.message); return; }
       const applied = (data as { status?: string } | null)?.status === 'applied';
       notify(applied ? labels.saved : (ar ? 'الرقم غير مسجّل بعد — سيُضاف تلقائياً عند أول دخول له.' : 'Number not signed up yet — it will be added on its first sign-in.'));

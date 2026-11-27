@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fmtLbp, fmtUsd, num, text, type CatalogIndex, type Product } from '@suqa/pos-core';
 import { pt, type L } from '../i18n';
 import Modal from './Modal';
-import { MicIcon, useVoiceRecorder } from '@/components/useVoiceRecorder';
+import { MicIcon, RecWave, useVoiceRecorder } from '@/components/useVoiceRecorder';
 
 // Yorgo in the till: the staff member pastes a customer's message, Yorgo proposes a draft, a person checks it and sends it to the cart.
 // The assistant never sells: a draft carries item ids and quantities only — names, prices and stock shown here come from the catalog on
@@ -180,7 +180,7 @@ export default function YorgoPanel({ open, onClose, shopId, locale, index, onlin
       </>}
       footer={<div className="yorgo-input" style={recording ? { alignItems: 'center' } : undefined}>
         {recording ? <>
-          <span className="yorgo-rec" aria-live="polite">● {pt('yorgoRecording', locale)}</span>
+          <span className="yorgo-rec" aria-live="polite"><RecWave /><span>{pt('yorgoRecording', locale)}</span></span>
           <button className="btn" onClick={() => stopRec(false)} aria-label={pt('cancel', locale)}>✕</button>
           <button className="btn primary" onClick={() => stopRec(true)} aria-label={pt('yorgoSend', locale)}>↑</button>
         </> : <>

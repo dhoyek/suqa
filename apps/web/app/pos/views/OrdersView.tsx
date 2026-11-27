@@ -244,7 +244,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                     <strong>{fmtUsd(num(o.total_cents))} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>· {fmtLbp(roundLbp(num(o.total_lbp), boot.shop.lbp_rounding_step ?? 5000), locale)}{num(o.delivery_fee_usd) > 0 ? ` · ${pt('ofWhichDelivery', locale)} ${fmtUsd(Math.round(num(o.delivery_fee_usd) * 100))}` : ''}</span></strong>
                     <span className={`pill ${isPaid(o) ? 'ok' : 'warn'}`}>{isPaid(o) ? pt('paid', locale) : pt('unpaidOrder', locale)}</span>
                   </div>
-                  {(open || steps.length > 0 || owes(o)) && (
+                  {/* the ⋯ menu is on every card from the start (nobody has to guess that a tap on the card reveals it); it holds every secondary action */}
+                  {(
                     <div className="order-actions" onClick={e => e.stopPropagation()}>
                       {/* the next step is outlined; solid blue only when one step is left */}
                       {steps.map((n, i) => <button key={n} className={`btn ${steps.length === 1 ? 'primary' : i === 0 ? 'next-step' : ''}`} onClick={() => act(o, n)}>
@@ -256,9 +257,12 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
                       {open && !['delivered', 'rejected', 'cancelled'].includes(o.status) && <button className="btn" onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
                       {open && !infoEditBlock(o) && <button className="btn" onClick={() => setDialog({ k: 'info', o })}>👤 {pt('editOrderInfo', locale)}</button>}
                       {open && <button className="btn" onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>}
-                      {open && <span style={{ position: 'relative' }}>
-                        <button className="btn icon" title={pt('moreActions', locale)} onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setMenuAt({ side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right', up: window.innerHeight - r.bottom < 330 && r.top > 330 }); setMenu(menu === o.id ? null : o.id); }}>⋯</button>
+                      {<span className="order-more" style={{ position: 'relative' }}>
+                        <button className="btn icon" title={pt('moreActions', locale)} aria-label={pt('moreActions', locale)} onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setMenuAt({ side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right', up: window.innerHeight - r.bottom < 330 && r.top > 330 }); setMenu(menu === o.id ? null : o.id); }}>⋯</button>
                         {menu === o.id && <div className="order-menu" style={{ insetInlineEnd: 'auto', [menuAt.side]: 0, ...(menuAt.up ? { top: 'auto', bottom: '100%' } : {}) }} onClick={() => setMenu(null)}>
+                          <button onClick={() => setDialog({ k: 'detail', o })}>🧾 {pt('orderDetails', locale)}</button>
+                          {!['delivered', 'rejected', 'cancelled'].includes(o.status) && <button onClick={() => setDialog({ k: 'edit', o })}>✎ {pt('editOrder', locale)}</button>}
+                          {!infoEditBlock(o) && <button onClick={() => setDialog({ k: 'info', o })}>👤 {pt('editOrderInfo', locale)}</button>}
                           <button onClick={() => doPrint(receiptHtml(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, loadPrintSettings(), { again: true }))}>🖨 {pt('print', locale)}</button>
                           <button onClick={() => doPrint(orderSheetHtml(o, lines[o.id] ?? [], boot.shop, locale, loadPrintSettings()))}>📋 {pt('printSheet', locale)}</button>
                           <a href={waHref(o.customer_phone, invoiceText(o, lines[o.id] ?? [], payments[o.id] ?? [], boot.shop, locale, { url: `${location.origin}/r/${o.id}` }))} target="_blank" rel="noreferrer">💬 {pt('sendInvoiceWa', locale)}</a>

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { MicIcon, useVoiceRecorder } from '@/components/useVoiceRecorder';
+import { MicIcon, RecWave, useVoiceRecorder } from '@/components/useVoiceRecorder';
 import YorgoBasketCard, { toDraft, useAddBasket, type Draft, type DraftIn, type Item } from '@/components/YorgoBasketCard';
 
 // Yorgo on the storefront: the customer writes what they want (Arabic, Arabizi or English), Yorgo proposes a basket, the customer
@@ -135,7 +135,7 @@ export default function YorgoChat({ locale, signedIn }: { locale: L; signedIn: b
             <div ref={endRef} />
           </div>
           {signedIn && recording && <div className="yorgo-input" style={{ alignItems: 'center' }}>
-            <span className="yorgo-rec" aria-live="polite">● {t('recording')}</span>
+            <span className="yorgo-rec" aria-live="polite"><RecWave /><span>{t('recording')}</span></span>
             <button className="btn" onClick={() => stopRec(false)} aria-label={t('cancel')}>✕</button>
             <button className="btn primary" onClick={() => stopRec(true)} aria-label={t('stop')}>↑</button>
           </div>}

@@ -39,3 +39,6 @@ export function MicIcon({ size = 20 }: { size?: number }) {
     <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>;
 }
+
+/** shown while recording: seven bars that keep moving, the way a chat app shows a voice note being recorded */
+export function RecWave() { return <span className="rec-wave" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></span>; }

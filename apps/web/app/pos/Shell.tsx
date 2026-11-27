@@ -116,7 +116,7 @@ export default function Shell(props: {
         <div className="pos-status">
           {multiShop && <span className="pill pos-shopname" title={shopName}>🏪 {shopName}</span>}
           <span className={`pill status ${online ? 'ok' : 'warn'}`} title={`${pt('lastSync', locale)}: ${fmtTime(status?.lastSyncAt, locale)}`}>
-            <span className={`dot ${online ? 'on' : ''}`} />{online ? pt('online', locale) : pt('offline', locale)}
+            <span className={`dot ${online ? 'on' : ''}`} /><span className="status-text">{online ? pt('online', locale) : pt('offline', locale)}</span>
           </span>
           {!!status?.pending && <span className="pill">{status.pending} {pt('pending', locale)}</span>}
           {canYorgo && <button className="btn yorgo-btn" title={pt('yorgoOpen', locale)} onClick={() => setYorgoOpen(true)}>✨<span className="yorgo-btn-label"> Yorgo</span></button>}

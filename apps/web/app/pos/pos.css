@@ -701,3 +701,22 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 
 .pur-price { width: 120px; }
 .pur-price .btn { min-width: 44px; padding: 4px 6px; }
+
+/* ---- phones: the top bar must fit the screen. When it did not (shop name + status + ✨ 🔔 🔄 + account), the whole page became wider than
+   the screen: every screen looked shifted and the dialogs opened wider than the phone. The shop name gives way first, then the status
+   keeps only its dot while connected (the word stays when OFFLINE). ---- */
+.pos { max-width: 100vw; overflow-x: clip; }
+@media (max-width: 760px) {
+  .pos-bar { max-width: 100%; }
+  .pos-status { min-width: 0; flex: 1 1 auto; justify-content: flex-end; }
+  .pos-status > * { flex: none; }
+  .pos-status .pos-shopname { flex: 0 1 auto; min-width: 0; max-width: 40vw; padding-inline: 8px; }
+  .pos-status .btn.icon, .pos .pos-status .btn.yorgo-btn, .pos-status .avatar-btn { min-width: 40px; width: 40px; padding: 0; justify-content: center; }
+  .pos-status .pill.status.ok { padding: 6px; }
+  .pos-status .pill.status.ok .status-text { display: none; }
+  .pos-status .pill.status.warn { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pos-menu-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* orders: the ⋯ menu button sits at the end of every card's actions */
+.order-actions .order-more { margin-inline-start: auto; }
+.order-actions .order-more > .btn.icon { min-width: 44px; font-size: 20px; font-weight: 800; }

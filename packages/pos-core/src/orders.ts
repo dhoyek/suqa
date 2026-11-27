@@ -1,6 +1,6 @@
 import { META, type PosDb } from './db';
 import { enqueue, newId } from './sale';
-import { settle, type Settlement } from './money';
+import { orderRetotal, settle, type Settlement } from './money';
 import { driverPayOf } from './drivers';
 import { num, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product } from './types';
 
@@ -63,11 +63,9 @@ export async function editOrder(db: PosDb, order: Order, edits: LineEdit[], note
     }
   }
   const all = [...lines, ...newLines];
-  const subtotal = all.filter(l => !l.voided).reduce((s, l) => s + num(l.line_total_cents), 0);
-  const discount = Math.min(num(order.discount_cents), subtotal);
   const fee = Math.round(num(order.delivery_fee_usd) * 100);
-  const total = subtotal - discount + fee;
-  const updated: Order = { ...order, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100), shop_notes: note || order.shop_notes, updated_at: new Date().toISOString() };
+  const { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp } = orderRetotal(all, num(order.discount_cents), fee, rate);
+  const updated: Order = { ...order, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp, shop_notes: note || order.shop_notes, updated_at: new Date().toISOString() };
   await db.transaction('rw', [db.orders, db.orderLines, db.outbox], async () => {
     await db.orderLines.bulkPut(all); await db.orders.put(updated);
     await enqueue(db, 'order.edit', { id: order.id, lines: payloadLines, note: note ?? null, notify });
@@ -196,13 +194,11 @@ export async function mergeOrders(db: PosDb, target: Order, source: Order): Prom
   const rate = num(target.rate_lbp_per_usd) || 89500; const now = new Date().toISOString();
   const map: Record<string, string> = {};
   const moved: OrderLine[] = sLines.filter(l => !l.voided).map(l => { const id = newId(); map[l.id] = id; return { ...l, id, order_id: target.id }; });
-  const subtotal = [...tLines, ...moved].filter(l => !l.voided).reduce((x, l) => x + num(l.line_total_cents), 0);
-  const discount = Math.min(num(target.discount_cents) + num(source.discount_cents), subtotal);
   const feeUsd = Math.max(num(target.delivery_fee_usd), num(source.delivery_fee_usd)); const fee = Math.round(feeUsd * 100);
-  const total = subtotal - discount + fee;
+  const { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp } = orderRetotal([...tLines, ...moved], num(target.discount_cents) + num(source.discount_cents), fee, rate);
   const tNo = target.number ?? target.local_number ?? '', sNo = source.number ?? source.local_number ?? '';
   const notes = [target.shop_notes, source.shop_notes, source.customer_notes].map(x => (x ?? '').trim()).filter(Boolean).join(' · ') || null;
-  const updated: Order = { ...target, subtotal_cents: subtotal, discount_cents: discount, delivery_fee_usd: feeUsd, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100), shop_notes: notes, updated_at: now };
+  const updated: Order = { ...target, subtotal_cents: subtotal, discount_cents: discount, delivery_fee_usd: feeUsd, total_cents: total, total_usd: total / 100, total_lbp, shop_notes: notes, updated_at: now };
   const closed: Order = { ...source, status: 'cancelled', cancel_reason: `دُمج مع الطلب ${tNo}`, notify_customer: false, closed_at: now, updated_at: now };
   await db.transaction('rw', [db.orders, db.orderLines, db.outbox], async () => {
     await db.orderLines.bulkPut(moved); await db.orders.bulkPut([updated, closed]);
@@ -239,14 +235,12 @@ export async function editOrderInfo(db: PosDb, order: Order, patch: OrderInfoPat
   const rate = num(order.rate_lbp_per_usd) || 89500;
   const fee = closed ? Math.round(num(order.delivery_fee_usd) * 100) : pickup ? 0 : Math.max(0, Math.round(patch.delivery_fee_cents || 0));
   const lines = await db.orderLines.where('order_id').equals(order.id).toArray();
-  const subtotal = lines.filter(l => !l.voided).reduce((s, l) => s + num(l.line_total_cents), 0);
-  const discount = Math.min(num(order.discount_cents), subtotal);
-  const total = subtotal - discount + fee;
+  const { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp } = orderRetotal(lines, num(order.discount_cents), fee, rate);
   const dropDriver = !closed && pickup && !!order.driver_id;
   const updated: Order = { ...order, customer_name: patch.customer_name.trim(), customer_phone: patch.customer_phone.trim() || order.customer_phone, fulfillment: patch.fulfillment,
     address: pickup ? {} : patch.address, customer_notes: patch.notes?.trim() || null, needed_at: patch.needed_at,
     // totals move only when the fee moved (a name or address fix must not re-round the LBP total)
-    ...(closed || fee === Math.round(num(order.delivery_fee_usd) * 100) ? {} : { delivery_fee_usd: fee / 100, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp: Math.round((total * rate) / 100) }),
+    ...(closed || fee === Math.round(num(order.delivery_fee_usd) * 100) ? {} : { delivery_fee_usd: fee / 100, subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_usd: total / 100, total_lbp }),
     ...(dropDriver ? { driver_id: null, courier_name: null, courier_fee_cents: 0, driver_ack_at: null, driver_picked_at: null, driver_delivered_at: null } : {}),
     updated_at: new Date().toISOString() };
   await db.transaction('rw', [db.orders, db.outbox], async () => {

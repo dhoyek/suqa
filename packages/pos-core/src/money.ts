@@ -40,6 +40,27 @@ export function totals(lines: Array<{ price_currency: Currency; unit_price_cents
   const lbp = Math.max(0, liraLbp + usdToLbp(total - liraCents, rate));
   return { subtotal_cents: subtotal, discount_cents: discount, total_cents: total, total_lbp: lbp, total_lbp_rounded: roundLbp(lbp, lbpStep) };
 }
+/**
+ * Re-total of a saved order after an edit, a merge or a fee change — the till's copy of the server's `_order_recalc` (script 128).
+ * Lira-priced lines are added up in lira and only the sum is turned into cents, when their stored cents agree with their lira
+ * prices up to rounding (half a cent per unit + one per line); otherwise everything is computed from the stored cents (as before 128).
+ */
+export function orderRetotal(lines: Array<{ voided?: boolean; price_currency?: Currency | null; unit_price_lbp?: number | string | null; quantity: number | string; discount_cents?: number | string | null; line_total_cents?: number | string | null }>,
+                             orderDiscountCents: number, feeCents: number, rate: number): { subtotal_cents: number; discount_cents: number; total_cents: number; total_lbp: number } {
+  const n = (v: unknown) => Number(v) || 0;
+  const live = lines.filter(l => !l.voided);
+  let sub = live.reduce((s, l) => s + n(l.line_total_cents), 0);
+  const lira = rate > 0 ? live.filter(l => l.price_currency === 'lbp' && n(l.unit_price_lbp) > 0 && n(l.line_total_cents) > 0) : [];
+  const L = lira.reduce((s, l) => s + Math.round(n(l.unit_price_lbp) * n(l.quantity)), 0);
+  const stored = lira.reduce((s, l) => s + n(l.line_total_cents) + n(l.discount_cents), 0);
+  const tol = lira.reduce((s, l) => s + 0.5 * n(l.quantity) + 1, 0);
+  const lc = L > 0 ? lbpToCents(L, rate) : 0;
+  const native = L > 0 && Math.abs(lc - stored) <= tol;
+  if (native) sub = Math.max(0, sub + lc - stored);
+  const discount = Math.min(Math.max(0, orderDiscountCents), sub);
+  const total = sub - discount + feeCents;
+  return { subtotal_cents: sub, discount_cents: discount, total_cents: total, total_lbp: native ? Math.max(0, L + usdToLbp(total - lc, rate)) : Math.round((total * rate) / 100) };
+}
 /** The lira to ask for: the order's own lira total on the note step — but never an amount that, counted back in cents, leaves the order short. */
 export function dueLbp(totalCents: number, totalLbp: number | null | undefined, rate: number, lbpStep: number, mode: 'nearest' | 'up' = 'up'): number {
   const viaCents = roundLbp(usdToLbp(totalCents, rate), lbpStep, mode);

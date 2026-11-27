@@ -45,3 +45,26 @@ describe('lira-priced items keep their lira total', () => {
     }
   });
 });
+
+import { orderRetotal } from '../money';
+describe('re-total of a saved order (mirror of script 128)', () => {
+  const l = (lbpPrice: number, quantity: number, cents: number, extra: object = {}) => ({ price_currency: 'lbp' as const, unit_price_lbp: lbpPrice, quantity, discount_cents: 0, line_total_cents: cents, ...extra });
+  const lines = [l(221760, 1, 249), l(274995, 2, 618), l(138465, 3, 467)];
+  it('lira lines keep the exact lira sum', () => {
+    expect(orderRetotal(lines, 0, 0, RATE)).toEqual({ subtotal_cents: 1334, discount_cents: 0, total_cents: 1334, total_lbp: 1187145 });
+  });
+  it('fee and discount are converted, the lira part stays', () => {
+    expect(orderRetotal(lines, 100, 200, RATE)).toMatchObject({ total_cents: 1434, total_lbp: 1187145 + 89000 });
+  });
+  it('mixed with a dollar line, a voided line', () => {
+    const usdLine = { price_currency: 'usd' as const, unit_price_lbp: 0, quantity: 2, discount_cents: 0, line_total_cents: 1000 };
+    expect(orderRetotal([...lines, usdLine], 0, 0, RATE)).toMatchObject({ total_cents: 2334, total_lbp: 1187145 + 890000 });
+    expect(orderRetotal([{ ...lines[0], voided: true }, lines[1], lines[2], usdLine], 0, 0, RATE).total_lbp).toBe(549990 + 415395 + 890000);
+  });
+  it('cents set on another basis: as before', () => {
+    expect(orderRetotal([l(274995, 2, 900), l(138465, 3, 467)], 0, 0, RATE)).toEqual({ subtotal_cents: 1367, discount_cents: 0, total_cents: 1367, total_lbp: Math.round(1367 * 890) });
+  });
+  it('dollar-only order: as before', () => {
+    expect(orderRetotal([{ price_currency: 'usd', unit_price_lbp: 0, quantity: 2, discount_cents: 0, line_total_cents: 1000 }], 0, 150, 89500)).toEqual({ subtotal_cents: 1000, discount_cents: 0, total_cents: 1150, total_lbp: 1029250 });
+  });
+});

@@ -318,7 +318,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
             {!!live.length && (isOrder
               ? <button className="btn primary" onClick={saveToOrders}>📥 {pt('saveToOrders', locale)}</button>
               : <><button className="btn icon" title={pt('toOrdersHint', locale)} aria-label={pt('toOrders', locale)} onClick={toOrders}>📥</button><button className="btn primary" onClick={() => setDialog({ k: 'pay' })}>{pt('pay', locale)}</button></>)}
-            {!!live.length && <button className="btn icon" title={pt('cart', locale)} onClick={() => setCartOpen(true)}>▴</button>}
+            {!!live.length && <button className="btn icon cart-mini-open" title={pt('cart', locale)} onClick={() => setCartOpen(true)}>▴</button>}
           </span>
         </div>}
         <div className="row spread cart-head" style={{ alignItems: 'center' }}>

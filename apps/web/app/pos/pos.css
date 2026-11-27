@@ -712,7 +712,7 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
   .pos-status > * { flex: none; }
   .pos-status .pos-shopname { flex: 0 1 auto; min-width: 0; max-width: 40vw; padding-inline: 8px; }
   .pos-status .btn.icon, .pos .pos-status .btn.yorgo-btn, .pos-status .avatar-btn { min-width: 40px; width: 40px; padding: 0; justify-content: center; }
-  .pos-status .pill.status.ok { padding: 6px; }
+  .pos .pos-status .pill.status.ok { padding: 6px; min-width: 0; }
   .pos-status .pill.status.ok .status-text { display: none; }
   .pos-status .pill.status.warn { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pos-menu-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -720,3 +720,11 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 /* orders: the ⋯ menu button sits at the end of every card's actions */
 .order-actions .order-more { margin-inline-start: auto; }
 .order-actions .order-more > .btn.icon { min-width: 44px; font-size: 20px; font-weight: 800; }
+/* narrow phones: the minimised basket keeps its total readable — tighter buttons, and the ▴ goes (a tap anywhere on the bar opens the basket) */
+@media (max-width: 480px) {
+  .cart-mini { gap: 6px; }
+  .cart-mini .btn.icon { min-width: 40px; width: 40px; padding: 0; justify-content: center; }
+  .cart-mini .btn.primary { padding-inline: 12px; }
+  .cart-mini .cart-mini-open { display: none; }
+  .cart-mini-total strong { font-size: 18px; }
+}

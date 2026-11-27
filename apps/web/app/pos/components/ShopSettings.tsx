@@ -41,7 +41,7 @@ export default function ShopSettings({ boot, sb, locale, online }: { boot: Boote
       <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
         <F label={pt('defaultDeliveryFee', locale)}><input className="input" dir="ltr" inputMode="decimal" value={fee} onChange={e => setFee(e.target.value)} /></F>
         <F label={pt('maxDiscount', locale)}><input className="input" dir="ltr" inputMode="decimal" value={disc} onChange={e => setDisc(e.target.value)} /></F>
-        <F label={pt('lbpStep', locale)}><select className="input" value={step} onChange={e => setStep(e.target.value)}>{[1000, 5000, 10000, 25000, 50000].map(v => <option key={v} value={v}>{v.toLocaleString('en')}</option>)}</select></F>
+        <F label={pt('lbpStep', locale)}><select className="input" value={step} onChange={e => setStep(e.target.value)}>{/* 1 = no rounding: the lira total is shown and taken to the lira (roundLbp leaves a step of 1 alone) */}{[1, 1000, 5000, 10000, 25000, 50000].map(v => <option key={v} value={v}>{v === 1 ? pt('lbpStepNone', locale) : v.toLocaleString('en')}</option>)}</select></F>
         <F label={pt('deductAt', locale)}><div className="seg"><button className={deduct === 'ready' ? 'active' : ''} onClick={() => setDeduct('ready')}>{pt('st_ready', locale)}</button><button className={deduct === 'delivered' ? 'active' : ''} onClick={() => setDeduct('delivered')}>{pt('st_delivered', locale)}</button></div></F>
         <F label={pt('offlineDaysLabel', locale)}><input className="input" dir="ltr" inputMode="numeric" value={days} onChange={e => setDays(e.target.value)} /></F>
         <F label={pt('returnDaysLabel', locale)}><input className="input" dir="ltr" inputMode="numeric" value={retDays} onChange={e => setRetDays(e.target.value)} /></F>

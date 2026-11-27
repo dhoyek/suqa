@@ -1,4 +1,5 @@
 'use client';
+import { isMeasureUnit } from '@suqa/pos-core';
 import NumInput from './NumInput';
 import CategoryPicker from './CategoryPicker';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -104,7 +105,7 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
     const fields: Partial<Product> = {
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
       price_usd: cur === 'usd' ? priceNum : Number(src?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(src?.price_lbp ?? 0),
-      sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || unit === 'kg' || unit === 'g', vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
+      sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || isMeasureUnit(unit), vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
       visible_online: vis, is_available: avail, is_active: active, image_url: img, available_days: days.length && days.length < 7 ? [...days].sort() : null,
       description: { ar: dAr.trim(), en: dEn.trim() },
     };
@@ -174,7 +175,7 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
           {product?.next_expiry && <div className="label">{pt('nextExpiry', locale)}<div className={new Date(product.next_expiry) < new Date() ? 'bad' : ''} dir="ltr">{product.next_expiry}</div></div>}
           <div className="checks" style={{ gridColumn: '1 / -1' }}>
             <label><input type="checkbox" checked={track} onChange={e => setTrack(e.target.checked)} /> {pt('trackStock', locale)}</label>
-            <label><input type="checkbox" checked={dec || unit === 'kg' || unit === 'g'} disabled={unit === 'kg' || unit === 'g'} onChange={e => setDec(e.target.checked)} /> {pt('decimalQty', locale)}</label>
+            <label><input type="checkbox" checked={dec || isMeasureUnit(unit)} disabled={isMeasureUnit(unit)} onChange={e => setDec(e.target.checked)} /> {pt('decimalQty', locale)}</label>
             <label><input type="checkbox" checked={vat} onChange={e => setVat(e.target.checked)} /> {pt('vat', locale)}</label>
             <label><input type="checkbox" checked={vis} onChange={e => setVis(e.target.checked)} /> {pt('visibleOnline', locale)}</label>
             <label><input type="checkbox" checked={avail} onChange={e => setAvail(e.target.checked)} /> {pt('sellable', locale)}</label>

@@ -55,9 +55,9 @@ export default function CartView({ locale: L, fx, rates, displayCurrency, signed
                   <div className="muted" style={{ fontSize: 13 }}>{money(l.price_usd)}{l.unit ? ` / ${l.unit}` : ''}</div>
                 </div>
                 <div className="stepper">
-                  <button className="btn" onClick={() => setQty(s.id, l.product_id, l.qty - 1)}>−</button>
-                  <span className="qty">{l.qty}</span>
-                  <button className="btn" onClick={() => setQty(s.id, l.product_id, l.qty + 1)}>+</button>
+                  <button className="btn" onClick={() => setQty(s.id, l.product_id, Math.round((l.qty - (l.dec ? 0.5 : 1)) * 100) / 100)}>−</button>
+                  <span className="qty">{l.qty}{l.dec && l.unit ? <small> {l.unit}</small> : null}</span>
+                  <button className="btn" onClick={() => setQty(s.id, l.product_id, Math.round((l.qty + (l.dec ? 0.5 : 1)) * 100) / 100)}>+</button>
                 </div>
                 <strong className="total">{money(l.price_usd * l.qty)}</strong>
                 <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />

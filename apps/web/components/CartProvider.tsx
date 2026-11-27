@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LocalizedText } from '@suqa/shared';
 
-export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string;
+export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string; /** sold by measure (kg, l…): the quantity moves by half units */ dec?: boolean;
   /** weekdays the item is sold on (0 = Sunday); absent / null = every day */ days?: number[] | null };
 export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number; pickup_enabled?: boolean };
 export type CartShop = ShopRef & { lines: CartLine[]; selected: boolean };
@@ -39,7 +39,7 @@ function migrate(raw: any): Cart {
   return EMPTY;
 }
 const sum = (shops: CartShop[]) => Math.round(shops.reduce((s, sh) => s + sh.lines.reduce((a, l) => a + l.price_usd * l.qty, 0), 0) * 100) / 100;
-const cnt = (shops: CartShop[]) => shops.reduce((n, sh) => n + sh.lines.reduce((a, l) => a + l.qty, 0), 0);
+const cnt = (shops: CartShop[]) => shops.reduce((n, sh) => n + sh.lines.reduce((a, l) => a + (l.dec ? 1 : l.qty), 0), 0);   // 1.5 kg of lemons is one thing in the basket
 
 // One cart per tenant, kept in localStorage (per-device convenience; orders themselves are created server-side).
 export function CartProvider({ tenantSlug, multiShop, children }: { tenantSlug: string; multiShop: boolean; children: ReactNode }) {

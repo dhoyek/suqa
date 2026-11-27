@@ -1,5 +1,6 @@
 export interface ScaleConfig { prefix: string | null; code_len?: number; value_kind?: 'weight' | 'price_lbp' | 'price_usd'; value_divisor?: number }
 export interface ScanHit { product: Product; qty: number; pack?: { qty: number; barcode: string }; unit_price_cents?: number; unit_price_lbp?: number; fixed_total_cents?: number; fixed_total_lbp?: number; scale?: boolean }
+import { allowsDecimal } from './units';
 import type { Barcode, Category, Localized, Product, QuickButton } from './types';
 import { foldItem, makeMatcher, type Folded } from './item-match';
 
@@ -22,6 +23,9 @@ interface IndexRow { id: string; norm: string; fold: Folded }
  * In-memory catalog for the sale screen. Built once from IndexedDB, patched by the feed.
  * Hot paths: byBarcode.get() for scans, search() for typing. Never touches IndexedDB.
  */
+/** an item sold by measure (unit kg, g, l…) is a decimal-quantity item for the whole till, ticked or not (units.ts) */
+const measured = (p: Product): Product => (!p.decimal_qty && allowsDecimal(p) ? { ...p, decimal_qty: true } : p);
+
 export class CatalogIndex {
   byId = new Map<string, Product>();
   byBarcode = new Map<string, string>();        // barcode → product id
@@ -34,13 +38,13 @@ export class CatalogIndex {
 
   load(products: Product[], barcodes: Barcode[], _categories: Category[], quickButtons: QuickButton[]): void {
     this.byId.clear(); this.byBarcode.clear(); this.barcodeRows.clear(); this.barcodesOf.clear(); this.categories.clear();
-    for (const p of products) if (p.is_active) this.byId.set(p.id, p);
+    for (const p of products) if (p.is_active) this.byId.set(p.id, measured(p));
     for (const b of barcodes) this.addBarcode(b);
     this.rebuildSections();
     this.quickButtons = [...quickButtons].sort((a, b) => a.sort_order - b.sort_order);
     this.dirty = true;
   }
-  upsertProduct(p: Product): void { if (p.is_active) this.byId.set(p.id, p); else this.byId.delete(p.id); this.dirty = true; this.rebuildSections(); }
+  upsertProduct(p: Product): void { if (p.is_active) this.byId.set(p.id, measured(p)); else this.byId.delete(p.id); this.dirty = true; this.rebuildSections(); }
   /** Products group by their free-text `section` (the storefront's menu groups); the POS shows them as category chips. */
   /** The association's shared item categories (87): names in both languages and their order. Every category of the list is
    *  kept here for the item editor's picker; `categories` (the chips) stays the ones this shop's items actually use. */

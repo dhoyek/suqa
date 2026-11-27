@@ -1,5 +1,5 @@
 'use client';
-import { foldForSearch, searchItems, type SearchFold } from '@/lib/item-match';
+import { allowsDecimal, foldForSearch, searchItems, type SearchFold } from '@/lib/item-match';
 import FilterIcon from '@/components/FilterIcon';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
@@ -63,13 +63,13 @@ export default function ShopMenu({ shop, products, locale: L, fx, displayCurrenc
   ].filter(Boolean).join('\n'));
 
   // the buy controls of an item (add, or − qty +): the same in the list and in the item's details
-  const buy = (p: Product) => { const q = qtyOf(p.id); return (<>
+  const buy = (p: Product) => { const q = qtyOf(p.id); const dec = allowsDecimal(p as { decimal_qty?: boolean; unit?: string | null; unit_kind?: string | null }); const step = dec ? 0.5 : 1; return (<>
       {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
+                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, ...(dec ? { dec: true } : {}), price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
                     : <div className="stepper">
-                        <button className="btn" onClick={() => setQty(shop.id, p.id, q - 1)} aria-label="−">−</button>
-                        <span className="qty">{q}</span>
-                        <button className="btn" onClick={() => setQty(shop.id, p.id, q + 1)} aria-label="+">+</button>
+                        <button className="btn" onClick={() => setQty(shop.id, p.id, Math.round((q - step) * 100) / 100)} aria-label="−">−</button>
+                        <span className="qty">{q}{dec && p.unit ? <small> {p.unit}</small> : null}</span>
+                        <button className="btn" onClick={() => setQty(shop.id, p.id, Math.round((q + step) * 100) / 100)} aria-label="+">+</button>
                       </div>}
   </>); };
   const [detail, setDetail] = useState<string | null>(null);      // the item whose picture and details are open

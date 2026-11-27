@@ -9,14 +9,17 @@ export const toNumText = (s: string) => s.replace(/[٠-٩]/g, d => String('٠١�
  * number 1), so 1.5 could never be entered. This one keeps the text as typed and hands the number up; it takes a new value from
  * outside only when that value is not what the text already says (a chip that fills the price, a row loaded from a photo).
  */
-export default function NumInput({ value, onChange, empty = false, className = 'input', style, placeholder, title }: {
+export default function NumInput({ value, onChange, empty = false, className = 'input', style, placeholder, title, disabled }: {
   value: number | null | undefined; onChange: (n: number | null) => void; /** an empty box means "no value" (null) instead of 0 */ empty?: boolean;
-  className?: string; style?: CSSProperties; placeholder?: string; title?: string;
+  className?: string; style?: CSSProperties; placeholder?: string; title?: string; disabled?: boolean;
 }) {
   const show = (v: number | null | undefined) => (v == null || (empty && !Number.isFinite(v)) ? '' : String(v));
   const [txt, setTxt] = useState(() => show(value)); const mine = useRef<number | null>(value ?? null);
-  useEffect(() => { const v = value ?? null; if (v !== mine.current) { mine.current = v; setTxt(show(v)); } }, [value]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // While the box is being typed in, the text stays the person's: a caller that rounds or limits the number (a whole-unit item, a
+  // minimum) must not rewrite "0." on the way to "0.5". The caller's figure is shown when the box is left.
+  const focused = useRef(false);
+  useEffect(() => { const v = value ?? null; if (v !== mine.current) { mine.current = v; if (!focused.current) setTxt(show(v)); } }, [value]);   // eslint-disable-line react-hooks/exhaustive-deps
   return <input className={className} dir="ltr" inputMode="decimal" style={style} placeholder={placeholder} title={title} value={txt}
-    onFocus={e => e.target.select()}
+    disabled={disabled} onFocus={e => { focused.current = true; e.target.select(); }} onBlur={() => { focused.current = false; setTxt(show(value)); }}
     onChange={e => { const t = toNumText(e.target.value); setTxt(t); const n = t === '' || t === '.' ? (empty ? null : 0) : Number(t); const out = n != null && Number.isFinite(n) ? n : empty ? null : 0; mine.current = out; onChange(out); }} />;
 }

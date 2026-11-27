@@ -1,4 +1,5 @@
 'use client';
+import NumInput from './NumInput';
 import CategoryPicker from './CategoryPicker';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { barcodeOwner, createProduct, normBarcode, patchProduct, text, type CatalogIndex, type Product, type Staff, type Supplier } from '@suqa/pos-core';
@@ -158,8 +159,8 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
           <div className="label" style={{ gridColumn: '1 / -1' }}>{pt('barcodes', locale)}
             <div className="stack" style={{ gap: 4, margin: '4px 0' }}>{bcs.map((b, i) => <div key={b.barcode} className="row" style={{ gap: 6, alignItems: 'center' }}>
               <span className="chip" dir="ltr" style={{ minWidth: 120 }}>{b.barcode}</span>
-              <input className="input" dir="ltr" inputMode="decimal" title={pt('packQty', locale)} placeholder={pt('packQty', locale)} value={b.pack_qty === 1 ? '' : b.pack_qty} onChange={e => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_qty: Number(e.target.value) || 1 } : y)))} style={{ width: 90, minHeight: 36 }} />
-              {b.pack_qty !== 1 && <input className="input" dir="ltr" inputMode="decimal" title={pt('packPrice', locale)} placeholder={pt('packPrice', locale)} value={b.pack_price_usd ?? ''} onChange={e => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_price_usd: e.target.value === '' ? null : Number(e.target.value) } : y)))} style={{ width: 110, minHeight: 36 }} />}
+              <NumInput empty title={pt('packQty', locale)} placeholder={pt('packQty', locale)} value={b.pack_qty === 1 ? null : b.pack_qty} onChange={n => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_qty: n || 1 } : y)))} style={{ width: 90, minHeight: 36 }} />
+              {b.pack_qty !== 1 && <NumInput empty title={pt('packPrice', locale)} placeholder={pt('packPrice', locale)} value={b.pack_price_usd ?? null} onChange={n => setBcs(x => x.map((y, j) => (j === i ? { ...y, pack_price_usd: n } : y)))} style={{ width: 110, minHeight: 36 }} />}
               {b.pack_qty !== 1 && <small className="muted">{pt('pack', locale)} ×{b.pack_qty}</small>}
               <button type="button" className="btn icon" style={{ minHeight: 0, padding: '0 6px' }} onClick={() => setBcs(x => x.filter((_, j) => j !== i))}>✕</button></div>)}</div>
             <div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" placeholder={pt('addBarcode', locale)} value={bcInput} onChange={e => setBcInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addBc(bcInput); } }} /><button type="button" className="btn" onClick={() => addBc(bcInput)}>＋</button><button type="button" className="btn" onClick={() => setCam(true)} title={pt('cameraScan', locale)} aria-label={pt('cameraScan', locale)}>📷</button></div>

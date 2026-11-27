@@ -1,4 +1,5 @@
 'use client';
+import NumInput from '../components/NumInput';
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { backBlock, backTargets, stepBackOrder, returnTooOld, NEXT, assignDriver, mergeBlock, mergeOrders, cashMove, currentShift, driverPayOf, payDriver, deleteOrder, editOrder, editOrderInfo, infoEditBlock, fmtLbp, fmtUsd, num, roundLbp, payOrder, setOrderStatus, text, type CatalogIndex, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product, type Rate, type Staff, type SyncStatus, waDigits, type Driver } from '@suqa/pos-core';
 import { pt, type L, type Key } from '../i18n';
@@ -399,7 +400,7 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
           </div>
           <div className="qty-btns">
             <button disabled={r.voided || locked} onClick={() => setQty(i, r.qty - stepOf(r.dec), r.dec)}>−</button>
-            <input className="qty-in num" inputMode="decimal" disabled={r.voided || locked} value={r.qty} onChange={e => { if (e.target.value === '') return; const v = Number(e.target.value); if (!Number.isNaN(v)) setQty(i, r.dec ? v : Math.round(v), r.dec); }} />
+            <NumInput className="qty-in num" empty disabled={r.voided || locked} value={r.qty} onChange={v => { if (v != null) setQty(i, r.dec ? v : Math.round(v), r.dec); }} />
             <button disabled={r.voided || locked} onClick={() => setQty(i, r.qty + stepOf(r.dec), r.dec)}>+</button>
           </div>
           <button className={`btn ${r.voided ? '' : 'danger'}`} disabled={locked} onClick={() => setRows(x => x.map((y, j) => (j === i ? { ...y, voided: !y.voided } : y)))}>{r.voided ? '↶ ' + pt('restoreLine', locale) : pt('removeLine', locale)}</button>
@@ -408,7 +409,7 @@ function EditOrderDialog({ boot, locale, index, order, lines, paidCents, onDone,
           <div className="edit-line-name"><div>＋ {text(a.p.name, locale)}</div><div className="muted num" style={{ fontSize: 12 }}>{fmtUsd(Math.round(num(a.p.price_usd) * 100))} × {a.qty}{a.p.unit ? ' ' + a.p.unit : ''} = <strong>{fmtUsd(Math.round(num(a.p.price_usd) * 100 * a.qty))}</strong></div></div>
           <div className="qty-btns">
             <button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), Math.round((y.qty - stepOf(!!a.p.decimal_qty)) * 1000) / 1000) } : y)))}>−</button>
-            <input className="qty-in num" inputMode="decimal" value={a.qty} onChange={e => { if (e.target.value === '') return; const v = Number(e.target.value); if (!Number.isNaN(v)) setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), a.p.decimal_qty ? v : Math.round(v)) } : y))); }} />
+            <NumInput className="qty-in num" empty value={a.qty} onChange={v => { if (v != null) setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.max(minOf(!!a.p.decimal_qty), a.p.decimal_qty ? v : Math.round(v)) } : y))); }} />
             <button onClick={() => setAdds(x => x.map((y, j) => (j === i ? { ...y, qty: Math.round((y.qty + stepOf(!!a.p.decimal_qty)) * 1000) / 1000 } : y)))}>+</button>
           </div>
           <button className="btn icon" onClick={() => setAdds(x => x.filter((_, j) => j !== i))}>✕</button>

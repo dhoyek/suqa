@@ -23,7 +23,7 @@ export default async function OffersPage() {
         <h1 style={{ margin: 0, fontSize: 22 }}>🎁 {ar ? 'العروض' : 'Offers'}</h1>
       </div>
       <OffersBoard locale={L} fx={Number(tenant.fx_lbp_rate)} rates={rates} displayCurrency={tenant.display_currency} cats={cats.map(c => ({ id: c.id, name: c.name }))} shops={cards} offers={offers} products={products}
-        labels={{ add: ui('add', L), replaceCart: ui('replaceCart', L), all: ui('all', L) }} />
+        labels={{ add: ui('add', L), replaceCart: ui('replaceCart', L), all: ui('all', L), shops: ui('shops', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), ok: ui('okBtn', L) }} />
     </>
   );
 }

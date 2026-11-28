@@ -30,7 +30,7 @@ const WHY: Record<string, [string, string]> = {
 };
 
 type Row = { p: Product; qty: number };
-type Form = { id?: string; ar: string; en: string; img: string | null; rows: Row[]; price: number | null; hot: boolean; active: boolean; starts: string; ends: string; max: number | null };
+type Form = { id?: string; ar: string; en: string; dAr: string; dEn: string; img: string | null; rows: Row[]; price: number | null; hot: boolean; active: boolean; starts: string; ends: string; max: number | null };
 const localDT = (iso?: string | null) => { if (!iso) return ''; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 
 export default function OffersView({ boot, sb, locale, index, online, tick }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; online: boolean; tick: number }) {
@@ -47,9 +47,9 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
   const money = (v: number, unit: 'cents' | 'lbp') => (unit === 'lbp' ? fmtLbp(v, locale) : fmtUsd(v));
 
   const open = (o?: Offer) => { setErr(''); setQ(''); setForm(o
-    ? { id: o.id, ar: o.name?.ar ?? '', en: o.name?.en ?? '', img: o.image_url ?? null, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd), hot: o.is_hot, active: o.is_active, starts: localDT(o.starts_at), ends: localDT(o.ends_at), max: o.max_per_order ?? null,
+    ? { id: o.id, ar: o.name?.ar ?? '', en: o.name?.en ?? '', dAr: o.description?.ar ?? '', dEn: o.description?.en ?? '', img: o.image_url ?? null, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd), hot: o.is_hot, active: o.is_active, starts: localDT(o.starts_at), ends: localDT(o.ends_at), max: o.max_per_order ?? null,
         rows: [...o.items].sort((a, b) => num(a.sort_order) - num(b.sort_order)).map(it => ({ p: index.byId.get(it.product_id)!, qty: num(it.quantity) })).filter(r => r.p) }
-    : { ar: '', en: '', img: null, rows: [], price: null, hot: false, active: true, starts: '', ends: '', max: null }); };
+    : { ar: '', en: '', dAr: '', dEn: '', img: null, rows: [], price: null, hot: false, active: true, starts: '', ends: '', max: null }); };
   // the bundle's currency is its items' currency
   const cur = form?.rows[0]?.p.price_currency === 'lbp' ? 'lbp' : 'usd';
   const mixed = !!form && form.rows.some(r => (r.p.price_currency ?? 'usd') !== cur);
@@ -62,7 +62,7 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
 
   const save = async () => {
     if (!form || busy) return; setBusy(true); setErr('');
-    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { ...(form.id ? { id: form.id } : {}), name: { ar: form.ar.trim(), en: form.en.trim() }, image_url: form.img ?? '', price_currency: cur, price: form.price,
+    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { ...(form.id ? { id: form.id } : {}), name: { ar: form.ar.trim(), en: form.en.trim() }, description: { ar: form.dAr.trim().slice(0, 300), en: form.dEn.trim().slice(0, 300) }, image_url: form.img ?? '', price_currency: cur, price: form.price,
       is_active: form.active, is_hot: form.hot, starts_at: form.starts ? new Date(form.starts).toISOString() : '', ends_at: form.ends ? new Date(form.ends).toISOString() : '', max_per_order: form.max ? String(Math.round(form.max)) : '',
       items: form.rows.map(r => ({ product_id: r.p.id, quantity: r.qty })) } });
     setBusy(false);
@@ -71,7 +71,7 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
   };
   const toggle = async (o: Offer, x: { is_active?: boolean; is_hot?: boolean }) => {
     setBusy(true);
-    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { id: o.id, name: o.name, image_url: o.image_url ?? '', price_currency: o.price_currency, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd),
+    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { id: o.id, name: o.name, description: o.description ?? {}, image_url: o.image_url ?? '', price_currency: o.price_currency, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd),
       is_active: x.is_active ?? o.is_active, is_hot: x.is_hot ?? o.is_hot, starts_at: o.starts_at ?? '', ends_at: o.ends_at ?? '', max_per_order: o.max_per_order ? String(o.max_per_order) : '', items: o.items.map(i => ({ product_id: i.product_id, quantity: num(i.quantity) })) } });
     setBusy(false); if (error) { const k = Object.keys(ERR).find(c => error.message.includes(c)); setErr(k ? T(...ERR[k]) : error.message); } else await reload();
   };
@@ -96,6 +96,7 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row spread" style={{ gap: 6 }}><strong>{o.is_hot ? '🔥 ' : ''}{text(o.name, locale)}</strong>{!v.ok && <span className="pill warn" style={{ fontSize: 11 }}>{T(...(WHY[v.why ?? 'off'] ?? WHY.off))}</span>}</div>
                 <div className="muted" style={{ fontSize: 13 }}>{v.lines.map(l => `${l.quantity}× ${text(l.product.name, locale)}`).join(' · ') || '—'}</div>
+                {text(o.description ?? {}, locale) && <div className="muted" style={{ fontSize: 12, fontStyle: 'italic' }}>{text(o.description ?? {}, locale)}</div>}
                 <div style={{ marginTop: 4 }}>{v.normal > v.charged && <s className="muted" style={{ marginInlineEnd: 8 }}>{money(v.normal, v.unit)}</s>}<strong className="offer-price">{money(v.charged, v.unit)}</strong>{v.saving > 0 && v.ok && <span className="pill ok" style={{ marginInlineStart: 8, fontSize: 11 }}>−{v.pct}%</span>}</div>
                 {(o.starts_at || o.ends_at || o.max_per_order) && <div className="muted" style={{ fontSize: 12 }}>{o.starts_at ? `${T('من', 'from')} ${new Date(o.starts_at).toLocaleString(locale === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })} ` : ''}{o.ends_at ? `${T('حتى', 'until')} ${new Date(o.ends_at).toLocaleString(locale === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })} ` : ''}{o.max_per_order ? `· ${T('حدّ', 'max')} ${o.max_per_order} ${T('بالطلب', 'per order')}` : ''}</div>}
               </div>
@@ -116,6 +117,8 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
           <div className="form-grid">
             <label className="label">{T('اسم العرض (عربي)', 'Name (Arabic)')}<input className="input" dir="rtl" maxLength={80} value={form.ar} onChange={e => patch({ ar: e.target.value })} placeholder="فطور الصبح" /></label>
             <label className="label">{T('اسم العرض (إنكليزي)', 'Name (English)')}<input className="input" dir="ltr" maxLength={80} value={form.en} onChange={e => patch({ en: e.target.value })} placeholder="Breakfast deal" /></label>
+            <label className="label">{T('وصف قصير (عربي، اختياري)', 'Short description (Arabic, optional)')}<textarea className="input" dir="rtl" rows={2} maxLength={300} value={form.dAr} onChange={e => patch({ dAr: e.target.value })} placeholder="فطور كامل لشخصين" /></label>
+            <label className="label">{T('وصف قصير (إنكليزي، اختياري)', 'Short description (English, optional)')}<textarea className="input" dir="ltr" rows={2} maxLength={300} value={form.dEn} onChange={e => patch({ dEn: e.target.value })} placeholder="A full breakfast for two" /></label>
           </div>
           <div className="label">{T('أصناف المجموعة', 'Items in the bundle')}
             {form.rows.map(r => (

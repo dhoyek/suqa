@@ -105,6 +105,27 @@ export function settle(total_cents: number, payments: Array<Pick<Payment, 'tende
   return { paid_cents: paid, paid_usd_cents, paid_lbp, remaining_cents: remaining, change_cents: change, change_usd_cents, change_lbp, unpaid_cents };
 }
 
+/**
+ * An order saved as debt, then paid at handover — the till's copy of the server's rule (scripts 127 / 129): money taken now
+ * (net of the change given back) comes off the order's open debt first, and "still not paid" adds only the part of the debt
+ * that is not already on the order. Returns the old debt lines that changed and the new rows as they should be kept.
+ */
+export function payOffOrderDebt<P extends Pick<Payment, 'tender' | 'amount' | 'currency'>, N extends Pick<Payment, 'tender' | 'amount' | 'currency'>>(
+  oldDebt: P[], collectedCents: number, incoming: N[], changeCents: number, rate: number): { changed: P[]; incoming: N[] } {
+  const val = (p: Pick<Payment, 'amount' | 'currency'>) => (p.currency === 'lbp' ? lbpToCents(Number(p.amount) || 0, rate) : Number(p.amount) || 0);
+  const cut = <T extends Pick<Payment, 'amount' | 'currency'>>(p: T, take: number): T => ({ ...p, amount: take >= val(p) ? 0 : p.currency === 'lbp' ? Number(p.amount) - usdToLbp(take, rate) : Number(p.amount) - take });
+  const open = oldDebt.filter(p => p.tender === 'unpaid' && Number(p.amount) > 0);
+  let debt = Math.max(0, open.reduce((s, p) => s + val(p), 0) - Math.max(0, collectedCents));
+  if (debt <= 0) return { changed: [], incoming };
+  const money = incoming.filter(p => p.tender !== 'unpaid').reduce((s, p) => s + val(p), 0);
+  let left = money > 0 ? Math.min(debt, Math.max(0, money - Math.max(0, changeCents))) : 0;
+  debt -= left;
+  const changed: P[] = [];
+  for (const p of [...open].reverse()) { if (left <= 0) break; const take = Math.min(left, val(p)); changed.push(cut(p, take)); left -= take; }
+  const out = incoming.map(p => { if (p.tender !== 'unpaid') return p; const take = Math.min(debt, val(p)); debt -= take; return take > 0 ? cut(p, take) : p; });
+  return { changed, incoming: out };
+}
+
 export const tenderCurrency = (t: Tender): Currency => (t === 'cash_lbp' ? 'lbp' : 'usd');
 
 // Display (Western digits in both languages, like the store)

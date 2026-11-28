@@ -132,12 +132,26 @@ export function searchItems<T>(items: T[], foldOf: (item: T) => SearchFold, quer
   const loose = makeMatcher(query)!;
   if (kindsIn(qn).words.size) return items.filter(x => loose(foldOf(x)));
   const toks = qn.split(' ').filter(Boolean).map(w => ({ w, s: skelWord(w), ar: isAr(w), num: /^[0-9]+$/.test(w) }));
-  const strong = (f: SearchFold) => f.norm.includes(qn) || toks.every(t => {
-    if (f.norm.includes(t.w)) return true;
-    if (t.num) return false;
-    if (t.s.length < 2) return toks.length > 1 && t.w.length <= 2;              // "w", "el" between other words carry no weight
-    return f.words.some(k => k.ar !== t.ar && (t.s.length === 2 ? k.s === t.s : k.s.startsWith(t.s)) && (t.ar ? vowelsAgree(k.w, t.w) : vowelsAgree(t.w, k.w)));
-  });
+  const sounds = (t: typeof toks[number], k: NameWord) => k.ar !== t.ar && (t.s.length === 2 ? k.s === t.s : k.s.startsWith(t.s)) && (t.ar ? vowelsAgree(k.w, t.w) : vowelsAgree(t.w, k.w));
+  const strong = (f: SearchFold) => {
+    if (f.norm.includes(qn)) return true;
+    // A name word heard in the other alphabet serves ONE typed word: "rico" (as typed) is ريكو, so "rice" cannot be ريكو too —
+    // "rico rice" is the brand's rice, not every item of the brand.
+    const used = new Set<number>(); const bySound: typeof toks = [];
+    for (const t of toks) {
+      if (f.norm.includes(t.w)) { if (!t.num && t.s.length >= 2) { const i = f.words.findIndex((k, j) => !used.has(j) && sounds(t, k)); if (i >= 0) used.add(i); } continue; }
+      if (t.num) return false;
+      if (t.s.length < 2) { if (toks.length > 1 && t.w.length <= 2) continue; return false; }    // "w", "el" between other words carry no weight
+      bySound.push(t);
+    }
+    for (const t of bySound) { const i = f.words.findIndex((k, j) => !used.has(j) && sounds(t, k)); if (i < 0) return false; used.add(i); }
+    return true;
+  };
+  // several words, and some items carry every one of them as typed: those are the answer ("ريكو رز" is not Taj rice because ريكو sounds like "rice")
+  if (toks.length > 1) { const typed = items.filter(x => { const f = foldOf(x); return toks.every(t => f.norm.includes(t.w)); }); if (typed.length) return typed; }
   const sure = items.filter(x => strong(foldOf(x)));
-  return sure.length ? sure : items.filter(x => loose(foldOf(x)));
+  if (!sure.length) return items.filter(x => loose(foldOf(x)));
+  // what carries the words as typed comes first; a match by sound alone ("rice" heard in ريكو) after it
+  const asTyped = (x: T) => { const f = foldOf(x); return toks.every(t => f.norm.includes(t.w)); };
+  return [...sure.filter(asTyped), ...sure.filter(x => !asTyped(x))];
 }

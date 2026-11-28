@@ -1,6 +1,6 @@
 import { META, type PosDb } from './db';
 import { enqueue, newId } from './sale';
-import { orderLineCents, orderRetotal, settle, type Settlement } from './money';
+import { orderLineCents, orderRetotal, payOffOrderDebt, settle, type Settlement } from './money';
 import { driverPayOf } from './drivers';
 import { num, type Currency, type Order, type OrderLine, type OrderStatus, type Payment, type Product } from './types';
 
@@ -82,8 +82,12 @@ export async function payOrder(db: PosDb, order: Order, payments: Array<Omit<Pay
     courier_fee_cents: extra.courier_fee_cents ?? order.courier_fee_cents ?? 0, courier_name: extra.courier_name ?? order.courier_name ?? null,
     delivered_at: status === 'delivered' ? now : order.delivered_at, closed_at: status === 'delivered' ? now : order.closed_at, updated_at: now };
   if (status === 'delivered' && order.status !== 'delivered' && updated.driver_id && !num(updated.courier_fee_cents) && !updated.driver_paid_at) updated.courier_fee_cents = await driverPayOf(db, updated);
+  // an order saved as debt: the money taken now pays that debt (the server does the same — 129); what is sent stays as typed
+  const before = await db.payments.where('order_id').equals(order.id).toArray();
+  const collected = before.some(p => p.tender === 'unpaid') ? (await db.debtAllocations.where('order_id').equals(order.id).toArray()).reduce((a, x) => a + num(x.amount_cents), 0) : 0;
+  const debt = payOffOrderDebt(before.slice().sort((a, b) => String(a.at).localeCompare(String(b.at))), collected, pays, s.change_cents, rate);
   await db.transaction('rw', [db.orders, db.payments, db.outbox], async () => {
-    await db.payments.bulkPut(pays); await db.orders.put(updated);
+    await db.payments.bulkPut([...debt.changed, ...debt.incoming]); await db.orders.put(updated);
     await enqueue(db, 'order.pay', { id: order.id, status, shift_id: shiftId, payments: pays.map(p => ({ id: p.id, tender: p.tender, amount: p.amount, currency: p.currency, reference: p.reference ?? null, unpaid_name: p.unpaid_name ?? null, unpaid_phone: p.unpaid_phone ?? null, at: p.at })),
       paid_usd_cents: s.paid_usd_cents, paid_lbp: s.paid_lbp, change_usd_cents: s.change_usd_cents, change_lbp: s.change_lbp, courier_fee_cents: updated.courier_fee_cents, courier_name: updated.courier_name });
   });

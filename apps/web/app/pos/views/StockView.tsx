@@ -33,7 +33,7 @@ export default function StockView({ boot, locale, index, tick, staff, reindex, f
   const tracked = useMemo(() => [...index.byId.values()].filter(p => p.track_stock), [index, tick]);
   const soon = useMemo(() => { const lim = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10); return [...index.byId.values()].filter(p => p.next_expiry && p.next_expiry <= lim && num(p.on_hand) > 0).sort((a, b) => (a.next_expiry ?? '').localeCompare(b.next_expiry ?? '')); }, [index, tick]);
   const low = useMemo(() => tracked.filter(p => num(p.on_hand) - num(p.reserved) <= num(p.min_stock)).sort((a, b) => (num(a.on_hand) - num(a.reserved)) - (num(b.on_hand) - num(b.reserved))), [tracked]);
-  const negative = useMemo(() => tracked.filter(p => p.needs_review || num(p.on_hand) < 0), [tracked]);
+  const negative = useMemo(() => tracked.filter(p => num(p.on_hand) < 0), [tracked]);     // only what is below zero NOW — an item that was received or counted back above zero leaves the list (Dan, 28 Nov)
   const results = q.trim() ? index.search(q, 30) : [];
 
   // reorder list grouped by supplier: suggested quantity brings the item back to twice its minimum (at least 1)

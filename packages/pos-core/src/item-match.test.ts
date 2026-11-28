@@ -138,4 +138,15 @@ describe('searchItems (the shop page search box)', () => {
     expect(find('zzzz')).toEqual([]);
     expect(find('  ')).toHaveLength(shop.length);
   });
+  it('a kind word next to a brand ("rico rice"): that brand, that kind — not the whole brand', () => {
+    const sec = 'Grains, Pulses & Spices', secAr = 'حبوب وبقول وبهارات';
+    const rico = [mk('ريكو رز أميركي 1 كغ', 'RICO AMERICAN RICE 1 KG.', sec, secAr), mk('ريكو رز مصري 1 كغ', 'RICO EGIPTIAN RICE 1 KG.', sec, secAr),
+      mk('ريكو قرفة 100 غ', 'RICO CINNAMON 100 G.', sec, secAr), mk('ريكو خميرة 50 غ', 'RICO YEAST 50 G.', sec, secAr), mk('تاج دايموند رز بسمتي 900 غ', 'TAJ DIAMOND BASMATI RICE 900GR', sec, secAr)];
+    const f = (q: string) => searchItems(rico, x => x.f, q).map(x => x.en);
+    expect(f('rico rice')).toEqual(['RICO AMERICAN RICE 1 KG.', 'RICO EGIPTIAN RICE 1 KG.']);
+    expect(f('rico rez')).toEqual(['RICO AMERICAN RICE 1 KG.', 'RICO EGIPTIAN RICE 1 KG.']);
+    expect(f('ريكو رز')).toEqual(['RICO AMERICAN RICE 1 KG.', 'RICO EGIPTIAN RICE 1 KG.']);
+    expect(f('rico')).toHaveLength(4);
+    expect(f('rice').slice(0, 3)).toEqual(['RICO AMERICAN RICE 1 KG.', 'RICO EGIPTIAN RICE 1 KG.', 'TAJ DIAMOND BASMATI RICE 900GR']);   // the word as typed first; the brand that sounds like it after
+  });
 });

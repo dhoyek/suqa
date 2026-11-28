@@ -22,6 +22,9 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(window.location.origin), []);
   const money = (v: number) => formatMoney(v, fx, displayCurrency, L);
+  // an item priced in lira shows that lira as the shop set it (260,001 — not 260,000); only totals are rounded
+  const liraOf = (p: Product) => { const x = p as { price_currency?: string | null; price_lbp?: number | string | null }; return x.price_currency === 'lbp' && Number(x.price_lbp) > 0 ? Number(x.price_lbp) : null; };
+  const price = (p: Product) => formatMoney(Number(p.price_usd), fx, displayCurrency, L, liraOf(p));
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
   const qtyOf = (id: string) => qtyIn(shop.id, id);
   // a section's display name in the visitor's language (schema 74); the section key itself when the shop gave it no name
@@ -64,7 +67,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   // Prefilled WhatsApp message with the item's details and a link back to the shop page.
   const askLink = (p: Product) => waLink(shop.whatsapp, [
     `${labels.waHello} ${tr(shop.name, L)} 👋`, labels.waAskItem,
-    `• ${tr(p.name, L)}${p.unit ? ` (${p.unit})` : ''} — ${money(Number(p.price_usd))}`,
+    `• ${tr(p.name, L)}${p.unit ? ` (${p.unit})` : ''} — ${price(p)}`,
     tr(p.description, L) || null,
     origin ? `${labels.waFrom} ${origin}/s/${shop.slug}` : null,
   ].filter(Boolean).join('\n'));
@@ -72,7 +75,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   // the buy controls of an item (add, or − qty +): the same in the list and in the item's details
   const buy = (p: Product) => { const q = qtyOf(p.id); const dec = allowsDecimal(p as { decimal_qty?: boolean; unit?: string | null; unit_kind?: string | null }); const step = dec ? 0.5 : 1; return (<>
       {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, ...(dec ? { dec: true } : {}), price_usd: Number(p.price_usd), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
+                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, ...(dec ? { dec: true } : {}), price_usd: Number(p.price_usd), ...(liraOf(p) ? { lbp: liraOf(p)! } : {}), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(shop.id, p.id, Math.round((q - step) * 100) / 100)} aria-label="−">−</button>
                         <span className="qty">{q}{dec && p.unit ? <small> {p.unit}</small> : null}</span>
@@ -140,7 +143,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
               {!!(dp as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((dp as { available_days?: number[] }).available_days!, L)}</div>}
               {tr(dp.description, L) && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{tr(dp.description, L)}</p>}
               <div className="row spread" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <strong style={{ fontSize: 16 }}>{money(Number(dp.price_usd))}{dp.unit ? <span className="muted" style={{ fontWeight: 400 }}> / {dp.unit}</span> : null}</strong>
+                <strong style={{ fontSize: 16 }}>{price(dp)}{dp.unit ? <span className="muted" style={{ fontWeight: 400 }}> / {dp.unit}</span> : null}</strong>
                 <span className="row" style={{ gap: 8, alignItems: 'center' }}>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(dp) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {buy(dp)}
@@ -173,7 +176,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
                     <div className="name">{tr(p.name, L)}</div>
                     {!!(p as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((p as { available_days?: number[] }).available_days!, L)}</div>}
                     {tr(p.description, L) && <div className="muted desc">{tr(p.description, L)}</div>}
-                    <div className="price">{money(Number(p.price_usd))}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
+                    <div className="price">{price(p)}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
                   </div>
                   <div className="menu-acts">
                     {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}

@@ -14,7 +14,7 @@ export default function CartView({ locale: L, fx, rates, displayCurrency, signed
 }) {
   const { cart, multiShop, setQty, setNote, setSelected, removeShop, count, selectedShops, selectedSubtotal } = useCart();
   // each shop's lira at its own rate (103); a total across shops is the sum of their lira
-  const moneyAt = (shopId: string) => (v: number) => formatMoney(v, rateOf(rates, shopId, fx), displayCurrency, L);
+  const moneyAt = (shopId: string) => (v: number, lbpExact?: number | null) => formatMoney(v, rateOf(rates, shopId, fx), displayCurrency, L, lbpExact);
   if (!count) return <div className="card stack" style={{ textAlign: 'center' }}><p className="muted">{labels.emptyCart}</p><Link className="btn primary" href="/">{labels.browseShops}</Link></div>;
 
   const shopSub = (lines: { price_usd: number; qty: number }[]) => Math.round(lines.reduce((s, l) => s + l.price_usd * l.qty, 0) * 100) / 100;
@@ -22,7 +22,7 @@ export default function CartView({ locale: L, fx, rates, displayCurrency, signed
   const canCheckout = selectedShops.length > 0 && belowMin.length === 0;
   const waTextFor = (s: typeof cart.shops[number], money = moneyAt(s.id)) => [
     `${labels.waHello} ${tr(s.name, L)} 👋`, labels.waOrderIntro,
-    ...s.lines.map(l => `• ${l.qty} × ${tr(l.name, L)}${l.unit ? ` (${l.unit})` : ''} — ${money(l.price_usd * l.qty)}`),
+    ...s.lines.map(l => `• ${l.qty} × ${tr(l.name, L)}${l.unit ? ` (${l.unit})` : ''} — ${money(l.price_usd * l.qty, l.lbp ? l.lbp * l.qty : null)}`),
     `${labels.total}: ${money(shopSub(s.lines))} (+ ${labels.deliveryFee.toLowerCase()})`,
   ].join('\n');
 
@@ -53,14 +53,14 @@ export default function CartView({ locale: L, fx, rates, displayCurrency, signed
                 <div className="info">
                   <div className="name">{l.bundle ? '🎁 ' : ''}{tr(l.name, L)}</div>
                   {l.bundle && <div className="muted" style={{ fontSize: 13 }}>{l.bundle.items.map(i => `${i.qty}× ${tr(i.name, L)}`).join(' · ')}</div>}
-                  <div className="muted" style={{ fontSize: 13 }}>{l.bundle && l.bundle.normal_usd > l.price_usd ? <s style={{ marginInlineEnd: 6 }}>{money(l.bundle.normal_usd)}</s> : null}{money(l.price_usd)}{l.unit ? ` / ${l.unit}` : ''}</div>
+                  <div className="muted" style={{ fontSize: 13 }}>{l.bundle && l.bundle.normal_usd > l.price_usd ? <s style={{ marginInlineEnd: 6 }}>{money(l.bundle.normal_usd)}</s> : null}{money(l.price_usd, l.lbp)}{l.unit ? ` / ${l.unit}` : ''}</div>
                 </div>
                 <div className="stepper">
                   <button className="btn" onClick={() => setQty(s.id, l.product_id, Math.round((l.qty - (l.dec ? 0.5 : 1)) * 100) / 100)}>−</button>
                   <span className="qty">{l.qty}{l.dec && l.unit ? <small> {l.unit}</small> : null}</span>
                   <button className="btn" disabled={!!l.bundle?.max && l.qty >= l.bundle.max} onClick={() => setQty(s.id, l.product_id, Math.round((l.qty + (l.dec ? 0.5 : 1)) * 100) / 100)}>+</button>
                 </div>
-                <strong className="total">{money(l.price_usd * l.qty)}</strong>
+                <strong className="total">{money(l.price_usd * l.qty, l.lbp ? l.lbp * l.qty : null)}</strong>
                 {!l.bundle && <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />}
               </div>
             ))}

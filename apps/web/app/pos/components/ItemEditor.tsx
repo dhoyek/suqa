@@ -99,12 +99,18 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
   };
   useScanner(code => { void addBc(code); });
 
-  const valid = (ar.trim() || en.trim()) && Number(price) >= 0 && price !== '';
+  // a DOLLAR price of 1,000 or more is almost always a lira amount typed with "$" selected (Najem Market, Nov 2026): ask before saving
+  const bigUsd = cur === 'usd' && Number(price) >= 1000; const [bigOk, setBigOk] = useState(false);
+  useEffect(() => { setBigOk(false); }, [price, cur]);
+  const [fxRate, setFxRate] = useState(0);
+  useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: { lbp_per_usd?: number } | undefined) => { if (r?.lbp_per_usd) setFxRate(Number(r.lbp_per_usd)); }); }, [boot]);
+  const valid = (ar.trim() || en.trim()) && Number(price) >= 0 && price !== '' && (!bigUsd || bigOk);
   const build = () => {
     const priceNum = Number(price) || 0;
     const fields: Partial<Product> = {
       name: { ar: ar.trim() || en.trim(), en: en.trim() || ar.trim() }, section: cat.trim() || null, price_currency: cur,
-      price_usd: cur === 'usd' ? priceNum : Number(src?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(src?.price_lbp ?? 0),
+      // a lira-priced item keeps a sensible dollar figure next to it (the lira at today's rate), not whatever was typed before
+      price_usd: cur === 'usd' ? priceNum : fxRate > 0 ? Math.round((Math.round(priceNum) / fxRate) * 100) / 100 : Number(src?.price_usd ?? 0), price_lbp: cur === 'lbp' ? Math.round(priceNum) : Number(src?.price_lbp ?? 0),
       sku: sku.trim() || null, unit_kind: unit, unit: unit === 'piece' ? null : unit, decimal_qty: dec || isMeasureUnit(unit), vat, track_stock: track, min_stock: Number(min) || 0, supplier_id: supplierId || null, margin_pct: margin.trim() === '' ? null : Number(margin) || 0,
       visible_online: vis, is_available: avail, is_active: active, image_url: img, available_days: days.length && days.length < 7 ? [...days].sort() : null,
       description: { ar: dAr.trim(), en: dEn.trim() },
@@ -147,7 +153,10 @@ export default function ItemEditor({ boot, locale, index, product, template, pre
             <div className="row" style={{ gap: 8 }}>
               <div className="seg"><button type="button" className={cur === 'usd' ? 'active' : ''} onClick={() => setCur('usd')}>$</button><button type="button" className={cur === 'lbp' ? 'active' : ''} onClick={() => setCur('lbp')}>ل.ل.</button></div>
               <input className="input" dir="ltr" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} style={{ flex: 1 }} />
-            </div></label>
+            </div>
+            {bigUsd && !bigOk && <div className="error" style={{ fontSize: 13 }}>⚠ {locale === 'ar' ? `السعر ${Number(price).toLocaleString('en-US')} بالدولار. هل تقصد الليرة؟` : `The price is $${Number(price).toLocaleString('en-US')}. Did you mean lira?`}
+              <div className="row" style={{ gap: 6, marginTop: 4 }}><button type="button" className="btn primary" onClick={() => setCur('lbp')}>{locale === 'ar' ? '← نعم، بالليرة' : 'Yes, lira'}</button><button type="button" className="btn" onClick={() => setBigOk(true)}>{locale === 'ar' ? 'لا، بالدولار' : 'No, dollars'}</button></div></div>}
+            </label>
           {owner && <label className="label">{pt('cost', locale)} ($)<div className="row" style={{ gap: 6 }}><input className="input" dir="ltr" inputMode="decimal" value={cost} onChange={e => setCost(e.target.value)} style={{ flex: 1 }} />{marginPct > 0 && <button type="button" className="btn" title={`${pt('defaultMargin', locale)} ${marginPct}%`} onClick={priceFromMargin}>{pt('fromMargin', locale)} {marginPct}%</button>}</div>
             {Number(cost) > 0 && cur === 'usd' && Number(price) > 0 && <small className={`muted ${Number(price) < Number(cost) ? 'bad' : ''}`}>{pt('margin', locale)} {Math.round(((Number(price) - Number(cost)) / Number(price)) * 100)}%</small>}</label>}
           <label className="label">{pt('sku', locale)}<input className="input" dir="ltr" value={sku} onChange={e => setSku(e.target.value)} /></label>

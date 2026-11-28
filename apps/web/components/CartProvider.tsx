@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LocalizedText } from '@suqa/shared';
 
-export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string; /** sold by measure (kg, l…): the quantity moves by half units */ dec?: boolean;
+export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string; /** the item's own lira price when the shop priced it in lira: shown as it is, never rounded */ lbp?: number; /** sold by measure (kg, l…): the quantity moves by half units */ dec?: boolean;
   /** weekdays the item is sold on (0 = Sunday); absent / null = every day */ days?: number[] | null ;
   /** a bundle (130): product_id is "offer:<id>", price_usd the bundle's price, and this is what is inside it */ bundle?: { items: { name: LocalizedText; qty: number }[]; normal_usd: number; max?: number | null } };
 /** the key a bundle has in the cart, and back */

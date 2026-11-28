@@ -1,6 +1,6 @@
 import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
-import { getHomeData } from '@/lib/public-data';
+import { getHomeData, getShopRates } from '@/lib/public-data';
 import { ui } from '@/lib/ui-text';
 import { isOpenNow, reopenLabel } from '@/lib/hours';
 import ShopGrid from './ShopGrid';
@@ -21,6 +21,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
   // customers only see categories that have at least one shop listed (an empty category is a dead end)
   const used = new Set(shops.map(s => s.category_id).filter(Boolean));
   const shownCats = cats.filter(cat => used.has(cat.id));
-  return <ShopGrid cats={shownCats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id} brand={tenant.brand_name}
+  return <ShopGrid cats={shownCats} shops={cards} initial={c ?? null} locale={L} tenantId={tenant.id} brand={tenant.brand_name} fx={Number(tenant.fx_lbp_rate)} rates={await getShopRates(tenant.id)} displayCurrency={tenant.display_currency}
     labels={{ all: ui('all', L), minOrder: ui('minOrder', L), empty: ui('noShopsInCategory', L), favorites: ui('favorites', L), noFavorites: ui('noFavorites', L), addFavorite: ui('addFavorite', L), removeFavorite: ui('removeFavorite', L), categories: ui('categories', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), ok: ui('okBtn', L) }} />;
 }

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { t as tr, type Locale, type LocalizedText } from '@suqa/shared';
+import { formatMoney, t as tr, type DisplayCurrency, type Locale, type LocalizedText } from '@suqa/shared';
+import { rateOf, type Rates } from '@/lib/shop-money';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { noteSearch } from '@/lib/search-note';
 import FilterIcon from '@/components/FilterIcon';
@@ -15,8 +16,8 @@ type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people
 // Filters run in the browser: the home page is fetched once and every tap is instant.
 // Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the category
 // filter — the same sheet as inside a shop: type to narrow the list, tick several. Chosen categories are mirrored into ?c=.
-export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, brand, labels }: {
-  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string; brand: string;
+export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, brand, labels, fx = 0, rates = {}, displayCurrency = 'both' }: {
+  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string; brand: string; fx?: number; rates?: Rates; displayCurrency?: DisplayCurrency;
   labels: { all: string; minOrder: string; empty: string; favorites: string; noFavorites: string; addFavorite: string; removeFavorite: string; categories: string; clearFilter: string; typeToFilter: string; ok: string };
 }) {
   const [sel, setSel] = useState<Set<string>>(() => new Set((initial ?? '').split(',').filter(id => cats.some(x => x.id === id))));
@@ -143,7 +144,9 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
                   <span style={{ display: 'block', fontWeight: 600 }}>{tr(x.name, L)}</span>
                   <span className="muted" style={{ fontSize: 13 }}>🏪 {tr(x.shop_name, L)}</span>
                 </span>
-                <span dir="ltr" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{x.price_currency === 'lbp' && Number(x.price_lbp) > 0 ? `${Number(x.price_lbp).toLocaleString('en-US')} ل.ل.` : `$${Number(x.price_usd).toFixed(2)}`}</span>
+                <span style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'end' }}>{(() => { const rate = rateOf(rates, x.shop_id, fx); const lira = x.price_currency === 'lbp' && Number(x.price_lbp) > 0 ? Number(x.price_lbp) : null;
+                  // both currencies, at the shop's own rate; a lira price as the shop set it
+                  return rate > 0 ? formatMoney(lira ? lira / rate : Number(x.price_usd), rate, displayCurrency, L, lira) : lira ? `${lira.toLocaleString('en-US')} ل.ل.` : `$${Number(x.price_usd).toFixed(2)}`; })()}</span>
               </Link>
             ))}
           </div>

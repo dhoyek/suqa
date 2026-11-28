@@ -249,7 +249,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         return (
           <section className="card stack" key={s.id}>
             <div className="row spread"><strong>{tr(s.name, L)}</strong><span>{money(shopSub(s.lines))}</span></div>
-            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {l.bundle ? '🎁 ' : ''}{tr(l.name, L)}{l.bundle && <span className="muted"> ({l.bundle.items.map(i => `${i.qty}× ${tr(i.name, L)}`).join(' · ')})</span>}{l.notes && <span className="muted"> · 📝 {l.notes}</span>}</span><span>{money(l.price_usd * l.qty)}</span></div>)}
+            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {l.bundle ? '🎁 ' : ''}{tr(l.name, L)}{l.bundle && <span className="muted"> ({l.bundle.items.map(i => `${i.qty}× ${tr(i.name, L)}`).join(' · ')})</span>}{l.notes && <span className="muted"> · 📝 {l.notes}</span>}</span><span>{formatMoney(l.price_usd * l.qty, rate(s.id), displayCurrency, L, l.lbp ? l.lbp * l.qty : null)}</span></div>)}
             {f === 'outside' && <div className="error">{labels.outsideZone}</div>}
             {f && f !== 'outside' && !courier && !pickup && (
               <div className="row spread muted" style={{ fontSize: 13 }}>

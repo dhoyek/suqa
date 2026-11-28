@@ -510,6 +510,11 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 /* the all-shops Offers page: a grid instead of one swiped row */
 .offers-grid-page { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .offers-grid-page .offer-card { max-width: none; min-width: 0; flex: initial; }
+.home-bar { gap: 8px; align-items: stretch; flex-wrap: nowrap; }
+.home-bar .input { flex: 1; min-width: 0; margin: 0; }
+.home-bar .home-ico { flex: none; min-width: 46px; min-height: 46px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 20px; margin-inline-start: auto; }
+.home-bar .home-ico + .home-ico { margin-inline-start: 0; }
+.dlg .cat-row.home-open { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; font-weight: 600; }
 .home-offers-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid #f3c9d1; background: #fff5f7; color: #8a1f36; font-size: 17px; font-weight: 700; text-decoration: none; }
 
 /* the Offers page: a tight head (back · title · filter by shop) and one swiped line of chips */

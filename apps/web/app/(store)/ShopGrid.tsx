@@ -22,10 +22,14 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
 }) {
   const [sel, setSel] = useState<Set<string>>(() => new Set((initial ?? '').split(',').filter(id => cats.some(x => x.id === id))));
   const [fav, setFav] = useState(false);
-  const [st, setSt] = useState<'open' | 'closed' | null>(null);
+  const [st, setSt] = useState<'open' | null>(null);                 // "open now" only; it lives in the filter sheet
   const [sheet, setSheet] = useState(false); const [catQ, setCatQ] = useState('');
   const toggleCat = (id: string) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const reset = () => { setSel(new Set()); setFav(false); setSt(null); };
+  const reset = () => { setSel(new Set()); setSt(null); };
+  const nFilters = sel.size + (st ? 1 : 0);
+  const openNow = L === 'ar' ? 'مفتوح الآن' : 'Open now';
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => { setNarrow(window.matchMedia('(max-width: 480px)').matches); }, []);
   const c = [...sel].join(',');
   const [favs, setFavs] = useState<Set<string> | null>(null);     // null = not signed in / not loaded
   useEffect(() => {
@@ -64,7 +68,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
   // search by shop name (both languages), what people call it, or its description; Arabic letter variants are folded
   const fold = (t: string) => t.toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   const list = useMemo(() => {
-    const base = shops.filter(s => (!fav || favs?.has(s.id)) && (!st || s.open === (st === 'open')) && (!sel.size || (s.category_id != null && sel.has(s.category_id))));
+    const base = shops.filter(s => (!fav || favs?.has(s.id)) && (!st || s.open) && (!sel.size || (s.category_id != null && sel.has(s.category_id))));
     const n = fold(q.trim()); if (!n) return base;
     return base.filter(s => fold([s.name.ar, s.name.en, s.known_as, s.known_as_en, s.description?.ar, s.description?.en].filter(Boolean).join(' ')).includes(n));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,36 +83,32 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
   const toggleFav = (id: string, on: boolean) => setFavs(prev => { const n = new Set(prev ?? []); on ? n.add(id) : n.delete(id); return n; });
   return (
     <>
-      {/* the filter button keeps its place at the end of the first line; the chips beside it slide sideways if the screen is narrow */}
-      <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: sel.size ? 8 : 14 }}>
-      <nav className="row chips-scroll" style={{ flex: 1, minWidth: 0 }}>
-        <button type="button" className={`chip ${!fav && !st && !sel.size ? 'active' : ''}`} onClick={reset}>{labels.all}</button>
-        {favs && <button type="button" className={`chip ${fav ? 'active' : ''}`} aria-pressed={fav} onClick={() => setFav(v => !v)}>★ {labels.favorites}{favs.size ? ` (${favs.size})` : ''}</button>}
-        {/* icons keep the row on one line on a phone; the words stay for screen readers and as a tooltip */}
-        <button type="button" className={`chip ${st === 'open' ? 'active' : ''}`} aria-pressed={st === 'open'} title={L === 'ar' ? 'مفتوح الآن' : 'Open now'} aria-label={L === 'ar' ? 'مفتوح الآن' : 'Open now'} onClick={() => setSt(v => v === 'open' ? null : 'open')}><DoorIcon open /></button>
-        <button type="button" className={`chip ${st === 'closed' ? 'active' : ''}`} aria-pressed={st === 'closed'} title={L === 'ar' ? 'مغلق الآن' : 'Closed now'} aria-label={L === 'ar' ? 'مغلق الآن' : 'Closed now'} onClick={() => setSt(v => v === 'closed' ? null : 'closed')}><DoorIcon open={false} /></button>
-      </nav>
-        {cats.length > 1 && <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} style={{ flex: 'none' }} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{sel.size ? ` ${sel.size}` : ''}</button>}
+      {/* one line: search · ★ favourites (signed in) · filter (open now + categories) */}
+      <div className="row home-bar" style={{ marginBottom: sel.size || st ? 8 : 12 }}>
+        {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? (narrow ? '🔍 ابحث عن متجر أو صنف…' : '🔍 ابحث عن متجر أو صاحبه أو صنف…') : (narrow ? '🔍 Search a shop or an item…' : '🔍 Search a shop, its owner or an item…')} />}
+        {favs && <button type="button" className={`btn home-ico ${fav ? 'primary' : ''}`} aria-pressed={fav} title={labels.favorites} aria-label={labels.favorites} onClick={() => setFav(v => !v)}>{fav ? '★' : '☆'}</button>}
+        <button type="button" className={`btn home-ico ${nFilters ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{nFilters ? ` ${nFilters}` : ''}</button>
       </div>
-      {sel.size > 0 && (
-        <nav className="row chips" style={{ marginBottom: 14 }}>
+      {(sel.size > 0 || st) && (
+        <nav className="row chips" style={{ marginBottom: 12 }}>
+          {st && <button type="button" className="chip active" onClick={() => setSt(null)}>{openNow} ✕</button>}
           {cats.filter(x => sel.has(x.id)).map(x => <button type="button" key={x.id} className="chip active" onClick={() => toggleCat(x.id)}>{tr(x.name, L)} ✕</button>)}
-          <button type="button" className="chip" onClick={() => setSel(new Set())}>{labels.clearFilter}</button>
+          <button type="button" className="chip" onClick={reset}>{labels.clearFilter}</button>
         </nav>
       )}
       {sheet && (
         <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setSheet(false); }}>
           <div className="dlg card" role="dialog" aria-label={labels.categories}>
-            <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.categories}{sel.size ? ` (${sel.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
+            <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.categories}{nFilters ? ` (${nFilters})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
+            <label className={`cat-row home-open ${st ? 'active' : ''}`}><input type="checkbox" checked={!!st} onChange={() => setSt(v => v ? null : 'open')} /> <DoorIcon open /> <span>{openNow}</span></label>
             <input className="input" placeholder={labels.typeToFilter} value={catQ} onChange={e => setCatQ(e.target.value)} />
             <div className="cat-list">
               {cats.filter(x => !catQ.trim() || fold(`${x.name.ar ?? ''} ${x.name.en ?? ''}`).includes(fold(catQ.trim()))).map(x => <label key={x.id} className={`cat-row ${sel.has(x.id) ? 'active' : ''}`}><input type="checkbox" checked={sel.has(x.id)} onChange={() => toggleCat(x.id)} /> <span>{tr(x.name, L)}</span></label>)}
             </div>
-            <div className="row spread"><button type="button" className="btn" onClick={() => setSel(new Set())}>✕ {labels.clearFilter}</button><button type="button" className="btn primary" onClick={() => setSheet(false)}>{labels.ok}</button></div>
+            <div className="row spread"><button type="button" className="btn" onClick={reset}>✕ {labels.clearFilter}</button><button type="button" className="btn primary" onClick={() => setSheet(false)}>{labels.ok}</button></div>
           </div>
         </div>
       )}
-      {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه أو صنف…' : '🔍 Search a shop, its owner or an item…'} style={{ marginBottom: 12 }} />}
       {offersCount > 0 && !q.trim() && <Link href="/offers" className="home-offers-btn"><span>🎁 {L === 'ar' ? 'العروض' : 'Offers'} ({offersCount})</span><span aria-hidden>{L === 'ar' ? '‹' : '›'}</span></Link>}
       <section className="grid">
         {list.map(s => (

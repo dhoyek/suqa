@@ -14,7 +14,7 @@ export const roleOf = (s: { role?: Staff['role'] } | null | undefined): PosRole 
  */
 const VIEWS_BY_ROLE: Record<PosRole, View[]> = {
   // in the order of the menu: every day · people · goods · back office
-  owner:   ['sell', 'orders', 'shift', 'debts', 'customers', 'drivers', 'items', 'stock', 'purchases', 'reports', 'settings'],   // drivers: deliveries, pay and settlements — owner only
+  owner:   ['sell', 'orders', 'shift', 'debts', 'customers', 'drivers', 'items', 'offers', 'stock', 'purchases', 'reports', 'settings'],   // drivers: deliveries, pay and settlements — owner only
   stock:   ['sell', 'orders', 'shift', 'debts', 'customers', 'items', 'stock', 'purchases', 'reports', 'settings'],
   cashier: ['sell', 'orders', 'shift', 'debts', 'customers', 'items', 'settings'],
   setup:   ['items', 'settings'],

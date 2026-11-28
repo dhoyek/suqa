@@ -3,7 +3,13 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { LocalizedText } from '@suqa/shared';
 
 export type CartLine = { product_id: string; name: LocalizedText; unit: string | null; price_usd: number; qty: number; notes?: string; /** sold by measure (kg, l…): the quantity moves by half units */ dec?: boolean;
-  /** weekdays the item is sold on (0 = Sunday); absent / null = every day */ days?: number[] | null };
+  /** weekdays the item is sold on (0 = Sunday); absent / null = every day */ days?: number[] | null ;
+  /** a bundle (130): product_id is "offer:<id>", price_usd the bundle's price, and this is what is inside it */ bundle?: { items: { name: LocalizedText; qty: number }[]; normal_usd: number; max?: number | null } };
+/** the key a bundle has in the cart, and back */
+export const offerKey = (offerId: string) => `offer:${offerId}`;
+export const offerIdOf = (productId: string) => (productId.startsWith('offer:') ? productId.slice(6) : null);
+/** what an order is placed with: ordinary items by product, bundles by offer (the server prices both) */
+export const orderItems = (lines: CartLine[]) => lines.map(l => { const o = offerIdOf(l.product_id); return o ? { offer_id: o, quantity: l.qty } : { product_id: l.product_id, quantity: l.qty, ...(l.notes?.trim() ? { notes: l.notes.trim() } : {}) }; });
 export type ShopRef = { id: string; slug: string; name: LocalizedText; whatsapp?: string | null; min_order_usd?: number; pickup_enabled?: boolean };
 export type CartShop = ShopRef & { lines: CartLine[]; selected: boolean };
 /** v2: one cart, grouped by shop. `selected` = included in the next checkout (AliExpress-style). */

@@ -51,16 +51,17 @@ export default function CartView({ locale: L, fx, rates, displayCurrency, signed
             {s.lines.map(l => (
               <div className="product cart-line" key={l.product_id}>
                 <div className="info">
-                  <div className="name">{tr(l.name, L)}</div>
-                  <div className="muted" style={{ fontSize: 13 }}>{money(l.price_usd)}{l.unit ? ` / ${l.unit}` : ''}</div>
+                  <div className="name">{l.bundle ? '🎁 ' : ''}{tr(l.name, L)}</div>
+                  {l.bundle && <div className="muted" style={{ fontSize: 13 }}>{l.bundle.items.map(i => `${i.qty}× ${tr(i.name, L)}`).join(' · ')}</div>}
+                  <div className="muted" style={{ fontSize: 13 }}>{l.bundle && l.bundle.normal_usd > l.price_usd ? <s style={{ marginInlineEnd: 6 }}>{money(l.bundle.normal_usd)}</s> : null}{money(l.price_usd)}{l.unit ? ` / ${l.unit}` : ''}</div>
                 </div>
                 <div className="stepper">
                   <button className="btn" onClick={() => setQty(s.id, l.product_id, Math.round((l.qty - (l.dec ? 0.5 : 1)) * 100) / 100)}>−</button>
                   <span className="qty">{l.qty}{l.dec && l.unit ? <small> {l.unit}</small> : null}</span>
-                  <button className="btn" onClick={() => setQty(s.id, l.product_id, Math.round((l.qty + (l.dec ? 0.5 : 1)) * 100) / 100)}>+</button>
+                  <button className="btn" disabled={!!l.bundle?.max && l.qty >= l.bundle.max} onClick={() => setQty(s.id, l.product_id, Math.round((l.qty + (l.dec ? 0.5 : 1)) * 100) / 100)}>+</button>
                 </div>
                 <strong className="total">{money(l.price_usd * l.qty)}</strong>
-                <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />
+                {!l.bundle && <input className="input line-note" placeholder={labels.lineNote} value={l.notes ?? ''} onChange={e => setNote(s.id, l.product_id, e.target.value)} />}
               </div>
             ))}
             {short && s.selected && <div className="error" style={{ fontSize: 13 }}>{labels.belowMin} {money(min)}</div>}

@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { SHOP_PUBLIC_COLS, type Category, type Product, type Shop } from '@suqa/shared';
 import { rateOf, type Rates } from '@/lib/shop-money';
+import { sortOffers, type Offer } from '@suqa/pos-core';
 
 // Public storefront reads. Everyone sees the same data, so cache it server-side for a few seconds instead of
 // hitting the database on every visit. Uses the anon key (no cookies) — RLS still applies (active shops/products only).
@@ -64,7 +65,10 @@ async function loadShop(sb: Db, tenantId: string, slug: string, fx: number | str
     const available = Math.max(0, Number(p.on_hand ?? 0) - Number(p.reserved ?? 0));
     return { ...p, available, is_available: p.is_available && available > 0 };
   }).filter(p => !(shop.hide_online_when_zero && p.available === 0));
-  return { shop: shop as Shop, products: list, rate };
+  // the shop's offers (130): the public key sees the active ones only. A database without the tables yet answers with an error → none.
+  let offers: Offer[] = [];
+  try { const { data: off, error } = await sb.from('offers').select('*, items:offer_items(product_id, quantity, sort_order)').eq('shop_id', shop.id).eq('is_active', true).order('sort_order'); if (!error && off) offers = sortOffers(off as unknown as Offer[]); } catch {}
+  return { shop: shop as Shop, products: list, rate, offers };
 }
 
 export const getShopWithProducts = unstable_cache(async (tenantId: string, slug: string, fx?: number | string | null) => loadShop(anon(), tenantId, slug, fx),

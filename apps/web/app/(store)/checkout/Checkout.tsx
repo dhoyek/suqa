@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase-browser';
 import { friendlyError } from '@/lib/ui-text';
-import { useCart } from '@/components/CartProvider';
+import { useCart, orderItems } from '@/components/CartProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
 import MapPicker from '@/components/MapPicker';
 import { normalizePhone } from '@/lib/whatsapp';
@@ -128,11 +128,11 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
     try {
       if (shops.length === 1) {
         const s = shops[0];
-        const order = await placeOrder(sb, s.id, pickup ? null : selected, s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes?.trim() ? { notes: l.notes.trim() } : {}) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
+        const order = await placeOrder(sb, s.id, pickup ? null : selected, (orderItems(s.lines) as never), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/${order.id}?placed=1`);
       } else {
-        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: s.lines.map(l => ({ product_id: l.product_id, quantity: l.qty, ...(l.notes?.trim() ? { notes: l.notes.trim() } : {}) })) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
+        const basket = await placeBasket(sb, pickup ? null : selected, shops.map(s => ({ shop_id: s.id, items: (orderItems(s.lines) as never) })), notes.trim() || undefined, ph, pickup ? 'pickup' : 'delivery', neededAt);
         removeShops(ids);
         router.replace(`/orders/b/${basket.id}?placed=1`);
       }
@@ -249,7 +249,7 @@ export default function Checkout(props: { tenantId: string; locale: Locale; fx: 
         return (
           <section className="card stack" key={s.id}>
             <div className="row spread"><strong>{tr(s.name, L)}</strong><span>{money(shopSub(s.lines))}</span></div>
-            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {tr(l.name, L)}{l.notes && <span className="muted"> · 📝 {l.notes}</span>}</span><span>{money(l.price_usd * l.qty)}</span></div>)}
+            {s.lines.map(l => <div className="row spread" key={l.product_id} style={{ fontSize: 14 }}><span><span className="qty">{l.qty}×</span> {l.bundle ? '🎁 ' : ''}{tr(l.name, L)}{l.bundle && <span className="muted"> ({l.bundle.items.map(i => `${i.qty}× ${tr(i.name, L)}`).join(' · ')})</span>}{l.notes && <span className="muted"> · 📝 {l.notes}</span>}</span><span>{money(l.price_usd * l.qty)}</span></div>)}
             {f === 'outside' && <div className="error">{labels.outsideZone}</div>}
             {f && f !== 'outside' && !courier && !pickup && (
               <div className="row spread muted" style={{ fontSize: 13 }}>

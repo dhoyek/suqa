@@ -1,7 +1,7 @@
 'use client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, roundLbp, usdToLbp, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type ShopCustomer, type Order, type OrderLine,
+import { addToDraft, availableOn, cashierSalesDays, lineFromProduct, cancelDraft, commitSale, currentShift, debtLines, draftTotals, dropDraft, fmtBoth, fmtLbp, fmtUsd, roundLbp, usdToLbp, listParked, loadCurrentDraft, newDraft, newId, num, saveDraft, searchCustomers, text, editOrder, type Offer, type ShopCustomer, type Order, type OrderLine,
   type CatalogIndex, type CommitResult, type Currency, type Draft, type DraftLine, type Product, type Rate, type Shift, type Staff, type SyncStatus, scaleConfigs , type QuickButton } from '@suqa/pos-core';
 import { doPrint, loadPrintSettings, orderSheetHtml, receiptHtml } from '../lib/print';
 import { pt, daysLabel, type L } from '../i18n';
@@ -11,6 +11,7 @@ import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
 import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import { can, roleOf } from '../lib/perm';
+import { bundleDraftLines, cachedOffers, fetchOffers, tillBundle } from '../lib/offers';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
@@ -22,7 +23,7 @@ import CameraScanner from '../components/CameraScanner';
 import ItemEditor from '../components/ItemEditor';
 
 type TileView = { size: 's' | 'm' | 'l'; photos: boolean; cats: boolean; cartOpen: boolean; fav?: boolean };   // cats: the always-visible category line; cartOpen: keep the basket always open on a stacked screen (both off unless this device turns them on)
-type Dialog = null | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
+type Dialog = null | { k: 'offers' } | { k: 'help' } | { k: 'saved'; order: Order; lines: OrderLine[] } | { k: 'oos'; p: Product; avail: number } | { k: 'newItem'; code: string } | { k: 'line'; id: string; field?: 'qty' | 'price' | 'discount' } | { k: 'pay' } | { k: 'park' } | { k: 'cancel' } | { k: 'discount' } | { k: 'open' } | { k: 'camera' } | { k: 'customer' } | { k: 'preview' } | { k: 'qty'; p: Product } | { k: 'view' };
 
 /**
  * The sale screen. Left: search / scan / categories / quick buttons / grid. Right: the cart.
@@ -33,6 +34,9 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const [draft, setDraft] = useState<Draft>(() => newDraft('walkin'));
   const [q, setQ] = useState(''); const [cats, setCats] = useState<Set<string>>(new Set());
   const [rate, setRate] = useState(89500);
+  // the shop's offers (130): the device's copy, refreshed from the server when it can be reached — bundles sell offline too
+  const [offers, setOffers] = useState<Offer[]>(() => cachedOffers(boot.shop.id));
+  useEffect(() => { let on = true; void fetchOffers(sb, boot.shop.id).then(l => { if (on && l) setOffers(l); }); return () => { on = false; }; }, [sb, boot, status?.online]);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [receipt, setReceipt] = useState<CommitResult | null>(null);
   // how the item tiles look on THIS device: size and whether they carry the item's photo (the sale screen's ▦ button)
@@ -153,6 +157,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const quick = useMemo(() => index.quickButtons.map(b => ({ b, p: b.product_id ? index.byId.get(b.product_id) : undefined })), [index, tick]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
+  const bundles = useMemo(() => offers.filter(o => o.kind === 'bundle').map(o => tillBundle(o, index, rate, draft.needed_at ? new Date(draft.needed_at) : new Date())).filter(v => v.ok), [offers, index, rate, tick, draft.needed_at]);   // eslint-disable-line react-hooks/exhaustive-deps
   const add = useCallback((p: Product, quantity = 1, opts: { weigh?: boolean; ask?: boolean } = {}) => {
     if (p.track_stock) {
       const avail = num(p.on_hand) - num(p.reserved);
@@ -272,6 +277,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <div className="row spread" style={{ alignItems: 'center', flexShrink: 0 }}>
           <span className="muted num" style={{ fontSize: 12 }}>{all.length.toLocaleString('en-US')} {pt('itemsCount', locale)}{q.trim() || cats.size ? ` / ${index.size.toLocaleString('en-US')}` : ''} · {pt('sortedByTop', locale)}</span>
           <span className="row" style={{ gap: 10, alignItems: 'center' }}>
+            {bundles.length > 0 && <button className="chip offer-chip" style={{ fontSize: 13 }} onClick={() => setDialog({ k: 'offers' })}>🎁 {locale === 'ar' ? 'العروض' : 'Offers'} ({bundles.length})</button>}
             <button className={`chip fav-chip ${tiles.fav ? 'active' : ''}`} style={{ fontSize: 13 }} onClick={() => saveTiles({ ...tiles, fav: !tiles.fav })}>⭐ {pt('favOnly', locale)}{favIds.size ? ` (${favIds.size})` : ''}</button>
             <button className="link-btn" style={{ fontSize: 13 }} title={pt('tileView', locale)} onClick={() => setDialog({ k: 'view' })}>▦ {pt('tileView', locale)}</button>
           </span>
@@ -429,6 +435,19 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
         <table className="table"><tbody>
           {([['F1', 'shortcuts'], ['F2', 'searchItems'], ['F4', 'qty'], ['F6', 'discount'], ['F8', 'pay'], ['F9', 'park'], ['Esc', 'cancelSale'], ['Ctrl+Del', 'cancelSale'], ['Enter', 'enterAdds']] as const).map(([k, t]) => <tr key={k}><td><kbd className="kbd">{k}</kbd></td><td>{pt(t, locale)}</td></tr>)}
         </tbody></table>
+      </Modal>}
+      {dialog?.k === 'offers' && <Modal open onClose={() => setDialog(null)} title={`🎁 ${locale === 'ar' ? 'العروض' : 'Offers'}`}>
+        <div className="stack">
+          {bundles.map(v => (
+            <button key={v.offer.id} className="offer-pick" onClick={() => { setDraft(d => ({ ...d, lines: [...d.lines, ...bundleDraftLines(v, 1, rate)] })); setDialog(null); }}>
+              {v.offer.image_url ? <img className="offer-pic" src={v.offer.image_url} alt="" /> : <span className="offer-pic none">🎁</span>}
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'start' }}>
+                <strong>{v.offer.is_hot ? '🔥 ' : ''}{text(v.offer.name, locale)}</strong>
+                <span className="muted" style={{ display: 'block', fontSize: 13 }}>{v.lines.map(l => `${l.quantity}× ${text(l.product.name, locale)}`).join(' · ')}</span>
+              </span>
+              <span style={{ textAlign: 'end' }}><s className="muted" style={{ display: 'block', fontSize: 12 }}>{v.unit === 'lbp' ? fmtLbp(v.normal, locale) : fmtUsd(v.normal)}</s><strong>{v.unit === 'lbp' ? fmtLbp(v.charged, locale) : fmtUsd(v.charged)}</strong></span>
+            </button>))}
+        </div>
       </Modal>}
       {dialog?.k === 'camera' && <CameraScanner open locale={locale} onScan={onScan} onClose={() => setDialog(null)} />}
       {dialog?.k === 'open' && <OpenItem locale={locale} rate={rate} onAdd={l => { setDraft(d => ({ ...d, lines: [...d.lines, l] })); setDialog(null); }} onClose={() => setDialog(null)} />}

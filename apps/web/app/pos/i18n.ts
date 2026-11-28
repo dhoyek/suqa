@@ -343,6 +343,7 @@ const T = {
   newCustomer: { ar: 'زبون جديد', en: 'New customer' }, balance: { ar: 'الرصيد (دين)', en: 'Balance (debt)' }, 
   customerNotes: { ar: 'ملاحظات عن الزبون', en: 'Customer notes' }, noCustomers: { ar: 'لا زبائن بعد — يُضافون تلقائياً مع كل طلب', en: 'No customers yet — they are added with every order' }, newOrderFor: { ar: 'طلب جديد', en: 'New order' },
   // M10 purchases
+  offersNav: { ar: 'العروض', en: 'Offers' },
   purchasesNav: { ar: 'المشتريات', en: 'Purchases' }, suppliers: { ar: 'الموردون', en: 'Suppliers' }, supplier: { ar: 'المورد', en: 'Supplier' }, newSupplier: { ar: 'مورد جديد', en: 'New supplier' },
   ntTitle: { ar: 'الإشعارات', en: 'Notifications' }, ntNone: { ar: 'لا إشعارات بعد.', en: 'No notifications yet.' }, ntNew: { ar: 'طلب جديد', en: 'New order' },
   ntHint: { ar: 'ما وصل إلى هذا الجهاز خلال آخر يومين: طلبات جديدة، تأكيد السائق واستلامه وتسليمه، زبون في الطريق. اضغط لفتح الطلبات.', en: 'What reached this device in the last two days: new orders, the driver confirming, picking up and delivering, a customer on his way. Tap to open Orders.' },

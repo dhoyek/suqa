@@ -17,3 +17,4 @@ export * from './drivers';
 export * from './item-match';
 export * from './concepts';
 export * from './units';
+export * from './offers';

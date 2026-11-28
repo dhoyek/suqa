@@ -469,3 +469,25 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
   .product.menu-item { gap: 8px 10px; }
   .menu-item .price { font-size: 13.5px; }
 }
+
+/* offers on the shop page (130): bundles first, swiped sideways */
+.offers-strip { margin: 2px 0 6px; }
+.offers-title { font-size: 17px; margin: 0 0 8px; }
+.offers-row { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.offer-card { flex: 0 0 min(78vw, 270px); scroll-snap-align: start; border: 1px solid #f3c9d1; border-radius: 16px; background: #fff; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+.offer-card.off { opacity: .65; }
+.offer-pics { position: relative; height: 130px; background: #fbf3ee; display: grid; grid-template-columns: 1fr; place-items: center; font-size: 44px; }
+.offer-pics.n2, .offer-pics.n3, .offer-pics.n4 { grid-template-columns: 1fr 1fr; }
+.offer-pics.n3 img:first-child { grid-row: span 2; }
+.offer-pics img { width: 100%; height: 100%; min-height: 0; object-fit: cover; }
+.offer-pics.n3, .offer-pics.n4 { grid-template-rows: 65px 65px; }
+.offer-save { position: absolute; top: 8px; inset-inline-start: 8px; background: #c81e4a; color: #fff; font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.offer-hot { position: absolute; top: 6px; inset-inline-end: 8px; font-size: 20px; }
+.offer-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.offer-name { font-size: 16px; }
+.offer-items { list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--muted, #6b7280); }
+.offer-prices { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+.offer-prices s { color: var(--muted, #6b7280); font-size: 14px; }
+.offer-prices strong { font-size: 19px; color: #c81e4a; }
+.offer-saving { font-size: 13px; color: #15803d; font-weight: 600; }
+.offer-buy { margin-top: auto; padding-top: 6px; display: flex; justify-content: flex-end; }

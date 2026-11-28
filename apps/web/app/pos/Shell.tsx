@@ -19,6 +19,7 @@ import ShiftView from './views/ShiftView';
 import ReportsView from './views/ReportsView';
 import DriversView from './views/DriversView';
 import ItemsView from './views/ItemsView';
+import OffersView from './views/OffersView';
 import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
@@ -27,12 +28,12 @@ import CustomersView from './views/CustomersView';
 import PushReminder from './components/PushReminder';
 import PurchasesView from './views/PurchasesView';
 
-export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'stock' | 'purchases' | 'shift' | 'reports' | 'drivers' | 'settings';
-const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'stock', 'purchases', 'shift', 'reports', 'drivers', 'settings'];
+export type View = 'sell' | 'orders' | 'customers' | 'debts' | 'items' | 'offers' | 'stock' | 'purchases' | 'shift' | 'reports' | 'drivers' | 'settings';
+const VIEWS: View[] = ['sell', 'orders', 'customers', 'debts', 'items', 'offers', 'stock', 'purchases', 'shift', 'reports', 'drivers', 'settings'];
 // the menu in groups by how often they are used: every day · people · goods · back office (a thin line between groups)
-const GROUP: Record<View, number> = { sell: 0, orders: 0, shift: 0, debts: 0, customers: 1, drivers: 1, items: 2, stock: 2, purchases: 2, reports: 3, settings: 3 };
-const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', stock: '📦', purchases: '🚚', shift: '💵', reports: '📊', drivers: '🛵', settings: '⚙️' };
-const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', stock: 'stock', purchases: 'purchasesNav', shift: 'shift', reports: 'reports', drivers: 'driversNav', settings: 'settings' };
+const GROUP: Record<View, number> = { sell: 0, orders: 0, shift: 0, debts: 0, customers: 1, drivers: 1, items: 2, offers: 2, stock: 2, purchases: 2, reports: 3, settings: 3 };
+const ICON: Record<View, string> = { sell: '🧾', orders: '📥', customers: '👥', debts: '📒', items: '🏷️', offers: '🎁', stock: '📦', purchases: '🚚', shift: '💵', reports: '📊', drivers: '🛵', settings: '⚙️' };
+const LABEL: Record<View, Parameters<typeof pt>[0]> = { sell: 'sell', orders: 'ordersNav', customers: 'customersNav', debts: 'debtsNav', items: 'items', offers: 'offersNav', stock: 'stock', purchases: 'purchasesNav', shift: 'shift', reports: 'reports', drivers: 'driversNav', settings: 'settings' };
 
 /** One page, several views (no route changes → nothing to fetch when offline). The view is mirrored into #hash. */
 export default function Shell(props: {
@@ -145,6 +146,7 @@ export default function Shell(props: {
         {/* الدين: the signed-in person's own PIN again each time it is opened (a short grace after a correct one) */}
         {view === 'debts' && (debtOk ? <DebtsView {...props} onCustomer={openCustomer} /> : <PinGate locale={locale} me={staff} title={pt('debtsNav', locale)} onOk={() => { debtUntil.current = Date.now() + DEBT_GRACE_MS; setDebtOk(true); }} onCancel={() => setView('sell')} />)}
         {view === 'items' && <ItemsView {...props} />}
+        {view === 'offers' && <OffersView {...props} online={online} />}
         {view === 'stock' && <StockView {...props} online={online} focus={stockFocus} onReorder={allowed.includes('purchases') ? (supplierId, items) => { setPurPreset(p => ({ supplierId, items, n: (p?.n ?? 0) + 1 })); setView('purchases'); } : undefined} />}
         {view === 'purchases' && <PurchasesView {...props} preset={purPreset} />}
         {view === 'shift' && <ShiftView {...props} />}

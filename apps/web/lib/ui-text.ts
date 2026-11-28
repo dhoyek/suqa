@@ -307,6 +307,8 @@ const T = {
   err_product_unavailable: { en: 'An item in your cart is no longer available — please remove it', ar: 'أحد الأصناف في سلتك لم يعد متوفراً — يرجى حذفه' },
   err_product_not_that_day: { en: 'An item in your cart is not sold on that day — choose one of its days for the order', ar: 'أحد الأصناف في سلتك لا يُباع في هذا اليوم — اختر يوماً من أيامه لموعد الطلب' },
   err_bad_needed_at: { en: 'Please choose a time from now up to two weeks ahead', ar: 'يرجى اختيار موعد من الآن وحتى أسبوعين' },
+  err_offer_unavailable: { en: 'An offer in your cart is no longer available — please remove it', ar: 'أحد العروض في سلتك لم يعد متوفراً — يرجى حذفه' },
+  err_offer_quantity: { en: 'An offer in your cart is limited per order — please lower its quantity', ar: 'أحد العروض في سلتك له حدّ بالطلب الواحد — يرجى تخفيض الكمية' },
   err_bad_quantity: { en: 'Please check the quantities', ar: 'يرجى التحقق من الكميات' },
   err_min_order: { en: 'The order is below the shop minimum', ar: 'الطلب أقل من الحد الأدنى للمتجر' },
   err_order_locked: { en: 'This order can no longer be changed', ar: 'لم يعد بالإمكان تعديل هذا الطلب' },

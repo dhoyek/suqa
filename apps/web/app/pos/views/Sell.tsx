@@ -11,7 +11,7 @@ import { useShortcuts } from '../lib/useShortcuts';
 import CustomerDialog from '../components/CustomerDialog';
 import { CategoryChips, CategoryFilter } from '../components/CategoryFilter';
 import { can, roleOf } from '../lib/perm';
-import { bundleDraftLines, cachedOffers, fetchOffers, tillBundle } from '../lib/offers';
+import { addWithSale, bundleDraftLines, cachedOffers, fetchOffers, saleDraftLine, tillBundle, tillSales } from '../lib/offers';
 import Modal, { NumPad } from '../components/Modal';
 import LineEditor from '../components/LineEditor';
 import PayDialog from '../components/PayDialog';
@@ -91,7 +91,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       // "as an order": a counter cart becomes a WhatsApp order for delivery (pickup is chosen in the customer box, which opens next);
       // a cart that is already an order keeps its channel, customer and address
       setDraft(d => { let n: Draft = { ...d, via_yorgo: y.conversation ?? d.via_yorgo ?? null, ...(y.order && d.channel === 'walkin' ? { channel: 'whatsapp' as const, fulfillment: 'delivery' as const } : {}) };
-        for (const l of y.lines) n = l.note ? { ...n, lines: [...n.lines, { ...lineFromProduct(l.product, l.quantity), notes: l.note }] } : addToDraft(n, l.product, l.quantity);
+        for (const l of y.lines) n = l.note ? { ...n, lines: [...n.lines, { ...lineFromProduct(l.product, l.quantity), notes: l.note }] } : put(n, l.product, l.quantity);
         return n; });
       if (y.order) setDialog({ k: 'customer' }); else { setToast(pt('yorgoInCart', locale)); setTimeout(() => setToast(null), 3500); }
       onYorgoTaken?.();
@@ -158,6 +158,10 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
   const bundles = useMemo(() => offers.filter(o => o.kind === 'bundle').map(o => tillBundle(o, index, rate, draft.needed_at ? new Date(draft.needed_at) : new Date())).filter(v => v.ok), [offers, index, rate, tick, draft.needed_at]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // items with a running price offer (131): sold at the offer price; `put` is how every path adds an item to the cart
+  const sales = useMemo(() => tillSales(offers, index, rate, draft.needed_at ? new Date(draft.needed_at) : new Date()), [offers, index, rate, tick, draft.needed_at]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const salesRef = useRef(sales); salesRef.current = sales; const rateRef = useRef(rate); rateRef.current = rate;
+  const put = (d: Draft, p: Product, quantity: number): Draft => addWithSale(d, p, quantity, salesRef.current.get(p.id), rateRef.current);
   const add = useCallback((p: Product, quantity = 1, opts: { weigh?: boolean; ask?: boolean } = {}) => {
     if (p.track_stock) {
       const avail = num(p.on_hand) - num(p.reserved);
@@ -170,10 +174,10 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       else if (avail - inCart - quantity <= num(p.min_stock)) flash(`${pt('lowStock', locale)}: ${avail - inCart - quantity} ${pt('available', locale)}`);
     }
     if (opts.weigh && p.decimal_qty) {                                  // kg/g item tapped on the grid → ask for the weight (or the amount) right away
-      const line = lineFromProduct(p, quantity);
+      const sv = salesRef.current.get(p.id); const line = sv ? saleDraftLine(p, quantity, sv, rateRef.current) : lineFromProduct(p, quantity);
       setDraft(d => ({ ...d, lines: [...d.lines, line] })); setQ(''); setDialog({ k: 'line', id: line.id, field: 'qty' }); return;
     }
-    setDraft(d => addToDraft(d, p, quantity)); setQ('');
+    setDraft(d => put(d, p, quantity)); setQ('');
   }, [draft.lines, shop.allow_negative_stock, locale]);
 
   const onScan = useCallback((code: string): string | void => {
@@ -299,7 +303,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
                 {/* sold on some weekdays only: still sellable here, the note is for the cashier (day = when the order is wanted) */}
                 {!availableOn(p, draft.needed_at ? new Date(draft.needed_at) : new Date()) && <small className="pill warn" style={{ alignSelf: 'start', fontSize: 11 }}>{pt('notToday', locale)} · {daysLabel(p.available_days, locale)}</small>}
                 <div className="row spread" style={{ alignItems: 'center', marginTop: 'auto' }}>
-                  <div className="item-price">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}{p.decimal_qty && p.unit ? <span className="muted" style={{ fontWeight: 400 }}> /{p.unit}</span> : ''}</div>
+                  <div className="item-price">{(() => { const sv = sales.get(p.id); const normal = p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100)); return sv ? <><s className="muted" style={{ fontWeight: 400, fontSize: 12, marginInlineEnd: 4 }}>{normal}</s><span className="sale-price">{sv.unit === 'lbp' ? fmtLbp(sv.price, locale) : fmtUsd(sv.price)}</span></> : normal; })()}{p.decimal_qty && p.unit ? <span className="muted" style={{ fontWeight: 400 }}> /{p.unit}</span> : ''}</div>
                   {stock && (stock === 'neg' && onStock
                     ? <span role="button" tabIndex={-1} className="stock neg fix" title={pt('fixStock', locale)} onClick={e => { e.stopPropagation(); onStock(p.id); }}>⚠{avail} ✎</span>
                     : <span className={`stock ${stock}`} title={`${avail} ${pt('available', locale)}`}>{stock === 'neg' ? '⚠' : ''}{avail}</span>)}
@@ -455,7 +459,7 @@ export default function Sell({ boot, sb, locale, index, tick, staff, status, bus
       {dialog?.k === 'park' && <ParkDialog boot={boot} locale={locale} parked={parked} canPark={!!live.length} customer={draft.customer_phone ? { name: draft.customer_name ?? '', phone: draft.customer_phone } : null} onCustomer={c => setDraft(d => ({ ...d, customer_name: c?.name ?? '', customer_phone: c?.phone ?? '' }))} onPark={park} onResume={resume} onClose={() => setDialog(null)} />}
       {dialog?.k === 'cancel' && <ReasonDialog locale={locale} title={pt('cancelSale', locale)} onDone={cancel} onClose={() => setDialog(null)} />}
       {dialog?.k === 'customer' && <CustomerDialog boot={boot} sb={sb} locale={locale} draft={draft} fee={fee} online={status?.online ?? true} cartCount={live.length} onAddToOrder={addCartToOrder} onOpenOrders={() => { setDialog(null); onGo('orders'); }} onDone={r => {
-        setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = addToDraft(n, p, num(l.quantity)); } return n; });
+        setDraft(d => { let n = { ...d, ...r.patch }; if (r.repeat) for (const l of r.repeat) { const p = l.product_id ? index.byId.get(l.product_id) : undefined; if (p) n = put(n, p, num(l.quantity)); } return n; });
         setFee(r.feeCents); setDialog(null); }} onClose={() => setDialog(null)} />}
     </div>
   );

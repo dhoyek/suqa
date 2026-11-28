@@ -16,8 +16,8 @@ type ShopCard = { id: string; slug: string; name: LocalizedText; /** what people
 // Filters run in the browser: the home page is fetched once and every tap is instant.
 // Chips: ★ Favourites (signed-in users; loaded client-side so the page stays cacheable), Open, Closed, then the category
 // filter — the same sheet as inside a shop: type to narrow the list, tick several. Chosen categories are mirrored into ?c=.
-export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, brand, labels, fx = 0, rates = {}, displayCurrency = 'both' }: {
-  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string; brand: string; fx?: number; rates?: Rates; displayCurrency?: DisplayCurrency;
+export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, brand, labels, fx = 0, rates = {}, displayCurrency = 'both', offersCount = 0 }: {
+  cats: Cat[]; shops: ShopCard[]; initial: string | null; locale: Locale; tenantId: string; brand: string; fx?: number; rates?: Rates; displayCurrency?: DisplayCurrency; /** offers on sale now across the shops: the button under the search (hidden at 0) */ offersCount?: number;
   labels: { all: string; minOrder: string; empty: string; favorites: string; noFavorites: string; addFavorite: string; removeFavorite: string; categories: string; clearFilter: string; typeToFilter: string; ok: string };
 }) {
   const [sel, setSel] = useState<Set<string>>(() => new Set((initial ?? '').split(',').filter(id => cats.some(x => x.id === id))));
@@ -109,6 +109,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
         </div>
       )}
       {shops.length > 4 && <input className="input" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={L === 'ar' ? '🔍 ابحث عن متجر أو صاحبه أو صنف…' : '🔍 Search a shop, its owner or an item…'} style={{ marginBottom: 12 }} />}
+      {offersCount > 0 && !q.trim() && <Link href="/offers" className="home-offers-btn"><span>🎁 {L === 'ar' ? 'العروض' : 'Offers'} ({offersCount})</span><span aria-hidden>{L === 'ar' ? '‹' : '›'}</span></Link>}
       <section className="grid">
         {list.map(s => (
           <Link key={s.id} href={`/s/${s.slug}`} className={`card shop-card ${s.open ? 'is-open' : 'is-closed'}`} prefetch>

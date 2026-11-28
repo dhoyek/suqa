@@ -5,8 +5,10 @@ import { useConfirm } from '@/components/ConfirmProvider';
 import { weekdaysLabel } from '@/lib/weekdays';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { offerKey, useCart } from '@/components/CartProvider';
-import { bundleView, type Offer, type OfferProduct } from '@suqa/pos-core';
+import { useCart } from '@/components/CartProvider';
+import type { Offer, OfferProduct } from '@suqa/pos-core';
+import { offerVMs } from '@/lib/offer-view';
+import { OfferBuy, OfferCard, OfferDetail } from '@/components/offers/OfferParts';
 import { formatMoney, t as tr, type DisplayCurrency, type Locale, type LocalizedText, type Product } from '@suqa/shared';
 import { waLink } from '@/lib/whatsapp';
 import { noteSearch } from '@/lib/search-note';
@@ -25,6 +27,8 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   // an item priced in lira shows that lira as the shop set it (260,001 — not 260,000); only totals are rounded
   const liraOf = (p: Product) => { const x = p as { price_currency?: string | null; price_lbp?: number | string | null }; return x.price_currency === 'lbp' && Number(x.price_lbp) > 0 ? Number(x.price_lbp) : null; };
   const price = (p: Product) => formatMoney(Number(p.price_usd), fx, displayCurrency, L, liraOf(p));
+  // …and with a running price offer: the old price crossed out, the offer price, a small tag
+  const priceEl = (p: Product) => { const v = sales.get(p.id); return v ? <><s className="muted" style={{ fontWeight: 400, marginInlineEnd: 6 }}>{price(p)}</s><span className="sale-price">{formatMoney(v.charged / 100, fx, displayCurrency, L, v.lbp)}</span> <span className="sale-tag">−{v.pct}%</span></> : <>{price(p)}</>; };
   const sections = Array.from(new Set(products.map(p => p.section ?? '')));
   const qtyOf = (id: string) => qtyIn(shop.id, id);
   // a section's display name in the visitor's language (schema 74); the section key itself when the shop gave it no name
@@ -75,32 +79,25 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   // the buy controls of an item (add, or − qty +): the same in the list and in the item's details
   const buy = (p: Product) => { const q = qtyOf(p.id); const dec = allowsDecimal(p as { decimal_qty?: boolean; unit?: string | null; unit_kind?: string | null }); const step = dec ? 0.5 : 1; return (<>
       {!p.is_available ? <span className="badge cancelled">{labels.soldOut}</span>
-                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, ...(dec ? { dec: true } : {}), price_usd: Number(p.price_usd), ...(liraOf(p) ? { lbp: liraOf(p)! } : {}), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
+                    : q === 0 ? <button className="btn primary add-btn" onClick={() => add({ id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false }, { product_id: p.id, name: p.name, unit: p.unit, ...(dec ? { dec: true } : {}), ...(sales.get(p.id) ? { price_usd: sales.get(p.id)!.charged / 100, ...(sales.get(p.id)!.lbp ? { lbp: sales.get(p.id)!.lbp! } : {}) } : { price_usd: Number(p.price_usd), ...(liraOf(p) ? { lbp: liraOf(p)! } : {}) }), days: (p as { available_days?: number[] | null }).available_days ?? null }, () => ask(labels.replaceCart))} aria-label={labels.add}><span aria-hidden>+</span><span className="add-label"> {labels.add}</span></button>
                     : <div className="stepper">
                         <button className="btn" onClick={() => setQty(shop.id, p.id, Math.round((q - step) * 100) / 100)} aria-label="−">−</button>
                         <span className="qty">{q}{dec && p.unit ? <small> {p.unit}</small> : null}</span>
                         <button className="btn" onClick={() => setQty(shop.id, p.id, Math.round((q + step) * 100) / 100)} aria-label="+">+</button>
                       </div>}
   </>); };
-  // the shop's offers (130) — bundles: shown first, priced as the server will charge them (dollar cents at the shop's rate)
+  // the shop's offers (130 / 131): bundles and price offers, as the server will charge them (dollar cents at the shop's rate)
   const byId = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
   const [today, setToday] = useState<Date | null>(null); useEffect(() => setToday(new Date()), []);     // the visitor's clock, after the page is on screen
-  const bundles = useMemo(() => (today ? offers.filter(o => o.kind === 'bundle').map(o => bundleView<OfferProduct>(o, id => byId.get(id) as unknown as OfferProduct | undefined, fx, 'online', today, today.getDay())).filter(v => v.ok || v.why === 'item') : []), [offers, byId, fx, today]);
+  const vms = useMemo(() => (today ? offerVMs(offers, id => byId.get(id) as unknown as OfferProduct | undefined, fx, today) : []), [offers, byId, fx, today]);
+  // an item with a running price offer: its offer price everywhere on the page (row, details, basket)
+  const sales = useMemo(() => new Map(vms.filter(v => v.kind === 'discount' && v.ok && v.product).map(v => [v.product!.id, v])), [vms]);
   const ar = L === 'ar';
   const shopRef = { id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false };
-  const buyBundle = (v: typeof bundles[number]) => { const k = offerKey(v.offer.id); const n = qtyOf(k); const max = v.offer.max_per_order ?? 99; return (
-    !v.ok ? <span className="badge cancelled">{ar ? 'غير متوفر الآن' : 'Not available now'}</span>
-    : n === 0 ? <button className="btn primary offer-add" onClick={() => add(shopRef, { product_id: k, name: v.offer.name as LocalizedText, unit: null, price_usd: v.charged / 100,
-        bundle: { items: v.lines.map(l => ({ name: l.product.name as LocalizedText, qty: l.quantity })), normal_usd: v.normal / 100, max: v.offer.max_per_order ?? null } }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
-    : <div className="stepper">
-        <button className="btn" onClick={() => setQty(shop.id, k, n - 1)} aria-label="−">−</button>
-        <span className="qty">{n}</span>
-        <button className="btn" disabled={n >= max} onClick={() => setQty(shop.id, k, n + 1)} aria-label="+">+</button>
-      </div>); };
+  const fmt = { fx, displayCurrency, L };
   const [detail, setDetail] = useState<string | null>(null);      // the item whose picture and details are open
   const [offerOpen, setOfferOpen] = useState<string | null>(null);  // the offer whose pictures and details are open
-  const ov = offerOpen ? bundles.find(v => v.offer.id === offerOpen) ?? null : null;
-  useEffect(() => { if (!offerOpen) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOfferOpen(null); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [offerOpen]);
+  const ov = offerOpen ? vms.find(v => v.id === offerOpen) ?? null : null;
   const dp = detail ? products.find(x => x.id === detail) ?? null : null;
   useEffect(() => { if (!detail) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetail(null); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [detail]);
   return (
@@ -116,56 +113,15 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
             <button type="button" className="chip" onClick={() => setSecs(new Set())}>{labels.clearFilter}</button>
           </nav>
         )}
-        {bundles.length > 0 && !q.trim() && secs.size === 0 && (
+        {vms.length > 0 && !q.trim() && secs.size === 0 && (
           <section className="offers-strip" aria-label={ar ? 'العروض' : 'Offers'}>
             <h2 className="offers-title">🎁 {ar ? 'العروض' : 'Offers'}</h2>
             <div className="offers-row">
-              {bundles.map(v => { const pics = v.offer.image_url ? [v.offer.image_url] : v.lines.map(l => l.product.image_url).filter(Boolean).slice(0, 4) as string[];
-                // one main price, the other currency small under it: the card stays narrow enough for two side by side on a phone
-                const main = (c: number) => formatMoney(c / 100, fx, displayCurrency === 'lbp' ? 'lbp' : 'usd', L); const other = (c: number) => (displayCurrency === 'both' ? formatMoney(c / 100, fx, 'lbp', L) : '');
-                return (
-                <article key={v.offer.id} className={`offer-card ${v.ok ? '' : 'off'}`}>
-                  <div className={`offer-pics n${pics.length}`} role="button" tabIndex={0} aria-label={ar ? 'تفاصيل العرض' : 'Offer details'} onClick={() => setOfferOpen(v.offer.id)} onKeyDown={e => { if (e.key === 'Enter') setOfferOpen(v.offer.id); }} style={{ cursor: 'zoom-in' }}>{pics.length ? pics.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />) : <span>🎁</span>}
-                    {v.ok && v.pct > 0 && <span className="offer-save">−{v.pct}%</span>}{v.offer.is_hot && <span className="offer-hot">🔥</span>}</div>
-                  <div className="offer-body">
-                    <strong className="offer-name" onClick={() => setOfferOpen(v.offer.id)} style={{ cursor: 'pointer' }}>{tr(v.offer.name as LocalizedText, L)}</strong>
-                    <div className="offer-items" onClick={() => setOfferOpen(v.offer.id)} style={{ cursor: 'pointer' }}>{v.lines.map(l => `${l.quantity}× ${tr(l.product.name as LocalizedText, L)}`).join(' + ')}</div>
-                    <div className="offer-prices"><strong>{main(v.charged)}</strong><s>{main(v.normal)}</s></div>
-                    {other(v.charged) && <div className="offer-other">{other(v.charged)}</div>}
-                    <div className="offer-buy">{buyBundle(v)}</div>
-                  </div>
-                </article>); })}
+              {vms.map(v => <OfferCard key={v.id} vm={v} fmt={fmt} onOpen={() => setOfferOpen(v.id)}><OfferBuy vm={v} shop={shopRef} L={L} labels={{ add: labels.add, replaceCart: labels.replaceCart }} /></OfferCard>)}
             </div>
           </section>
         )}
-        {ov && (() => { const o = ov.offer; const desc = tr((o.description ?? {}) as LocalizedText, L);
-          const usd = (c: number) => formatMoney(c / 100, fx, displayCurrency, L);
-          return (
-          <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setOfferOpen(null); }}>
-            <div className="dlg card item-detail offer-detail" role="dialog" aria-label={tr(o.name as LocalizedText, L)}>
-              <div className="row spread" style={{ alignItems: 'center', gap: 8 }}><strong style={{ fontSize: 18, minWidth: 0 }}>{o.is_hot ? '🔥 ' : '🎁 '}{tr(o.name as LocalizedText, L)}</strong><button type="button" className="btn ghost" onClick={() => setOfferOpen(null)} aria-label="✕">✕</button></div>
-              {o.image_url && <img className="item-detail-img" src={o.image_url} alt={tr(o.name as LocalizedText, L)} />}
-              {desc && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{desc}</p>}
-              <div className="col-title" style={{ margin: 0 }}>{ar ? 'ماذا في العرض' : 'What is inside'}</div>
-              <div className="offer-detail-items">
-                {ov.lines.map(l => (
-                  <div className="offer-detail-item" key={l.product.id}>
-                    {l.product.image_url ? <img src={l.product.image_url} alt="" loading="lazy" /> : <span className="thumb ph" aria-hidden>{tr(l.product.name as LocalizedText, L).trim().charAt(0)}</span>}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600 }}><span className="qty">{l.quantity}×</span> {tr(l.product.name as LocalizedText, L)}{l.product.unit ? <span className="muted" style={{ fontWeight: 400 }}> · {l.product.unit}</span> : null}</div>
-                      <div className="muted" style={{ fontSize: 13 }}>{ar ? 'السعر العادي' : 'Normal price'} {usd(l.normal)}{l.quantity > 1 ? ` × ${l.quantity}` : ''}</div>
-                    </div>
-                  </div>))}
-              </div>
-              <div className="offer-detail-sum">
-                <div className="row spread"><span className="muted">{ar ? 'السعر العادي' : 'Normal price'}</span><s className="muted">{usd(ov.normal)}</s></div>
-                <div className="row spread"><strong>{ar ? 'سعر العرض' : 'Offer price'}</strong><strong style={{ fontSize: 19, color: '#c81e4a' }}>{usd(ov.charged)}</strong></div>
-                {ov.ok && ov.saving > 0 && <div className="row spread" style={{ color: '#15803d', fontWeight: 600 }}><span>{ar ? 'توفّر' : 'You save'}</span><span>{usd(ov.saving)} (−{ov.pct}%)</span></div>}
-              </div>
-              {(o.ends_at || o.max_per_order) && <div className="muted" style={{ fontSize: 13 }}>{o.ends_at ? `${ar ? 'العرض حتى' : 'Until'} ${new Date(o.ends_at).toLocaleDateString(ar ? 'ar-LB' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}{o.ends_at && o.max_per_order ? ' · ' : ''}{o.max_per_order ? `${ar ? 'حدّ أقصى' : 'At most'} ${o.max_per_order} ${ar ? 'بالطلب الواحد' : 'per order'}` : ''}</div>}
-              <div className="row" style={{ justifyContent: 'flex-end' }}>{buyBundle(ov)}</div>
-            </div>
-          </div>); })()}
+        {ov && <OfferDetail vm={ov} fmt={fmt} onClose={() => setOfferOpen(null)}><OfferBuy vm={ov} shop={shopRef} L={L} labels={{ add: labels.add, replaceCart: labels.replaceCart }} /></OfferDetail>}
         {dp && (
           <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}>
             <div className="dlg card item-detail" role="dialog" aria-label={tr(dp.name, L)}>
@@ -174,7 +130,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
               {!!(dp as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((dp as { available_days?: number[] }).available_days!, L)}</div>}
               {tr(dp.description, L) && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{tr(dp.description, L)}</p>}
               <div className="row spread" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <strong style={{ fontSize: 16 }}>{price(dp)}{dp.unit ? <span className="muted" style={{ fontWeight: 400 }}> / {dp.unit}</span> : null}</strong>
+                <strong style={{ fontSize: 16 }}>{priceEl(dp)}{dp.unit ? <span className="muted" style={{ fontWeight: 400 }}> / {dp.unit}</span> : null}</strong>
                 <span className="row" style={{ gap: 8, alignItems: 'center' }}>
                   {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(dp) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}
                   {buy(dp)}
@@ -207,7 +163,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
                     <div className="name">{tr(p.name, L)}</div>
                     {!!(p as { available_days?: number[] | null }).available_days?.length && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>📅 {weekdaysLabel((p as { available_days?: number[] }).available_days!, L)}</div>}
                     {tr(p.description, L) && <div className="muted desc">{tr(p.description, L)}</div>}
-                    <div className="price">{price(p)}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
+                    <div className="price">{priceEl(p)}{p.unit ? <span className="muted"> / {p.unit}</span> : null}{typeof (p as { available?: number | null }).available === 'number' && (p as { available?: number }).available! > 0 && (p as { available?: number }).available! <= 5 ? <span className="muted" style={{ fontSize: 12 }}> · {(p as { available?: number }).available} {L === 'ar' ? 'متبقٍ' : 'left'}</span> : null}</div>
                   </div>
                   <div className="menu-acts">
                     {shop.whatsapp && <a className="btn ghost wa-mini" href={askLink(p) ?? '#'} target="_blank" rel="noopener noreferrer" title={labels.askOnWhatsapp} aria-label={labels.askOnWhatsapp}>💬</a>}

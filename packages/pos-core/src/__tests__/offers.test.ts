@@ -56,3 +56,28 @@ describe('bundleView', () => {
     expect(bundleView(offer({}), id => (id === 'a' ? { ...P.a, available_days: [1] } : P[id]), 90000, 'online', new Date(), 2).why).toBe('item');
   });
 });
+
+import { saleView, salesByProduct } from '../offers';
+describe('a price offer on one item (131)', () => {
+  const P: Record<string, OfferProduct> = {
+    a: { id: 'a', name: { en: 'Labneh' }, price_currency: 'usd', price_usd: 3.5, price_lbp: 0 },
+    c: { id: 'c', name: { en: 'Rice' }, price_currency: 'lbp', price_usd: 2.46, price_lbp: 221760 },
+  };
+  const d = (o: Partial<Offer>): Offer => ({ id: 'd', shop_id: 's', kind: 'discount', name: { en: 'x' }, price_currency: 'usd', price_usd: 2.9, price_lbp: 0, is_active: true, is_hot: false, items: [{ product_id: 'a', quantity: 1 }], ...o });
+  it('dollars: $3.50 → $2.90', () => { const v = saleView(d({}), id => P[id], 90000, 'online'); expect(v).toMatchObject({ ok: true, normal: 350, price: 290, saving: 60, pct: 17, lbp: null }); });
+  it('lira: 221,760 → 180,000 is $2.00 online and exactly 180,000 at the till', () => {
+    const o = d({ price_currency: 'lbp', price_usd: 0, price_lbp: 180000, items: [{ product_id: 'c', quantity: 1 }] });
+    expect(saleView(o, id => P[id], 90000, 'online')).toMatchObject({ ok: true, unit: 'cents', normal: 246, price: 200, lbp: 180000, normalLbp: 221760 });
+    expect(saleView(o, id => P[id], 90000, 'till')).toMatchObject({ ok: true, unit: 'lbp', normal: 221760, price: 180000 });
+  });
+  it('off when not below the price, in another currency, ended, or the item is out', () => {
+    expect(saleView(d({ price_usd: 3.5 }), id => P[id], 90000, 'online').why).toBe('no_saving');
+    expect(saleView(d({ items: [{ product_id: 'c', quantity: 1 }] }), id => P[id], 90000, 'online').why).toBe('currency');
+    expect(saleView(d({ ends_at: '2020-01-01T00:00:00Z' }), id => P[id], 90000, 'online').why).toBe('ended');
+    expect(saleView(d({}), id => ({ ...P[id], is_available: false }), 90000, 'online').why).toBe('item');
+  });
+  it('several offers on one item: the cheapest', () => {
+    const m = salesByProduct([d({ id: 'd1', price_usd: 3 }), d({ id: 'd2', price_usd: 2.8 }), d({ id: 'd3', price_usd: 9 })], id => P[id], 90000, 'online');
+    expect(m.get('a')?.offer.id).toBe('d2'); expect(m.size).toBe(1);
+  });
+});

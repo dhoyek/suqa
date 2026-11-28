@@ -1,7 +1,7 @@
 // The shop's offers on the till (script 130). Read from the server when online and kept on the device, so bundles can be
 // sold offline; creating and changing them is the owner's, online (offer_save / offer_delete).
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { bundleNote, bundleView, lbpToCents, lineFromProduct, sortOffers, type BundleView, type CatalogIndex, type DraftLine, type Offer, type Product } from '@suqa/pos-core';
+import { addToDraft, bundleNote, bundleView, lbpToCents, lineFromProduct, saleNote, salesByProduct, saleView, sortOffers, type BundleView, type CatalogIndex, type Draft, type DraftLine, type Offer, type Product, type SaleView } from '@suqa/pos-core';
 
 const key = (shopId: string) => `suqa-pos-offers:${shopId}`;
 export function cachedOffers(shopId: string): Offer[] { try { const v = JSON.parse(localStorage.getItem(key(shopId)) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
@@ -23,4 +23,22 @@ export function bundleDraftLines(v: BundleView<Product>, n: number, rate: number
   return v.lines.map(l => ({ ...lineFromProduct(l.product, l.quantity * n),
     ...(v.unit === 'lbp' ? { price_currency: 'lbp' as const, unit_price_lbp: l.unit, unit_price_cents: lbpToCents(l.unit, rate) } : { price_currency: 'usd' as const, unit_price_cents: l.unit, unit_price_lbp: 0 }),
     notes: note }));
+}
+
+// ── price offers (131): an item with a running offer is sold at the offer price, in its own currency ──────────────────
+export const tillSale = (o: Offer, index: CatalogIndex, rate: number, at = new Date()): SaleView<Product> => saleView<Product>(o, id => index.byId.get(id), rate, 'till', at, at.getDay());
+export const tillSales = (offers: Offer[], index: CatalogIndex, rate: number, at = new Date()): Map<string, SaleView<Product>> => salesByProduct<Product>(offers, id => index.byId.get(id), rate, 'till', at, at.getDay());
+/** a cart line of an item at its offer price, marked with the offer's name */
+export function saleDraftLine(p: Product, quantity: number, v: SaleView<Product>, rate: number): DraftLine {
+  return { ...lineFromProduct(p, quantity),
+    ...(v.unit === 'lbp' ? { price_currency: 'lbp' as const, unit_price_lbp: v.price, unit_price_cents: lbpToCents(v.price, rate) } : { price_currency: 'usd' as const, unit_price_cents: v.price, unit_price_lbp: 0 }),
+    notes: saleNote(v.offer) };
+}
+/** add an item to the cart: at its offer price when one is running (same line grows), else as always */
+export function addWithSale(d: Draft, p: Product, quantity: number, v: SaleView<Product> | undefined, rate: number): Draft {
+  if (!v) return addToDraft(d, p, quantity);
+  const line = saleDraftLine(p, quantity, v, rate);
+  const i = d.lines.findIndex(l => l.product_id === p.id && !l.voided && !l.discount_cents && l.notes === line.notes && l.price_currency === line.price_currency && l.unit_price_cents === line.unit_price_cents && l.unit_price_lbp === line.unit_price_lbp);
+  if (i >= 0) { const lines = d.lines.slice(); lines[i] = { ...lines[i], quantity: Math.round((lines[i].quantity + quantity) * 1000) / 1000 }; return { ...d, lines }; }
+  return { ...d, lines: [...d.lines, line] };
 }

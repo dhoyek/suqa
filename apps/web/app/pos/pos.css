@@ -742,3 +742,5 @@ html.pos-big .table td, html.pos-big .table th { padding: 11px 8px; }
 .offer-pick { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; font-family: inherit; font-size: 15px; }
 .offer-pick:hover { border-color: #f3b3bf; background: #fff8f9; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.sale-price { color: #c81e4a; font-weight: 700; }
+.offer-kind { display: flex; gap: 8px; flex-wrap: wrap; }

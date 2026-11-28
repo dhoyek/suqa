@@ -2,6 +2,7 @@
 \set ON_ERROR_STOP on
 begin;
 \i supabase/schema/130_offers_bundles.sql
+\i supabase/schema/131_offers_price.sql
 do $$
 declare t suqa.tenants; s suqa.shops; a suqa.addresses; u uuid; own uuid; o suqa.orders; v_id uuid; v_id2 uuid; n int; li record;
         p1 suqa.products; p2 suqa.products; p3 suqa.products; v_err text;

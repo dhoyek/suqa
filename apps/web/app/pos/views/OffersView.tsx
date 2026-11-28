@@ -8,7 +8,7 @@ import type { Booted } from '../lib/boot';
 import Modal from '../components/Modal';
 import NumInput from '../components/NumInput';
 import ImageUpload from '@/components/ImageUpload';
-import { cachedOffers, fetchOffers, tillBundle } from '../lib/offers';
+import { cachedOffers, fetchOffers, tillBundle, tillSale } from '../lib/offers';
 
 const ERR: Record<string, [string, string]> = {
   not_owner: ['العروض يضيفها صاحب المحل فقط.', 'Only the shop owner can change offers.'],
@@ -23,6 +23,8 @@ const ERR: Record<string, [string, string]> = {
   offer_needs_two: ['العرض يحتاج قطعتين على الأقل (صنفان، أو صنف بكمية 2 أو أكثر).', 'A bundle needs at least two units (two items, or one item × 2 or more).'],
   offer_no_saving: ['سعر العرض يجب أن يكون أقل من مجموع أسعار الأصناف.', 'The bundle price must be below the items\' normal total.'],
   offer_not_found: ['العرض لم يعد موجوداً.', 'This offer no longer exists.'],
+  offer_one_item: ['عرض السعر يكون على صنف واحد.', 'A price offer is on one item.'],
+  offer_bad_kind: ['نوع العرض غير معروف.', 'Unknown kind of offer.'],
 };
 const WHY: Record<string, [string, string]> = {
   off: ['متوقف', 'Paused'], not_yet: ['لم يبدأ بعد', 'Not started yet'], ended: ['انتهى', 'Ended'], empty: ['بلا أصناف', 'No items'],
@@ -30,7 +32,7 @@ const WHY: Record<string, [string, string]> = {
 };
 
 type Row = { p: Product; qty: number };
-type Form = { id?: string; ar: string; en: string; dAr: string; dEn: string; img: string | null; rows: Row[]; price: number | null; hot: boolean; active: boolean; starts: string; ends: string; max: number | null };
+type Form = { id?: string; kind: 'bundle' | 'discount'; ar: string; en: string; dAr: string; dEn: string; img: string | null; rows: Row[]; price: number | null; hot: boolean; active: boolean; starts: string; ends: string; max: number | null };
 const localDT = (iso?: string | null) => { if (!iso) return ''; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 
 export default function OffersView({ boot, sb, locale, index, online, tick }: { boot: Booted; sb: SupabaseClient; locale: L; index: CatalogIndex; online: boolean; tick: number }) {
@@ -43,13 +45,18 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
   useEffect(() => { boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); }); }, [boot]);
   const reload = useCallback(async () => { const list = await fetchOffers(sb, boot.shop.id); setReady(!!list); if (list) setOffers(list); }, [sb, boot]);
   useEffect(() => { if (online) void reload(); }, [online, reload]);
-  const views = useMemo(() => offers.filter(o => o.kind === 'bundle').map(o => tillBundle(o, index, rate)), [offers, index, rate, tick]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // one card per offer, whatever its kind: what is in it, the normal price, the offer price
+  const views = useMemo(() => offers.filter(o => o.kind === 'bundle' || o.kind === 'discount').map(o => {
+    if (o.kind === 'bundle') return tillBundle(o, index, rate);
+    const v = tillSale(o, index, rate);
+    return { offer: o, ok: v.ok, why: v.why, unit: v.unit, lines: v.product ? [{ product: v.product, quantity: 1, unit: v.price, normal: v.normal }] : [], normal: v.normal, charged: v.price, saving: v.saving, pct: v.pct };
+  }), [offers, index, rate, tick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const money = (v: number, unit: 'cents' | 'lbp') => (unit === 'lbp' ? fmtLbp(v, locale) : fmtUsd(v));
 
-  const open = (o?: Offer) => { setErr(''); setQ(''); setForm(o
-    ? { id: o.id, ar: o.name?.ar ?? '', en: o.name?.en ?? '', dAr: o.description?.ar ?? '', dEn: o.description?.en ?? '', img: o.image_url ?? null, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd), hot: o.is_hot, active: o.is_active, starts: localDT(o.starts_at), ends: localDT(o.ends_at), max: o.max_per_order ?? null,
+  const open = (o?: Offer, kind?: 'bundle' | 'discount') => { setErr(''); setQ(''); setForm(o
+    ? { id: o.id, kind: o.kind === 'discount' ? 'discount' : 'bundle', ar: o.name?.ar ?? '', en: o.name?.en ?? '', dAr: o.description?.ar ?? '', dEn: o.description?.en ?? '', img: o.image_url ?? null, price: o.price_currency === 'lbp' ? num(o.price_lbp) : num(o.price_usd), hot: o.is_hot, active: o.is_active, starts: localDT(o.starts_at), ends: localDT(o.ends_at), max: o.max_per_order ?? null,
         rows: [...o.items].sort((a, b) => num(a.sort_order) - num(b.sort_order)).map(it => ({ p: index.byId.get(it.product_id)!, qty: num(it.quantity) })).filter(r => r.p) }
-    : { ar: '', en: '', dAr: '', dEn: '', img: null, rows: [], price: null, hot: false, active: true, starts: '', ends: '', max: null }); };
+    : { kind: kind ?? 'bundle', ar: '', en: '', dAr: '', dEn: '', img: null, rows: [], price: null, hot: false, active: true, starts: '', ends: '', max: null }); };
   // the bundle's currency is its items' currency
   const cur = form?.rows[0]?.p.price_currency === 'lbp' ? 'lbp' : 'usd';
   const mixed = !!form && form.rows.some(r => (r.p.price_currency ?? 'usd') !== cur);
@@ -58,13 +65,14 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
   const saving = normal - priceMinor; const units = form ? form.rows.reduce((s, r) => s + r.qty, 0) : 0;
   const hits = useMemo(() => (q.trim() && form ? index.search(q, 8).filter(p => !form.rows.some(r => r.p.id === p.id)) : []), [q, form, index]);
   const patch = (x: Partial<Form>) => setForm(f => (f ? { ...f, ...x } : f));
-  const canSave = !!form && (form.ar.trim() || form.en.trim()) && units >= 2 && !mixed && priceMinor > 0 && saving > 0;
+  const isDisc = form?.kind === 'discount';
+  const canSave = !!form && (isDisc ? form.rows.length === 1 : !!(form.ar.trim() || form.en.trim()) && units >= 2) && !mixed && priceMinor > 0 && saving > 0;
 
   const save = async () => {
     if (!form || busy) return; setBusy(true); setErr('');
-    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { ...(form.id ? { id: form.id } : {}), name: { ar: form.ar.trim(), en: form.en.trim() }, description: { ar: form.dAr.trim().slice(0, 300), en: form.dEn.trim().slice(0, 300) }, image_url: form.img ?? '', price_currency: cur, price: form.price,
+    const { error } = await sb.rpc('offer_save', { p_shop: boot.shop.id, p: { ...(form.id ? { id: form.id } : { kind: form.kind }), name: { ar: form.ar.trim(), en: form.en.trim() }, description: { ar: form.dAr.trim().slice(0, 300), en: form.dEn.trim().slice(0, 300) }, image_url: form.img ?? '', price_currency: cur, price: form.price,
       is_active: form.active, is_hot: form.hot, starts_at: form.starts ? new Date(form.starts).toISOString() : '', ends_at: form.ends ? new Date(form.ends).toISOString() : '', max_per_order: form.max ? String(Math.round(form.max)) : '',
-      items: form.rows.map(r => ({ product_id: r.p.id, quantity: r.qty })) } });
+      items: form.rows.map(r => ({ product_id: r.p.id, quantity: isDisc ? 1 : r.qty })) } });
     setBusy(false);
     if (error) { const k = Object.keys(ERR).find(c => error.message.includes(c)); setErr(k ? T(...ERR[k]) : /offer_save|schema cache|does not exist/i.test(error.message) ? T('العروض غير مفعّلة بعد.', 'Offers are not switched on yet.') : error.message); return; }
     setForm(null); await reload();
@@ -81,21 +89,21 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
     <div className="stack offers-view">
       <div className="row spread" style={{ alignItems: 'center' }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>🎁 {T('العروض', 'Offers')} <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>{views.length ? `(${views.length})` : ''}</span></h2>
-        <button className="btn primary" disabled={!online || ready === false} onClick={() => open()}>＋ {T('عرض جديد (مجموعة)', 'New bundle')}</button>
+        <span className="offer-kind"><button className="btn primary" disabled={!online || ready === false} onClick={() => open(undefined, 'bundle')}>🎁 ＋ {T('مجموعة', 'Bundle')}</button><button className="btn primary" disabled={!online || ready === false} onClick={() => open(undefined, 'discount')}>🏷️ ＋ {T('عرض سعر', 'Price offer')}</button></span>
       </div>
-      <p className="muted" style={{ margin: 0, fontSize: 13 }}>{T('المجموعة: عدة أصناف تُباع معاً بسعر واحد أقل من مجموع أسعارها. تظهر أولاً في صفحة المحل، وتُباع من شاشة البيع بزر 🎁.', 'A bundle: several items sold together for one price below their total. It shows first on the shop page and is sold from the sale screen with the 🎁 button.')}</p>
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>{T('🎁 مجموعة: عدة أصناف تُباع معاً بسعر واحد أقل من مجموع أسعارها (تُباع من شاشة البيع بزر 🎁). 🏷️ عرض سعر: صنف واحد بسعر أقل لفترة — يُطبَّق وحده عند بيع الصنف. كلاهما يظهر أولاً في صفحة المحل.', '🎁 Bundle: several items sold together for one price below their total (sold from the sale screen with the 🎁 button). 🏷️ Price offer: one item at a lower price for a while — applied by itself when the item is sold. Both show first on the shop page.')}</p>
       {!online && <div className="pill warn">{T('غير متصل: يمكن بيع العروض المحفوظة، وتعديلها يحتاج اتصالاً.', 'Offline: saved offers can be sold; changing them needs a connection.')}</div>}
       {online && ready === false && <div className="pill warn">{T('العروض غير مفعّلة بعد على الخادم.', 'Offers are not switched on yet on the server.')}</div>}
       {err && !form && <div className="error">{err}</div>}
-      {!views.length && ready !== false && <div className="card muted">{T('لا عروض بعد. أضف أول مجموعة.', 'No offers yet. Add the first bundle.')}</div>}
+      {!views.length && ready !== false && <div className="card muted">{T('لا عروض بعد. أضف أول عرض.', 'No offers yet. Add the first one.')}</div>}
       <div className="offers-grid">
         {views.map(v => { const o = v.offer; return (
           <div key={o.id} className={`card offer-card ${v.ok ? '' : 'off'}`}>
             <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-              {o.image_url ? <img className="offer-pic" src={o.image_url} alt="" /> : <div className="offer-pic none">🎁</div>}
+              {o.image_url ? <img className="offer-pic" src={o.image_url} alt="" /> : <div className="offer-pic none">{o.kind === 'discount' ? '🏷️' : '🎁'}</div>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row spread" style={{ gap: 6 }}><strong>{o.is_hot ? '🔥 ' : ''}{text(o.name, locale)}</strong>{!v.ok && <span className="pill warn" style={{ fontSize: 11 }}>{T(...(WHY[v.why ?? 'off'] ?? WHY.off))}</span>}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{v.lines.map(l => `${l.quantity}× ${text(l.product.name, locale)}`).join(' · ') || '—'}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{o.kind === 'discount' ? `🏷️ ${T('عرض سعر', 'Price offer')} · ${v.lines[0] ? text(v.lines[0].product.name, locale) : '—'}` : v.lines.map(l => `${l.quantity}× ${text(l.product.name, locale)}`).join(' · ') || '—'}</div>
                 {text(o.description ?? {}, locale) && <div className="muted" style={{ fontSize: 12, fontStyle: 'italic' }}>{text(o.description ?? {}, locale)}</div>}
                 <div style={{ marginTop: 4 }}>{v.normal > v.charged && <s className="muted" style={{ marginInlineEnd: 8 }}>{money(v.normal, v.unit)}</s>}<strong className="offer-price">{money(v.charged, v.unit)}</strong>{v.saving > 0 && v.ok && <span className="pill ok" style={{ marginInlineStart: 8, fontSize: 11 }}>−{v.pct}%</span>}</div>
                 {(o.starts_at || o.ends_at || o.max_per_order) && <div className="muted" style={{ fontSize: 12 }}>{o.starts_at ? `${T('من', 'from')} ${new Date(o.starts_at).toLocaleString(locale === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })} ` : ''}{o.ends_at ? `${T('حتى', 'until')} ${new Date(o.ends_at).toLocaleString(locale === 'ar' ? 'ar-LB' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })} ` : ''}{o.max_per_order ? `· ${T('حدّ', 'max')} ${o.max_per_order} ${T('بالطلب', 'per order')}` : ''}</div>}
@@ -111,40 +119,40 @@ export default function OffersView({ boot, sb, locale, index, online, tick }: { 
           </div>); })}
       </div>
 
-      {form && <Modal open onClose={() => setForm(null)} wide title={form.id ? T('تعديل المجموعة', 'Edit bundle') : T('مجموعة جديدة', 'New bundle')}
+      {form && <Modal open onClose={() => setForm(null)} wide title={isDisc ? (form.id ? T('تعديل عرض السعر', 'Edit price offer') : T('عرض سعر جديد', 'New price offer')) : form.id ? T('تعديل المجموعة', 'Edit bundle') : T('مجموعة جديدة', 'New bundle')}
         footer={<><button className="btn" onClick={() => setForm(null)}>{T('إلغاء', 'Cancel')}</button><span style={{ flex: 1 }} /><button className="btn primary" disabled={!canSave || busy} onClick={() => void save()}>✓ {T('حفظ', 'Save')}</button></>}>
         <div className="stack">
           <div className="form-grid">
-            <label className="label">{T('اسم العرض (عربي)', 'Name (Arabic)')}<input className="input" dir="rtl" maxLength={80} value={form.ar} onChange={e => patch({ ar: e.target.value })} placeholder="فطور الصبح" /></label>
-            <label className="label">{T('اسم العرض (إنكليزي)', 'Name (English)')}<input className="input" dir="ltr" maxLength={80} value={form.en} onChange={e => patch({ en: e.target.value })} placeholder="Breakfast deal" /></label>
+            <label className="label">{T('اسم العرض (عربي)', 'Name (Arabic)')}<input className="input" dir="rtl" maxLength={80} value={form.ar} onChange={e => patch({ ar: e.target.value })} placeholder={isDisc ? T('اختياري — وإلا اسم الصنف', 'Optional — else the item\'s name') : 'فطور الصبح'} /></label>
+            <label className="label">{T('اسم العرض (إنكليزي)', 'Name (English)')}<input className="input" dir="ltr" maxLength={80} value={form.en} onChange={e => patch({ en: e.target.value })} placeholder={isDisc ? 'Optional' : 'Breakfast deal'} /></label>
             <label className="label">{T('وصف قصير (عربي، اختياري)', 'Short description (Arabic, optional)')}<textarea className="input" dir="rtl" rows={2} maxLength={300} value={form.dAr} onChange={e => patch({ dAr: e.target.value })} placeholder="فطور كامل لشخصين" /></label>
             <label className="label">{T('وصف قصير (إنكليزي، اختياري)', 'Short description (English, optional)')}<textarea className="input" dir="ltr" rows={2} maxLength={300} value={form.dEn} onChange={e => patch({ dEn: e.target.value })} placeholder="A full breakfast for two" /></label>
           </div>
-          <div className="label">{T('أصناف المجموعة', 'Items in the bundle')}
+          <div className="label">{isDisc ? T('الصنف', 'The item') : T('أصناف المجموعة', 'Items in the bundle')}
             {form.rows.map(r => (
               <div key={r.p.id} className="row offer-row" style={{ gap: 8, alignItems: 'center' }}>
                 <span style={{ flex: 1, minWidth: 0 }}>{text(r.p.name, locale)} <small className="muted">{r.p.price_currency === 'lbp' ? fmtLbp(num(r.p.price_lbp), locale) : fmtUsd(Math.round(num(r.p.price_usd) * 100))}</small></span>
-                <span className="qty-btns"><button className="btn" onClick={() => patch({ rows: form.rows.map(x => (x.p.id === r.p.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x)) })}>−</button><strong style={{ minWidth: 24, textAlign: 'center' }}>{r.qty}</strong><button className="btn" onClick={() => patch({ rows: form.rows.map(x => (x.p.id === r.p.id ? { ...x, qty: Math.min(99, x.qty + 1) } : x)) })}>+</button></span>
+                {!isDisc && <span className="qty-btns"><button className="btn" onClick={() => patch({ rows: form.rows.map(x => (x.p.id === r.p.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x)) })}>−</button><strong style={{ minWidth: 24, textAlign: 'center' }}>{r.qty}</strong><button className="btn" onClick={() => patch({ rows: form.rows.map(x => (x.p.id === r.p.id ? { ...x, qty: Math.min(99, x.qty + 1) } : x)) })}>+</button></span>}
                 <button className="btn ghost" onClick={() => patch({ rows: form.rows.filter(x => x.p.id !== r.p.id) })}>✕</button>
               </div>))}
-            <input className="input" value={q} onChange={e => setQ(e.target.value)} placeholder={T('＋ أضف صنفاً — اكتب الاسم أو امسح الباركود', '＋ Add an item — type its name or scan')} />
+            {!(isDisc && form.rows.length >= 1) && <input className="input" value={q} onChange={e => setQ(e.target.value)} placeholder={T('＋ أضف صنفاً — اكتب الاسم أو امسح الباركود', '＋ Add an item — type its name or scan')} />}
             {hits.length > 0 && <div className="offer-hits">{hits.map(p => <button key={p.id} className="btn ghost" onClick={() => { patch({ rows: [...form.rows, { p, qty: 1 }] }); setQ(''); }}>{text(p.name, locale)} <small className="muted">{p.price_currency === 'lbp' ? fmtLbp(num(p.price_lbp), locale) : fmtUsd(Math.round(num(p.price_usd) * 100))}</small></button>)}</div>}
           </div>
           {mixed && <div className="error">{T(...ERR.offer_mixed_currency)}</div>}
           <div className="form-grid">
-            <label className="label">{T('سعر المجموعة', 'Bundle price')} ({cur === 'lbp' ? T('ل.ل.', 'LBP') : '$'})
+            <label className="label">{isDisc ? T('سعر العرض', 'Offer price') : T('سعر المجموعة', 'Bundle price')} ({cur === 'lbp' ? T('ل.ل.', 'LBP') : '$'})
               <NumInput className="input" value={form.price} onChange={v => patch({ price: v })} empty />
             </label>
             <div className="label">{T('السعر العادي ← سعر العرض', 'Normal price → bundle price')}
               <div style={{ fontSize: 16, paddingTop: 6 }}>{normal > 0 ? <><s className="muted">{money(normal, cur === 'lbp' ? 'lbp' : 'cents')}</s> → <strong>{priceMinor > 0 ? money(priceMinor, cur === 'lbp' ? 'lbp' : 'cents') : '—'}</strong>{priceMinor > 0 && saving > 0 && <span className="pill ok" style={{ marginInlineStart: 8 }}>{T('توفير', 'saves')} {money(saving, cur === 'lbp' ? 'lbp' : 'cents')} (−{Math.round((saving * 100) / normal)}%)</span>}</> : <span className="muted">—</span>}</div>
               {priceMinor > 0 && normal > 0 && saving <= 0 && <small className="error">{T(...ERR.offer_no_saving)}</small>}
-              {units === 1 && <small className="error">{T(...ERR.offer_needs_two)}</small>}
+              {!isDisc && units === 1 && <small className="error">{T(...ERR.offer_needs_two)}</small>}
             </div>
           </div>
           <div className="form-grid">
             <label className="label">{T('يبدأ (اختياري)', 'Starts (optional)')}<input className="input" type="datetime-local" value={form.starts} onChange={e => patch({ starts: e.target.value })} /></label>
             <label className="label">{T('ينتهي (اختياري)', 'Ends (optional)')}<input className="input" type="datetime-local" value={form.ends} onChange={e => patch({ ends: e.target.value })} /></label>
-            <label className="label">{T('حدّ أقصى بالطلب الواحد (اختياري)', 'At most per order (optional)')}<NumInput className="input" value={form.max} onChange={v => patch({ max: v })} empty /></label>
+            {!isDisc && <label className="label">{T('حدّ أقصى بالطلب الواحد (اختياري)', 'At most per order (optional)')}<NumInput className="input" value={form.max} onChange={v => patch({ max: v })} empty /></label>}
             <div className="label">{T('الظهور', 'Showing')}
               <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={form.active} onChange={e => patch({ active: e.target.checked })} /> {T('العرض شغّال', 'The offer is on')}</label>
               <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={form.hot} onChange={e => patch({ hot: e.target.checked })} /> 🔥 {T('عرض ساخن (يظهر أولاً)', 'Hot offer (shown first)')}</label>

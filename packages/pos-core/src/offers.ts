@@ -71,3 +71,42 @@ export function bundleView<P extends OfferProduct>(offer: Offer, byId: (id: stri
 export const bundleNote = (o: Pick<Offer, 'name'>) => `🎁 ${o.name?.ar || o.name?.en || ''}`.slice(0, 200);
 /** offers in the order they are shown: hot first, then the shop's own order */
 export const sortOffers = <T extends Pick<Offer, 'is_hot' | 'sort_order'>>(list: T[]): T[] => [...list].sort((a, b) => Number(b.is_hot) - Number(a.is_hot) || n(a.sort_order) - n(b.sort_order));
+
+// ── a price offer on one item (kind 'discount', script 131) ────────────────────────────────────────────────────────────
+export interface SaleView<P extends OfferProduct = OfferProduct> {
+  offer: Offer; product: P | undefined; ok: boolean; why?: BundleView['why'];
+  /** 'cents' online; the item's own currency at the till */ unit: 'cents' | 'lbp';
+  /** the item's normal price and its offer price, for one */ normal: number; price: number; saving: number; pct: number;
+  /** the offer's lira as the shop typed it, for a lira offer (shown as it is) */ lbp: number | null; normalLbp: number | null;
+}
+/** A price offer as it is shown and charged — the same rule as the database's `_sale_offer`. */
+export function saleView<P extends OfferProduct>(offer: Offer, byId: (id: string) => P | undefined, fx: number, mode: 'online' | 'till', now = new Date(), day?: number): SaleView<P> {
+  const p = byId(offer.items?.[0]?.product_id ?? '');
+  const lira = offer.price_currency === 'lbp'; const native = mode === 'till' && lira;
+  const usdCents = (lbp: number) => (fx > 0 ? Math.round((Math.round((lbp / fx) * 100) / 100) * 100) : 0);
+  const normal = !p ? 0 : native ? Math.round(n(p.price_lbp)) : p.price_currency === 'lbp' && n(p.price_lbp) > 0 ? usdCents(n(p.price_lbp)) : Math.round(n(p.price_usd) * 100);
+  const price = native ? Math.round(n(offer.price_lbp)) : lira ? usdCents(n(offer.price_lbp)) : Math.round(n(offer.price_usd) * 100);
+  let why: BundleView['why'];
+  if (!offer.is_active) why = 'off';
+  else if (offer.starts_at && new Date(offer.starts_at) > now) why = 'not_yet';
+  else if (offer.ends_at && new Date(offer.ends_at) <= now) why = 'ended';
+  else if (!p) why = 'empty';
+  else if (p.is_active === false || p.is_available === false || (day != null && p.available_days != null && !p.available_days.includes(day))) why = 'item';
+  else if ((p.price_currency ?? 'usd') !== offer.price_currency) why = 'currency';
+  else if (lira ? !(n(offer.price_lbp) > 0 && n(offer.price_lbp) < n(p.price_lbp)) : !(n(offer.price_usd) > 0 && n(offer.price_usd) < n(p.price_usd))) why = 'no_saving';
+  const saving = Math.max(0, normal - price);
+  return { offer, product: p, ok: !why, why, unit: native ? 'lbp' : 'cents', normal, price, saving, pct: normal > 0 ? Math.round((saving * 100) / normal) : 0,
+    lbp: lira ? Math.round(n(offer.price_lbp)) : null, normalLbp: p && p.price_currency === 'lbp' && n(p.price_lbp) > 0 ? Math.round(n(p.price_lbp)) : null };
+}
+/** the running price offer of each item (the cheapest when an item has several) */
+export function salesByProduct<P extends OfferProduct>(offers: Offer[], byId: (id: string) => P | undefined, fx: number, mode: 'online' | 'till', now = new Date(), day?: number): Map<string, SaleView<P>> {
+  const out = new Map<string, SaleView<P>>();
+  for (const o of offers) {
+    if (o.kind !== 'discount') continue;
+    const v = saleView(o, byId, fx, mode, now, day); if (!v.ok || !v.product) continue;
+    const cur = out.get(v.product.id); if (!cur || v.price < cur.price) out.set(v.product.id, v);
+  }
+  return out;
+}
+/** the note a line sold at an offer price carries ("🏷 name") */
+export const saleNote = (o: Pick<Offer, 'name'>) => `🏷 ${o.name?.ar || o.name?.en || ''}`.slice(0, 200);

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { getLocale } from '@/lib/locale';
 import { getTenant } from '@/lib/tenant';
 import { getHomeData, getShopRates } from '@/lib/public-data';
@@ -18,12 +17,8 @@ export default async function OffersPage() {
   const cards = shops.map(s => ({ id: s.id, slug: s.slug, name: s.name, category_id: s.category_id, min_order_usd: Number(s.min_order_usd ?? 0), open: isOpenNow(s.opening_hours, s.is_open_override, tenant.timezone) }));
   return (
     <>
-      <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
-        <Link href="/" className="btn ghost" aria-label={ar ? 'الرئيسية' : 'Home'}>{ar ? '→' : '←'}</Link>
-        <h1 style={{ margin: 0, fontSize: 22 }}>🎁 {ar ? 'العروض' : 'Offers'}</h1>
-      </div>
       <OffersBoard locale={L} fx={Number(tenant.fx_lbp_rate)} rates={rates} displayCurrency={tenant.display_currency} cats={cats.map(c => ({ id: c.id, name: c.name }))} shops={cards} offers={offers} products={products}
-        labels={{ add: ui('add', L), replaceCart: ui('replaceCart', L), all: ui('all', L), shops: ui('shops', L), clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), ok: ui('okBtn', L) }} />
+        labels={{ add: ui('add', L), replaceCart: ui('replaceCart', L), all: ui('all', L), shops: ar ? 'فلترة حسب المتجر' : 'Filter by shop', clearFilter: ui('clearFilter', L), typeToFilter: ui('typeToFilter', L), ok: ui('okBtn', L) }} />
     </>
   );
 }

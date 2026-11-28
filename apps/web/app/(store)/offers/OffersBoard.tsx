@@ -8,6 +8,7 @@ import { offerVMs, type OfferVM } from '@/lib/offer-view';
 import type { OfferItemRow } from '@/lib/offers-data';
 import { OfferBuy, OfferCard, OfferDetail } from '@/components/offers/OfferParts';
 import { useCart } from '@/components/CartProvider';
+import FilterIcon from '@/components/FilterIcon';
 
 type ShopCard = { id: string; slug: string; name: LocalizedText; category_id: string | null; min_order_usd: number; open: boolean };
 type Row = OfferVM & { shop: ShopCard; fx: number };
@@ -46,20 +47,23 @@ export default function OffersBoard({ locale: L, fx, rates, displayCurrency, cat
   const refOf = (s: ShopCard) => ({ id: s.id, slug: s.slug, name: s.name, min_order_usd: s.min_order_usd });
   const buy = (r: Row) => <OfferBuy vm={r} shop={refOf(r.shop)} L={L} labels={labels} />;
 
-  if (now && !rows.length) return <div className="card muted">{ar ? 'لا عروض الآن. عُد قريباً.' : 'No offers right now. Check back soon.'}</div>;
+  if (now && !rows.length) return <div className="stack"><div className="row offers-head"><Link href="/" className="btn ghost" aria-label={ar ? 'الرئيسية' : 'Home'}>{ar ? '→' : '←'}</Link><h1>🎁 {ar ? 'العروض' : 'Offers'}</h1></div><div className="card muted">{ar ? 'لا عروض الآن. عُد قريباً.' : 'No offers right now. Check back soon.'}</div></div>;
   return (
     <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
-      {offerShops.length > 1 && (
-        <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className={`btn ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)}>🏪 {labels.shops}{sel.size ? ` (${sel.size})` : ''}</button>
-          {[...sel].map(id => { const e = offerShops.find(x => x.shop.id === id); return e ? <button type="button" key={id} className="chip active" onClick={() => toggleShop(id)}>{tr(e.shop.name, L)} ✕</button> : null; })}
-          {sel.size > 0 && <button type="button" className="chip" onClick={() => setSel(new Set())}>{labels.clearFilter}</button>}
-        </div>
-      )}
-      {usedCats.length > 1 && (
-        <nav className="row chips">
-          <button type="button" className={`chip ${cat ? '' : 'active'}`} onClick={() => setCat(null)}>{labels.all}</button>
-          {usedCats.map(c => <button type="button" key={c.id} className={`chip ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>{tr(c.name, L)}</button>)}
+      {/* one line: back, the title, and the shop filter at the other end */}
+      <div className="row offers-head">
+        <Link href="/" className="btn ghost" aria-label={ar ? 'الرئيسية' : 'Home'}>{ar ? '→' : '←'}</Link>
+        <h1>🎁 {ar ? 'العروض' : 'Offers'}</h1>
+        {offerShops.length > 1 && <button type="button" className={`btn offers-filter ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)}><FilterIcon size={16} /> {labels.shops}{sel.size ? ` (${sel.size})` : ''}</button>}
+      </div>
+      {/* one line, swiped sideways: the chosen shops (tap to remove), then the shop categories */}
+      {(sel.size > 0 || usedCats.length > 1) && (
+        <nav className="row chips offers-chips">
+          {[...sel].map(id => { const e = offerShops.find(x => x.shop.id === id); return e ? <button type="button" key={id} className="chip active" onClick={() => toggleShop(id)}>🏪 {tr(e.shop.name, L)} ✕</button> : null; })}
+          {usedCats.length > 1 && <>
+            <button type="button" className={`chip ${cat ? '' : 'active'}`} onClick={() => setCat(null)}>{labels.all}</button>
+            {usedCats.map(c => <button type="button" key={c.id} className={`chip ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>{tr(c.name, L)}</button>)}
+          </>}
         </nav>
       )}
       {!shown.length && <p className="muted">{ar ? 'لا عروض بهذا الاختيار.' : 'No offers for this choice.'}</p>}
@@ -69,7 +73,7 @@ export default function OffersBoard({ locale: L, fx, rates, displayCurrency, cat
       {sheet && (
         <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setSheet(false); }}>
           <div className="dlg card" role="dialog" aria-label={labels.shops}>
-            <div className="row spread" style={{ alignItems: 'center' }}><strong>🏪 {labels.shops}{sel.size ? ` (${sel.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
+            <div className="row spread" style={{ alignItems: 'center' }}><strong>{labels.shops}{sel.size ? ` (${sel.size})` : ''}</strong><button type="button" className="btn ghost" onClick={() => setSheet(false)} aria-label="✕">✕</button></div>
             <input className="input" placeholder={labels.typeToFilter} value={shopQ} onChange={e => setShopQ(e.target.value)} />
             <div className="cat-list">
               {shopMatches.map(e => <label key={e.shop.id} className={`cat-row ${sel.has(e.shop.id) ? 'active' : ''}`}><input type="checkbox" checked={sel.has(e.shop.id)} onChange={() => toggleShop(e.shop.id)} /> <span>{tr(e.shop.name, L)} <span className="muted">({e.n})</span></span></label>)}

@@ -509,3 +509,12 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 .offers-grid-page { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .offers-grid-page .offer-card { max-width: none; min-width: 0; flex: initial; }
 .home-offers-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid #f3c9d1; background: #fff5f7; color: #8a1f36; font-size: 17px; font-weight: 700; text-decoration: none; }
+
+/* the Offers page: a tight head (back · title · filter by shop) and one swiped line of chips */
+.offers-head { gap: 8px; align-items: center; flex-wrap: nowrap; }
+.offers-head h1 { margin: 0; font-size: 20px; flex: 1; min-width: 0; white-space: nowrap; }
+.offers-head .btn.ghost { padding-inline: 10px; flex: none; }
+.offers-filter { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.offers-chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; scrollbar-width: none; }
+.offers-chips::-webkit-scrollbar { display: none; }
+.offers-chips .chip { flex: none; white-space: nowrap; }

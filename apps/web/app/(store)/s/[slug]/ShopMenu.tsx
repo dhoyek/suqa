@@ -98,6 +98,9 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
         <button className="btn" disabled={n >= max} onClick={() => setQty(shop.id, k, n + 1)} aria-label="+">+</button>
       </div>); };
   const [detail, setDetail] = useState<string | null>(null);      // the item whose picture and details are open
+  const [offerOpen, setOfferOpen] = useState<string | null>(null);  // the offer whose pictures and details are open
+  const ov = offerOpen ? bundles.find(v => v.offer.id === offerOpen) ?? null : null;
+  useEffect(() => { if (!offerOpen) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOfferOpen(null); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [offerOpen]);
   const dp = detail ? products.find(x => x.id === detail) ?? null : null;
   useEffect(() => { if (!detail) return; const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetail(null); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [detail]);
   return (
@@ -122,11 +125,11 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
                 const main = (c: number) => formatMoney(c / 100, fx, displayCurrency === 'lbp' ? 'lbp' : 'usd', L); const other = (c: number) => (displayCurrency === 'both' ? formatMoney(c / 100, fx, 'lbp', L) : '');
                 return (
                 <article key={v.offer.id} className={`offer-card ${v.ok ? '' : 'off'}`}>
-                  <div className={`offer-pics n${pics.length}`}>{pics.length ? pics.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />) : <span>🎁</span>}
+                  <div className={`offer-pics n${pics.length}`} role="button" tabIndex={0} aria-label={ar ? 'تفاصيل العرض' : 'Offer details'} onClick={() => setOfferOpen(v.offer.id)} onKeyDown={e => { if (e.key === 'Enter') setOfferOpen(v.offer.id); }} style={{ cursor: 'zoom-in' }}>{pics.length ? pics.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />) : <span>🎁</span>}
                     {v.ok && v.pct > 0 && <span className="offer-save">−{v.pct}%</span>}{v.offer.is_hot && <span className="offer-hot">🔥</span>}</div>
                   <div className="offer-body">
-                    <strong className="offer-name">{tr(v.offer.name as LocalizedText, L)}</strong>
-                    <div className="offer-items">{v.lines.map(l => `${l.quantity}× ${tr(l.product.name as LocalizedText, L)}`).join(' + ')}</div>
+                    <strong className="offer-name" onClick={() => setOfferOpen(v.offer.id)} style={{ cursor: 'pointer' }}>{tr(v.offer.name as LocalizedText, L)}</strong>
+                    <div className="offer-items" onClick={() => setOfferOpen(v.offer.id)} style={{ cursor: 'pointer' }}>{v.lines.map(l => `${l.quantity}× ${tr(l.product.name as LocalizedText, L)}`).join(' + ')}</div>
                     <div className="offer-prices"><strong>{main(v.charged)}</strong><s>{main(v.normal)}</s></div>
                     {other(v.charged) && <div className="offer-other">{other(v.charged)}</div>}
                     <div className="offer-buy">{buyBundle(v)}</div>
@@ -135,6 +138,34 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
             </div>
           </section>
         )}
+        {ov && (() => { const o = ov.offer; const desc = tr((o.description ?? {}) as LocalizedText, L);
+          const usd = (c: number) => formatMoney(c / 100, fx, displayCurrency, L);
+          return (
+          <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setOfferOpen(null); }}>
+            <div className="dlg card item-detail offer-detail" role="dialog" aria-label={tr(o.name as LocalizedText, L)}>
+              <div className="row spread" style={{ alignItems: 'center', gap: 8 }}><strong style={{ fontSize: 18, minWidth: 0 }}>{o.is_hot ? '🔥 ' : '🎁 '}{tr(o.name as LocalizedText, L)}</strong><button type="button" className="btn ghost" onClick={() => setOfferOpen(null)} aria-label="✕">✕</button></div>
+              {o.image_url && <img className="item-detail-img" src={o.image_url} alt={tr(o.name as LocalizedText, L)} />}
+              {desc && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{desc}</p>}
+              <div className="col-title" style={{ margin: 0 }}>{ar ? 'ماذا في العرض' : 'What is inside'}</div>
+              <div className="offer-detail-items">
+                {ov.lines.map(l => (
+                  <div className="offer-detail-item" key={l.product.id}>
+                    {l.product.image_url ? <img src={l.product.image_url} alt="" loading="lazy" /> : <span className="thumb ph" aria-hidden>{tr(l.product.name as LocalizedText, L).trim().charAt(0)}</span>}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}><span className="qty">{l.quantity}×</span> {tr(l.product.name as LocalizedText, L)}{l.product.unit ? <span className="muted" style={{ fontWeight: 400 }}> · {l.product.unit}</span> : null}</div>
+                      <div className="muted" style={{ fontSize: 13 }}>{ar ? 'السعر العادي' : 'Normal price'} {usd(l.normal)}{l.quantity > 1 ? ` × ${l.quantity}` : ''}</div>
+                    </div>
+                  </div>))}
+              </div>
+              <div className="offer-detail-sum">
+                <div className="row spread"><span className="muted">{ar ? 'السعر العادي' : 'Normal price'}</span><s className="muted">{usd(ov.normal)}</s></div>
+                <div className="row spread"><strong>{ar ? 'سعر العرض' : 'Offer price'}</strong><strong style={{ fontSize: 19, color: '#c81e4a' }}>{usd(ov.charged)}</strong></div>
+                {ov.ok && ov.saving > 0 && <div className="row spread" style={{ color: '#15803d', fontWeight: 600 }}><span>{ar ? 'توفّر' : 'You save'}</span><span>{usd(ov.saving)} (−{ov.pct}%)</span></div>}
+              </div>
+              {(o.ends_at || o.max_per_order) && <div className="muted" style={{ fontSize: 13 }}>{o.ends_at ? `${ar ? 'العرض حتى' : 'Until'} ${new Date(o.ends_at).toLocaleDateString(ar ? 'ar-LB' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}{o.ends_at && o.max_per_order ? ' · ' : ''}{o.max_per_order ? `${ar ? 'حدّ أقصى' : 'At most'} ${o.max_per_order} ${ar ? 'بالطلب الواحد' : 'per order'}` : ''}</div>}
+              <div className="row" style={{ justifyContent: 'flex-end' }}>{buyBundle(ov)}</div>
+            </div>
+          </div>); })()}
         {dp && (
           <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}>
             <div className="dlg card item-detail" role="dialog" aria-label={tr(dp.name, L)}>

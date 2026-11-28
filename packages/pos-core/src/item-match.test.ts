@@ -149,4 +149,13 @@ describe('searchItems (the shop page search box)', () => {
     expect(f('rico')).toHaveLength(4);
     expect(f('rice').slice(0, 3)).toEqual(['RICO AMERICAN RICE 1 KG.', 'RICO EGIPTIAN RICE 1 KG.', 'TAJ DIAMOND BASMATI RICE 900GR']);   // the word as typed first; the brand that sounds like it after
   });
+  it('a spelling slip in the same alphabet finds the word; a word merely heard in the other alphabet comes after', () => {
+    const najem = [mk('ليدي كير شرائط إزالة الشعر غير منسوجة 100 حبة', 'Lady Care Satin Depilatory Non-Woven Tissues 100 Bands', 'Cosmetics & Body Care', 'مستحضرات تجميل وعناية'),
+      mk('Mayonnaise lesieur 235g', 'Mayonnaise lesieur 235g', 'Sauces', 'صلصات'), mk('Mayonnaise heinz', 'Mayonnaise heinz', 'Sauces', 'صلصات'), mk('دوريا مايونيز 235 مل', 'Doria mayonnaise 235 ml', 'Sauces', 'صلصات')];
+    const f = (q: string) => searchItems(najem, x => x.f, q).map(x => x.en);
+    expect(f('mayonaise').slice(0, 3).sort()).toEqual(['Doria mayonnaise 235 ml', 'Mayonnaise heinz', 'Mayonnaise lesieur 235g']);
+    expect(f('mayonnaise')).toEqual(['Mayonnaise lesieur 235g', 'Mayonnaise heinz', 'Doria mayonnaise 235 ml']);
+    expect(f('mayonaise lesieur')).toEqual(['Mayonnaise lesieur 235g']);
+    expect(f('lesiuer')).toEqual(['Mayonnaise lesieur 235g']);            // two letters swapped: found by the forgiving matcher, as before
+  });
 });

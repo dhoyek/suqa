@@ -138,7 +138,7 @@ export default function ShopGrid({ cats, shops, initial, locale: L, tenantId, br
           <strong>{L === 'ar' ? 'أصناف' : 'Items'}</strong>
           <div className="card" style={{ padding: 0 }}>
             {items.filter(x => slugOf.has(x.shop_id)).map((x, i) => (
-              <Link key={x.product_id} href={`/s/${slugOf.get(x.shop_id)}?q=${encodeURIComponent(q.trim())}`} className="item-hit" style={{ borderTop: i ? '1px solid var(--line)' : 'none' }}>
+              <Link key={x.product_id} href={`/s/${slugOf.get(x.shop_id)}?q=${encodeURIComponent(q.trim())}&i=${x.product_id}`} className="item-hit" style={{ borderTop: i ? '1px solid var(--line)' : 'none' }}>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: 'block', fontWeight: 600 }}>{tr(x.name, L)}</span>
                   <span className="muted" style={{ fontSize: 13 }}>🏪 {tr(x.shop_name, L)}</span>

@@ -33,7 +33,8 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   const [limit, setLimit] = useState(60);
   const [q, setQ] = useState('');
   const fromHome = useRef('');                                     // words carried over from the home page: already counted there
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get('q'); if (v) { fromHome.current = v.trim(); setQ(v); } }, []);   // arriving from the home page's item search
+  const [pin, setPin] = useState<string | null>(null);              // the item that was tapped on the home page (?i=): shown first, whatever the words find
+  useEffect(() => { const sp = new URLSearchParams(window.location.search); const v = sp.get('q'); if (v) { fromHome.current = v.trim(); setQ(v); } const i = sp.get('i'); if (i) setPin(i); }, []);   // arriving from the home page's item search
   const toggleSec = (x: string) => setSecs(prev => { const n = new Set(prev); if (n.has(x)) n.delete(x); else n.add(x); return n; });
   const norm = (v: string) => v.toLowerCase().replace(/[\u064B-\u0652]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   // every item folded once. Names and other names ("man2ouche", "mayy" …) are also compared by sound; the description and the
@@ -42,8 +43,12 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
     [p.name?.ar, p.name?.en, ...((p as { aliases?: string[] | null }).aliases ?? [])], [p.description?.ar, p.description?.en, secText(p.section ?? '')], p.section ?? null)])),
     [products]);   // eslint-disable-line react-hooks/exhaustive-deps
   // as typed first, then the same word in the other alphabet (Arabizi), a typo only when nothing else matched (searchItems)
-  const visible = useMemo(() => searchItems(secs.size ? products.filter(p => secs.has(p.section ?? '')) : products, p => folded.get(p.id)!, q),
-    [products, secs, q, folded]);
+  const visible = useMemo(() => {
+    const found = searchItems(secs.size ? products.filter(p => secs.has(p.section ?? '')) : products, p => folded.get(p.id)!, q);
+    // arriving from a tapped item: that item first, while the words are still the ones that were searched
+    const first = pin && q.trim() === fromHome.current && !secs.size ? products.find(p => p.id === pin) : undefined;
+    return first ? [first, ...found.filter(p => p.id !== first.id)] : found;
+  }, [products, secs, q, folded, pin]);
   // what was searched in this shop, for the association's Demand page (99): once the person has stopped typing for 2 s
   const hitCount = visible.length;
   useEffect(() => {
@@ -53,7 +58,8 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   }, [q, hitCount, shop.id]);
   useEffect(() => setLimit(60), [q, secs]);                       // a new search/filter starts from the top again
   const shown = visible.slice(0, limit);
-  const visibleSections = sections.filter(s => shown.some(p => (p.section ?? '') === s));
+  // while searching, the categories follow the results (best match first); otherwise the shop's own order
+  const visibleSections = q.trim() ? Array.from(new Set(shown.map(p => p.section ?? ''))) : sections.filter(s => shown.some(p => (p.section ?? '') === s));
   const secMatches = sections.filter(Boolean).filter(x => !secQ.trim() || norm(secText(x)).includes(norm(secQ.trim()))).sort((a, b) => secName(a).localeCompare(secName(b), L));
   // Prefilled WhatsApp message with the item's details and a link back to the shop page.
   const askLink = (p: Product) => waLink(shop.whatsapp, [

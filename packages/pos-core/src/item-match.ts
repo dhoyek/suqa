@@ -133,6 +133,9 @@ export function searchItems<T>(items: T[], foldOf: (item: T) => SearchFold, quer
   if (kindsIn(qn).words.size) return items.filter(x => loose(foldOf(x)));
   const toks = qn.split(' ').filter(Boolean).map(w => ({ w, s: skelWord(w), ar: isAr(w), num: /^[0-9]+$/.test(w) }));
   const sounds = (t: typeof toks[number], k: NameWord) => k.ar !== t.ar && (t.s.length === 2 ? k.s === t.s : k.s.startsWith(t.s)) && (t.ar ? vowelsAgree(k.w, t.w) : vowelsAgree(t.w, k.w));
+  // a spelling slip in the SAME alphabet: a doubled letter more or less ("mayonaise" = mayonnaise), or one letter off in a long word
+  const squeeze = (w: string) => w.replace(/(.)\1+/g, '$1');
+  const slip = (t: typeof toks[number], k: NameWord) => k.ar === t.ar && !t.num && t.w.length >= 4 && (() => { const a = squeeze(t.w), b = squeeze(k.w); return b.startsWith(a) || (a.length >= 6 && near(a, b)); })();
   const strong = (f: SearchFold) => {
     if (f.norm.includes(qn)) return true;
     // A name word heard in the other alphabet serves ONE typed word: "rico" (as typed) is ريكو, so "rice" cannot be ريكو too —
@@ -142,6 +145,7 @@ export function searchItems<T>(items: T[], foldOf: (item: T) => SearchFold, quer
       if (f.norm.includes(t.w)) { if (!t.num && t.s.length >= 2) { const i = f.words.findIndex((k, j) => !used.has(j) && sounds(t, k)); if (i >= 0) used.add(i); } continue; }
       if (t.num) return false;
       if (t.s.length < 2) { if (toks.length > 1 && t.w.length <= 2) continue; return false; }    // "w", "el" between other words carry no weight
+      if (f.words.some(k => slip(t, k))) continue;
       bySound.push(t);
     }
     for (const t of bySound) { const i = f.words.findIndex((k, j) => !used.has(j) && sounds(t, k)); if (i < 0) return false; used.add(i); }
@@ -152,6 +156,12 @@ export function searchItems<T>(items: T[], foldOf: (item: T) => SearchFold, quer
   const sure = items.filter(x => strong(foldOf(x)));
   if (!sure.length) return items.filter(x => loose(foldOf(x)));
   // what carries the words as typed comes first; a match by sound alone ("rice" heard in ريكو) after it
-  const asTyped = (x: T) => { const f = foldOf(x); return toks.every(t => f.norm.includes(t.w)); };
-  return [...sure.filter(asTyped), ...sure.filter(x => !asTyped(x))];
+  // then the same word with a spelling slip; a word only HEARD in the other alphabet ("mayonaise" in منسوجة) last
+  // (2 = heard whole: بيبسي for "pepsi"; 3 = only the START of a longer word was heard — dropped when the word itself was found)
+  const rank = (x: T) => { const f = foldOf(x);
+    if (toks.every(t => f.norm.includes(t.w))) return 0;
+    if (toks.every(t => f.norm.includes(t.w) || f.words.some(k => slip(t, k)))) return 1;
+    return toks.every(t => f.norm.includes(t.w) || f.words.some(k => slip(t, k)) || f.words.some(k => sounds(t, k) && k.s === t.s)) ? 2 : 3; };
+  const ranked = sure.map(x => ({ x, r: rank(x) })); const found = ranked.some(e => e.r <= 1);
+  return [0, 1, 2, 3].flatMap(r => (r === 3 && found ? [] : ranked.filter(e => e.r === r).map(e => e.x)));
 }

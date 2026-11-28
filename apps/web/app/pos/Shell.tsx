@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useMemo, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CatalogIndex, Staff, SyncStatus } from '@suqa/pos-core';
 import { pt, type L } from './i18n';
@@ -20,6 +20,7 @@ import ReportsView from './views/ReportsView';
 import DriversView from './views/DriversView';
 import ItemsView from './views/ItemsView';
 import OffersView from './views/OffersView';
+import { fetchOffers } from './lib/offers';
 import StockView from './views/StockView';
 import OrdersView from './views/OrdersView';
 import DebtsView from './views/DebtsView';
@@ -74,7 +75,10 @@ export default function Shell(props: {
   const [manual, setManual] = useState(false);
   const [newOrderReq, setNewOrderReq] = useState(0);
   const [preset, setPreset] = useState<{ phone: string; name: string } | null>(null);
-  const allowed = viewsFor(roleOf(staff));
+  // 🎁 Offers (script 130) shows only where the server has the offers tables: asked once when online, remembered on the device
+  const [offersOn, setOffersOn] = useState(() => { try { return localStorage.getItem('suqa-pos-offers-on') === '1'; } catch { return false; } });
+  useEffect(() => { if (status?.online === false) return; let on = true; void fetchOffers(props.sb, boot.shop.id).then(l => { if (!on) return; const ok = l !== null; setOffersOn(ok); try { if (ok) localStorage.setItem('suqa-pos-offers-on', '1'); else localStorage.removeItem('suqa-pos-offers-on'); } catch {} }); return () => { on = false; }; }, [props.sb, boot, status?.online]);
+  const allowed = useMemo(() => viewsFor(roleOf(staff)).filter(v => v !== 'offers' || offersOn), [staff, offersOn]);
   useEffect(() => { if (!allowed.includes(view)) setView(allowed[0] ?? 'sell'); }, [allowed, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [custFocus, setCustFocus] = useState<{ phone: string; name: string; n: number } | null>(null);
   const [stockFocus, setStockFocus] = useState<{ id: string; n: number } | null>(null);

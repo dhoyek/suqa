@@ -23,9 +23,10 @@ export default function StoreHeader({ brand, logo = null, labels, user, staff = 
     <header className="topbar">
       <div className="container">
         {path !== '/' && <button type="button" className="back-btn" onClick={back} aria-label={backLabel} title={backLabel}>{locale === 'ar' ? '→' : '←'}</button>}
-        <Link href="/" className="brand" aria-label={brand}>{logo && <img className="brand-logo" src={logo} alt="" />}<span className={logo ? 'brand-text has-logo' : 'brand-text'}>{brand}</span></Link>
+        <Link href="/" className={`brand${path !== '/' ? (logo ? ' with-back' : ' with-back no-logo') : ''}`} aria-label={brand}>{logo && <img className="brand-logo" src={logo} alt="" />}<span className={logo ? 'brand-text has-logo' : 'brand-text'}>{brand}</span></Link>
         <nav className="tabs">
-          {user && staff && <a href="/pos" className="tab">🧾 {labels.pos}</a>}
+          {/* the till shortcut sits on the home page only (where staff open the app); on every other page it is in the profile menu */}
+          {user && staff && path === '/' && <a href="/pos" className="tab">🧾 {labels.pos}</a>}
           {user && <Link href="/orders" className="tab">📦 {labels.myOrders}</Link>}
           <Link href="/cart" className="tab cart-tab" aria-label={labels.cart}>
             🧺 {count > 0 && <span className="count">{count}</span>}

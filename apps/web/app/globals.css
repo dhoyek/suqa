@@ -357,6 +357,8 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 
 /* phones: with a site logo the name beside it is dropped — the header is the tightest place on the screen */
 @media (max-width: 640px) { .brand-text.has-logo { display: none; } }
+/* phones, inside pages: the back arrow takes the brand's place (the name was cut off anyway); a logo stays */
+@media (max-width: 640px) { .topbar .brand.with-back .brand-text { display: none; } .topbar .brand.with-back.no-logo { display: none; } }
 /* an item found from the home page search */
 .item-hit { display: flex; gap: 12px; align-items: center; padding: 12px 14px; min-height: 44px; color: inherit; text-decoration: none; }
 .item-hit:hover { background: #f9fafb; }
@@ -513,7 +515,6 @@ a.btn, a.btn:hover { text-decoration: none; color: inherit; display: inline-flex
 /* the Offers page: a tight head (back · title · filter by shop) and one swiped line of chips */
 .offers-head { gap: 8px; align-items: center; flex-wrap: nowrap; }
 .offers-head h1 { margin: 0; font-size: 20px; flex: 1; min-width: 0; white-space: nowrap; }
-.offers-head .btn.ghost { padding-inline: 10px; flex: none; }
 .offers-filter { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; font-size: 14px; }
 .offers-chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; scrollbar-width: none; }
 .offers-chips::-webkit-scrollbar { display: none; }

@@ -47,12 +47,11 @@ export default function OffersBoard({ locale: L, fx, rates, displayCurrency, cat
   const refOf = (s: ShopCard) => ({ id: s.id, slug: s.slug, name: s.name, min_order_usd: s.min_order_usd });
   const buy = (r: Row) => <OfferBuy vm={r} shop={refOf(r.shop)} L={L} labels={labels} />;
 
-  if (now && !rows.length) return <div className="stack"><div className="row offers-head"><Link href="/" className="btn ghost" aria-label={ar ? 'الرئيسية' : 'Home'}>{ar ? '→' : '←'}</Link><h1>🎁 {ar ? 'العروض' : 'Offers'}</h1></div><div className="card muted">{ar ? 'لا عروض الآن. عُد قريباً.' : 'No offers right now. Check back soon.'}</div></div>;
+  if (now && !rows.length) return <div className="stack"><div className="row offers-head"><h1>🎁 {ar ? 'العروض' : 'Offers'}</h1></div><div className="card muted">{ar ? 'لا عروض الآن. عُد قريباً.' : 'No offers right now. Check back soon.'}</div></div>;
   return (
     <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
       {/* one line: back, the title, and the shop filter at the other end */}
       <div className="row offers-head">
-        <Link href="/" className="btn ghost" aria-label={ar ? 'الرئيسية' : 'Home'}>{ar ? '→' : '←'}</Link>
         <h1>🎁 {ar ? 'العروض' : 'Offers'}</h1>
         {offerShops.length > 1 && <button type="button" className={`btn offers-filter ${sel.size ? 'primary' : ''}`} onClick={() => setSheet(true)}><FilterIcon size={16} /> {labels.shops}{sel.size ? ` (${sel.size})` : ''}</button>}
       </div>

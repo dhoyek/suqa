@@ -87,7 +87,7 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   const shopRef = { id: shop.id, slug: shop.slug, name: shop.name, whatsapp: shop.whatsapp, min_order_usd: shop.min_order_usd, pickup_enabled: shop.pickup_enabled !== false };
   const buyBundle = (v: typeof bundles[number]) => { const k = offerKey(v.offer.id); const n = qtyOf(k); const max = v.offer.max_per_order ?? 99; return (
     !v.ok ? <span className="badge cancelled">{ar ? 'غير متوفر الآن' : 'Not available now'}</span>
-    : n === 0 ? <button className="btn primary" onClick={() => add(shopRef, { product_id: k, name: v.offer.name as LocalizedText, unit: null, price_usd: v.charged / 100,
+    : n === 0 ? <button className="btn primary offer-add" onClick={() => add(shopRef, { product_id: k, name: v.offer.name as LocalizedText, unit: null, price_usd: v.charged / 100,
         bundle: { items: v.lines.map(l => ({ name: l.product.name as LocalizedText, qty: l.quantity })), normal_usd: v.normal / 100, max: v.offer.max_per_order ?? null } }, () => ask(labels.replaceCart))}>+ {labels.add}</button>
     : <div className="stepper">
         <button className="btn" onClick={() => setQty(shop.id, k, n - 1)} aria-label="−">−</button>
@@ -100,26 +100,6 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
   return (
     <>
       <div className="stack" style={{ paddingBottom: selectedCount ? 90 : 0 }}>
-        {bundles.length > 0 && !q.trim() && secs.size === 0 && (
-          <section className="offers-strip" aria-label={ar ? 'العروض' : 'Offers'}>
-            <h2 className="offers-title">🎁 {ar ? 'العروض' : 'Offers'}</h2>
-            <div className="offers-row">
-              {bundles.map(v => { const pics = v.offer.image_url ? [v.offer.image_url] : v.lines.map(l => l.product.image_url).filter(Boolean).slice(0, 4) as string[]; return (
-                <article key={v.offer.id} className={`offer-card ${v.ok ? '' : 'off'}`}>
-                  <div className={`offer-pics n${pics.length}`}>{pics.length ? pics.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />) : <span>🎁</span>}
-                    {v.ok && v.pct > 0 && <span className="offer-save">−{v.pct}%</span>}{v.offer.is_hot && <span className="offer-hot">🔥</span>}</div>
-                  <div className="offer-body">
-                    <strong className="offer-name">{tr(v.offer.name as LocalizedText, L)}</strong>
-                    <ul className="offer-items">{v.lines.map(l => <li key={l.product.id}><span className="qty">{l.quantity}×</span> {tr(l.product.name as LocalizedText, L)}</li>)}</ul>
-                    <div className="offer-prices"><s>{money(v.normal / 100)}</s><strong>{money(v.charged / 100)}</strong></div>
-                    {v.ok && <div className="offer-saving">{ar ? 'توفّر' : 'You save'} {money(v.saving / 100)}</div>}
-                    {v.offer.ends_at && <div className="muted" style={{ fontSize: 12 }}>{ar ? 'حتى' : 'Until'} {new Date(v.offer.ends_at).toLocaleDateString(ar ? 'ar-LB' : 'en-GB', { day: 'numeric', month: 'short' })}</div>}
-                    <div className="offer-buy">{buyBundle(v)}</div>
-                  </div>
-                </article>); })}
-            </div>
-          </section>
-        )}
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           <input className="input search" type="search" placeholder={labels.searchItems} value={q} onChange={e => setQ(e.target.value)} aria-label={labels.searchItems} style={{ flex: 1 }} />
           {sections.filter(Boolean).length > 1 && <button type="button" className={`btn ${secs.size ? 'primary' : ''}`} onClick={() => setSheet(true)} aria-label={labels.categories}><FilterIcon />{secs.size ? ` ${secs.size}` : ''}</button>}
@@ -129,6 +109,28 @@ export default function ShopMenu({ shop, products, offers = [], locale: L, fx, d
             {[...secs].map(x => <button type="button" key={x} className="chip active" onClick={() => toggleSec(x)}>{secName(x)} ✕</button>)}
             <button type="button" className="chip" onClick={() => setSecs(new Set())}>{labels.clearFilter}</button>
           </nav>
+        )}
+        {bundles.length > 0 && !q.trim() && secs.size === 0 && (
+          <section className="offers-strip" aria-label={ar ? 'العروض' : 'Offers'}>
+            <h2 className="offers-title">🎁 {ar ? 'العروض' : 'Offers'}</h2>
+            <div className="offers-row">
+              {bundles.map(v => { const pics = v.offer.image_url ? [v.offer.image_url] : v.lines.map(l => l.product.image_url).filter(Boolean).slice(0, 4) as string[];
+                // one main price, the other currency small under it: the card stays narrow enough for two side by side on a phone
+                const main = (c: number) => formatMoney(c / 100, fx, displayCurrency === 'lbp' ? 'lbp' : 'usd', L); const other = (c: number) => (displayCurrency === 'both' ? formatMoney(c / 100, fx, 'lbp', L) : '');
+                return (
+                <article key={v.offer.id} className={`offer-card ${v.ok ? '' : 'off'}`}>
+                  <div className={`offer-pics n${pics.length}`}>{pics.length ? pics.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />) : <span>🎁</span>}
+                    {v.ok && v.pct > 0 && <span className="offer-save">−{v.pct}%</span>}{v.offer.is_hot && <span className="offer-hot">🔥</span>}</div>
+                  <div className="offer-body">
+                    <strong className="offer-name">{tr(v.offer.name as LocalizedText, L)}</strong>
+                    <div className="offer-items">{v.lines.map(l => `${l.quantity}× ${tr(l.product.name as LocalizedText, L)}`).join(' + ')}</div>
+                    <div className="offer-prices"><strong>{main(v.charged)}</strong><s>{main(v.normal)}</s></div>
+                    {other(v.charged) && <div className="offer-other">{other(v.charged)}</div>}
+                    <div className="offer-buy">{buyBundle(v)}</div>
+                  </div>
+                </article>); })}
+            </div>
+          </section>
         )}
         {dp && (
           <div className="dlg-backdrop" onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}>

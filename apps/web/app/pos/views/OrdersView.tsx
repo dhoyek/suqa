@@ -40,6 +40,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
   const [orders, setOrders] = useState<Order[]>([]);
   const [lines, setLines] = useState<Record<string, OrderLine[]>>({});
   const [payments, setPayments] = useState<Record<string, Payment[]>>({});
+  const [collected, setCollected] = useState<Record<string, number>>({});
   const [rate, setRate] = useState(89500);
   const [dialog, setDialog] = useState<null | { k: 'reject' | 'cancel' | 'eta'; o: Order } | { k: 'driver'; o: Order; to: OrderStatus } | { k: 'assign'; o: Order } | { k: 'edit'; o: Order } | { k: 'info'; o: Order } | { k: 'pay'; o: Order; status: OrderStatus; fee?: number } | { k: 'return'; o: Order } | { k: 'detail'; o: Order } | { k: 'merge'; o: Order }>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -78,6 +79,8 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     const ls = await boot.db.orderLines.where('order_id').anyOf(ids).toArray(); const ps = await boot.db.payments.where('order_id').anyOf(ids).toArray();
     const lm: Record<string, OrderLine[]> = {}; for (const l of ls) (lm[l.order_id] ??= []).push(l); setLines(lm);
     const pm: Record<string, Payment[]> = {}; for (const p of ps) (pm[p.order_id] ??= []).push(p); setPayments(pm);
+    // what was already collected against an order's debt (Debts screen) is money paid on that order
+    const cm: Record<string, number> = {}; for (const a of await boot.db.debtAllocations.where('order_id').anyOf(ids).toArray()) cm[a.order_id] = (cm[a.order_id] ?? 0) + num(a.amount_cents); setCollected(cm);
     boot.db.rates.orderBy('effective_at').reverse().first().then((r: Rate | undefined) => { if (r) setRate(r.lbp_per_usd); });
   };
   useEffect(() => { void reload(); }, [boot, tick, range]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,7 +107,7 @@ export default function OrdersView({ boot, sb, locale, index, tick, staff, statu
     const t2 = setTimeout(() => setFlash(null), 3500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
-  const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0);
+  const paidCents = (o: Order) => (payments[o.id] ?? []).filter(p => p.tender !== 'unpaid').reduce((s, p) => s + (p.currency === 'lbp' ? Math.round((num(p.amount) * 100) / (num(o.rate_lbp_per_usd) || rate)) : num(p.amount)), 0) + ((payments[o.id] ?? []).some(p => p.tender === 'unpaid') ? collected[o.id] ?? 0 : 0);
   const isPaid = (o: Order) => paidCents(o) >= num(o.total_cents) - 1;
   // delivered, yet nothing covers it — no payment, no debt, no driver's cash (a payment cancelled from the operations log, 91): it can be collected again
   const owes = (o: Order) => o.status === 'delivered' && num(o.total_cents) > 1 && !(payments[o.id] ?? []).some(p => p.tender === 'driver')
